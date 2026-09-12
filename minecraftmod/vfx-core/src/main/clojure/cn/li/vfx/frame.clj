@@ -16,13 +16,16 @@
    content, not assumed -- cn.li.platform.neutral.vfx-render-plan's own
    line-ops already accepts :from/:to via its own fallback key chain.
 
-   :emitter is a deliberate exception: its old :vfx/emitter case produces
+   :emitter keeps its particle description in the neutral geometry payload.
+   The platform-neutral render plan expands it into a visible billboard,
+   including the optional animated texture frame. This keeps the ABI
+   Minecraft-free without silently dropping the emitter at render time.
+   Its old :vfx/emitter case produced
    geometry with no :p0..:p3 corners, and vfx-render-plan's quad-ops
    requires all four -- so :vfx/emitter has never drawn anything through
    the currently-live old engine either (confirmed by reading quad-ops).
-   legacy-op reproduces the SAME (currently a no-op) shape for :emitter,
-   which is behavioral parity with today's live rendering, not a
-   regression -- fixing it for real is a separate, unrelated follow-up."
+   legacy-op still preserves the neutral geometry shape; the actual corners
+   are intentionally supplied by the platform-neutral render plan."
   (:import [java.util ArrayList]
            [cn.li.mcmod.runtime.vfx VfxBatch VfxFrame VfxOutput VfxOutputKind VfxRenderStage ParticleColumns]))
 
@@ -132,7 +135,7 @@
                      :alpha (double (or (:alpha op) 1.0))}}
     :emitter {:operation :draw-batch :stage :world-translucent :primitive :quad
               :geometry {:kind :emitter :anchor (:anchor op) :rate-per-tick (:rate-per-tick op)
-                        :limit (:limit op) :particle (:particle op)}
+                        :limit (:limit op) :age (:age op) :particle (:particle op)}
               :material {:particle (:particle op)}}
     :audio-one-shot {:operation :audio :stage :audio :sound-id (:sound-id op)
                       :volume (:volume op) :pitch (:pitch op) :position (:position op)

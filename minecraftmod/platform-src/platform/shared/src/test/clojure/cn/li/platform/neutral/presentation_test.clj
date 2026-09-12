@@ -39,6 +39,27 @@
     (is (= :quad (:kind (first (:ops marker-plan)))))
     (is (= 1 (count (:ops marker-plan))))))
 
+(deftest emitter-expands-to-an-animated-camera-facing-billboard
+  "V4 billboard-session uses the emitter leaf for the Railgun charge burst.
+   It must become real textured geometry, not the old corner-less placeholder."
+  (let [plan (vfx-plan/neutral-op->plan
+              {:operation :draw-batch
+               :primitive :quad
+               :geometry {:kind :emitter
+                          :anchor {:vec3 [1.0 2.0 3.0]}
+                          :particle {:texture "academy:textures/effects/arc_burst/%d.png"
+                                      :frame-count 40
+                                      :frame-duration-ms 40
+                                      :age 2.0
+                                      :size 0.4}}
+               :material {:color [255 255 255 255]}}
+              {:player-yaw-rad 0.0 :player-pitch-rad 0.0})
+        op (first (:ops plan))]
+    (is (= 1 (count (:ops plan))))
+    (is (= "academy:textures/effects/arc_burst/2.png" (:texture op)))
+    (is (= 0.0 (Math/abs (- (.-x ^cn.li.mcmod.math.V3 (:p0 op)) 1.4))))
+    (is (not= (:p0 op) (:p1 op)))))
+
 (deftest arc-geometry-expands-to-textured-quad-strip
   "Regression: main arc-gen drew zigzag EntityArc quads. V4 :arc leaf must
    expand through the neutral render plan into a non-empty quad strip."

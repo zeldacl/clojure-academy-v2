@@ -5,7 +5,8 @@
    mc-* geometry modules remain responsible for Minecraft buffer state, so
    this adapter only expands line/beam/ring/quad/particle geometry into their
    long-lived {:ops [...]} plan shape.  It imports no Minecraft class."
-  (:require [cn.li.platform.neutral.arc-geometry :as arc-geometry])
+  (:require [clojure.string :as str]
+            [cn.li.platform.neutral.arc-geometry :as arc-geometry])
   (:import [cn.li.mcmod.math V3]
            [cn.li.mcmod.runtime.vfx ParticleBuffer]))
 
@@ -162,19 +163,48 @@
                :texture texture :color color}))
           (range n))))
 
-(defn- marker-quad [anchor color]
+(defn- animated-texture [particle]
+  (let [texture (:texture particle)
+        frame-count (long (max 1.0 (number-or (:frame-count particle) 1)))
+        frame-duration-ms (long (max 1.0 (number-or (:frame-duration-ms particle) 50)))
+        age (max 0.0 (number-or (:age particle) 0.0))
+        frame (long (mod (Math/floor (/ (* age 50.0) frame-duration-ms)) frame-count))]
+    (if (and (string? texture) (str/includes? texture "%d"))
+      (str/replace texture "%d" (str frame))
+      (or texture default-texture))))
+
+(defn- view-basis [view-ctx]
+  (if (and (map? view-ctx)
+           (number? (:player-yaw-rad view-ctx))
+           (number? (:player-pitch-rad view-ctx)))
+    (let [yaw (double (:player-yaw-rad view-ctx))
+          pitch (double (:player-pitch-rad view-ctx))
+          cos-pitch (Math/cos pitch)
+          forward (V3. (* (- (Math/sin yaw)) cos-pitch)
+                       (- (Math/sin pitch))
+                       (* (Math/cos yaw) cos-pitch))
+          reference (if (> (Math/abs (.-y forward)) 0.9)
+                      (V3. 1.0 0.0 0.0)
+                      (V3. 0.0 1.0 0.0))
+          right (V3/normalize (V3/cross forward reference))]
+      [right (V3/normalize (V3/cross right forward))])
+    [(V3. 1.0 0.0 0.0) (V3. 0.0 0.0 1.0)]))
+
+(defn- marker-quad [anchor color particle view-ctx]
   (let [center (v3-from anchor)
-        half 0.08
-        x (.-x center)
-        y (.-y center)
-        z (.-z center)]
+        half (max 0.001 (number-or (or (:size particle) (:scale particle)) 0.08))
+        texture (animated-texture particle)
+        [right up] (view-basis view-ctx)
+        side (V3/scale right half)
+        lift (V3/scale up half)
+        p0 (V3/sub (V3/sub center side) lift)
+        p1 (V3/add (V3/sub center side) lift)
+        p2 (V3/add (V3/add center side) lift)
+        p3 (V3/sub (V3/add center side) lift)]
     [{:kind :quad
-      :p0 (V3. (- x half) y (- z half))
-      :p1 (V3. (- x half) y (+ z half))
-      :p2 (V3. (+ x half) y (+ z half))
-      :p3 (V3. (+ x half) y (- z half))
+      :p0 p0 :p1 p1 :p2 p2 :p3 p3
       :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
-      :texture default-texture :color color}]))
+      :texture texture :color color}]))
 
 (defn- first-field [fields keys]
   (some (fn [key]
@@ -205,7 +235,7 @@
       (and start end) [(line-op start end color)]
       (and (sequential? points) (> (count points) 1)) (point-chain-ops points color)
       (and center (number? radius)) (ring-ops {:center center :radius radius :segments 16} color)
-      :else (marker-quad center color))))
+      :else (marker-quad center color nil nil))))
 
 (defn neutral-op->plan
   "Return the mc-* geometry plan for one neutral draw-batch operation.
@@ -232,7 +262,7 @@
                    :quad (case (:kind geometry)
                            :beam (beam-ops geometry material)
                            :arc (arc-geometry/arc-quad-ops geometry material color)
-                           :emitter (marker-quad (:anchor geometry) color)
+                           :emitter (marker-quad (:anchor geometry) color (:particle geometry) view-ctx)
                            (quad-ops geometry color material))
                    :particle (if-let [particles (:particle-buffer op)]
                                (if (instance? ParticleBuffer particles)

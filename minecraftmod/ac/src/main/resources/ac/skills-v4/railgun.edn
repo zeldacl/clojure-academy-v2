@@ -189,7 +189,8 @@
          :instance-key [:activation :railgun-charge],
          :audience {:type :nearby, :radius 32.0},
          :payload
-         {:anchor :owner-hand,
+         {:anchor {:nid :n/n--entry--start-10-anchor,
+                   :ref [:local :eye]},
           :duration-ticks 64,
           :texture-pattern "academy:textures/effects/arc_burst/%d.png",
           :frame-count 40,
@@ -650,7 +651,7 @@
           {:nid :n/n--entry--release-19-767d60f1,
            :component :value/field,
            :inputs
-           {:field :end,
+           {:field :visual-end,
             :value
             {:nid :n/n--entry--release-19-b3d5371b,
              :ref [:local :beam-result]}}},
