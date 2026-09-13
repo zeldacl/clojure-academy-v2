@@ -203,7 +203,12 @@
                                    ;; held and enables it only on release/abort.
                                    :place-when-collide? false
                                    :renderer-id "block-body"
-                                   :behavior :block-body-impact}}}))
+                                   ;; The 1.20.1 renderer uses this hook to
+                                   ;; identify MagManip bodies and draw the
+                                   ;; capture arcs. Collision dispatch is
+                                   ;; registered by AC under this behavior id.
+                                   :hook :magmanip-block
+                                   :behavior :mag-manip-damage}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
