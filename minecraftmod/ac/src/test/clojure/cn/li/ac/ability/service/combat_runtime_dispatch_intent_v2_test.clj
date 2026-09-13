@@ -215,6 +215,24 @@
       (is (= :accepted (:status result)))
       (is (= :noop (:outcome result))))))
 
+(deftest real-mag-movement-unsupported-movement-event-is-noop-test
+  "mag-movement owns movement in its server pulse and therefore declares no
+   :movement/* entries.  A movement packet must not be routed to a guessed
+   program entry or produce a server warning."
+  (let [_ (combat-runtime/initialize-final-runtime-v2!)
+        owner "v2-mag-movement-movement-owner"]
+    (is (nil? (@#'combat-runtime/resolve-program-entry
+               :mag-movement {:op :event :event :movement/left-tick})))
+    (is (= :movement/left-tick
+           (@#'combat-runtime/resolve-program-entry
+            :flashing {:op :event :event :movement/left-tick})))
+    (flush-with-resources! owner)
+    (let [result (combat-runtime/dispatch-intent-v2!
+                  owner {:op :event :event :movement/left-tick
+                         :ability-id :mag-movement :slot 0})]
+      (is (= :accepted (:status result)))
+      (is (= :noop (:outcome result))))))
+
 (deftest railgun-sessionless-release-after-auto-release-is-noop-test
   "Railgun may finish from the server pulse's automatic release before the
    physical mouse-up arrives. That stale key-up must not fire a second beam."

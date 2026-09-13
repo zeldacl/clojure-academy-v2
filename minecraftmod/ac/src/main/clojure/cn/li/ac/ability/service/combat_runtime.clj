@@ -461,6 +461,19 @@
     :abort #{:phase/abort :activation/abort}
     nil))
 
+(defn- movement-event?
+  "True for the movement events emitted by the fixed combat channel.
+
+   A skill may legitimately omit movement entries: its active pulse can own
+   all movement (mag-movement is one example).  Such a protocol event is a
+   no-op for that skill, not a request to invoke a guessed program entry."
+  [event]
+  (and (keyword? event)
+       (= "movement" (namespace event))
+       (boolean
+        (re-matches #"(?:forward|back|left|right)-(?:press|tick|release)"
+                    (name event)))))
+
 (defn- resolve-program-entry
   "Translate an intent's :op/:event into the skill-v4 program entry key.
 
@@ -1048,6 +1061,13 @@
             ;; Client should only emit wheel for held skills that declare the
             ;; trigger; if a stray packet arrives, accept as noop (no warn).
             (= :slot-wheel (:event intent))
+            {:status :accepted :outcome :noop :schema-version 1 :ability-id ability-id}
+
+            ;; Movement input is likewise optional per skill.  A valid
+            ;; movement packet can be in flight after a session changes, and
+            ;; skills whose pulse owns movement must not be rejected noisily
+            ;; just because they do not declare movement program entries.
+            (movement-event? (:event intent))
             {:status :accepted :outcome :noop :schema-version 1 :ability-id ability-id}
 
             :else

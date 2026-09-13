@@ -97,6 +97,30 @@
      nil)
     intent-id))
 
+(defn- skill-accepts-movement?
+  "True only when the skill IR declares a movement entry.
+
+   Movement input is a skill-specific protocol, not a property of merely
+   having an active combat slot.  Skills such as mag-movement already run
+   their movement from the server pulse and must not receive synthetic
+   movement events; flashing/storm-wing explicitly declare :movement/*
+   entries and do need them."
+  [ability-id]
+  (when ability-id
+    (let [triggers (or (get-in (combat-catalog/catalog)
+                               [:combat :abilities ability-id :program :entry-triggers])
+                       {})
+          movement-entry? (fn [entry]
+                            (and (keyword? entry)
+                                 (= "movement" (namespace entry))))
+          movement-trigger? (fn [trigger]
+                              (and (keyword? trigger)
+                                   (= "phase" (namespace trigger))
+                                   (re-matches #"(?:forward|back|left|right)-(?:press|tick|release)"
+                                                (name trigger))))]
+      (boolean (or (some movement-entry? (keys triggers))
+                   (some movement-trigger? (vals triggers)))))))
+
 (defn- active-slot-for-owner [player-uuid]
   (some (fn [[session owner slot]]
           (when (and (= session (current-session))
@@ -104,8 +128,17 @@
             slot))
         @active-slots*))
 
+(defn- active-movement-slot-for-owner [player-uuid]
+  (some (fn [[session owner slot]]
+          (when (and (= session (current-session))
+                     (= owner (str player-uuid))
+                     (skill-accepts-movement?
+                      (keybinds/get-skill-id-for-slot-public player-uuid slot)))
+            slot))
+        @active-slots*))
+
 (defn- send-movement-intent! [player-uuid movement-key transition]
-  (when-let [slot (active-slot-for-owner player-uuid)]
+  (when-let [slot (active-movement-slot-for-owner player-uuid)]
     (let [intent-id (swap! intent-seq* inc)]
       (net-client/send-to-server
        (client-owner player-uuid) messages/MSG-COMBAT-INTENT
