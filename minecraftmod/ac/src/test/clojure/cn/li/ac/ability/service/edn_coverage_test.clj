@@ -127,6 +127,60 @@
                 :state {:mode :armed}})]
     (is (= :ignored (:outcome (.result frame))))))
 
+(deftest mag-manip-hand-capture-dispatches-the-hold-entity-test
+  "The hand-held path must do more than consume the item: it must spawn and
+   configure the tracked block body that pulse/release will address. This is
+   deliberately an end-to-end graph dispatch so a disconnected V4 link cannot
+   regress into a compile-only success."
+  (let [mag-manip (some #(when (= :mag-manip (:id %)) %)
+                        (:skills (skills-catalog/assemble)))
+        queries (atom [])
+        actions (atom [])
+        program (combat-api/compile-skill-program
+                 (:ir mag-manip)
+                 {:query! (fn [cap args _frame]
+                            (swap! queries conj [cap args])
+                            (case cap
+                              :item/held {:present? true
+                                          :block-id "minecraft:iron_block"
+                                          :item-id "minecraft:iron_block"
+                                          :count 1}
+                              :raycast {:hit-type :miss}
+                              :entity/spawn {:status :applied
+                                             :entity-id "body-1"}
+                              nil))
+                  :command! (fn [cap args _frame]
+                              (swap! actions conj [cap args]))})
+        frame (combat-api/dispatch-skill!
+               program
+               :start
+               {:tunables {:targeting-grab-range 10.0
+                           :targeting-throw-range 20.0
+                           :targeting-max-hold-distance 5.0
+                           :movement-hold-distance 2.0
+                           :movement-hold-head-y-offset 0.1
+                           :movement-throw-speed 1.0
+                           :progression-exp-throw 0.005
+                           :throw-damage 10.0}
+                :capabilities {:caster/id "owner"
+                               :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                               :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                               :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                               :caster/creative? false
+                               :caster/normal-metal-blocks ["minecraft:iron_block"]
+                               :caster/weak-metal-blocks []
+                               :world/id "minecraft:overworld"
+                               :progression/mastery 0.0
+                               :rng/seed 1}})]
+    (is (some #(= :entity/spawn (first %)) @queries)
+        "hand capture must spawn the tracked block body")
+    (is (some #(and (= :entity/configure (first %))
+                    (= "minecraft:iron_block" (get-in (second %) [:block-id])))
+              @actions)
+        "spawned body must be configured with the consumed block id")
+    (is (some #(= :arc-channel-session (:effect-id %)) (.-vfx frame))
+        "hand capture must start the hold VFX session")))
+
 (deftest assembled-skill-ir-capabilities-are-host-dispatchable-test
   (let [assembled (skills-catalog/assemble)
         gaps (mapcat (fn [{:keys [id ir]}]

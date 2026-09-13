@@ -99,7 +99,7 @@
   ;; primitives instead of each skill file checking config itself.
   (damage-effects/install-pvp-gate! ability-config/attack-player-enabled?)
   (damage-effects/install-scripted-block-body-hit-handler!
-    :block-body-impact
+    :mag-manip-damage
     apply-block-body-impact!)
   (block-effects/install-destroy-gate!
     (fn [world-id]

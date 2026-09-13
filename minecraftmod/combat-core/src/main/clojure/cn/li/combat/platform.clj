@@ -6,6 +6,7 @@
    operations are installed by platform-src and never contain Minecraft
    behaviour."
   (:require [clojure.set :as set]
+            [clojure.string :as str]
             [cn.li.combat.actions :as combat-actions]
             [cn.li.combat.beam-settlement :as beam]
             [cn.li.combat.targeting :as targeting]
@@ -79,6 +80,28 @@
                 :tags (set (or (:tags entity) []))}]
     (select-keys values (or (seq projection)
                             [:id :type :position :eye-height]))))
+
+(defn- entity-type-matches?
+  "Match the public registry-id spelling used by ability graphs against the
+   description-id spelling exposed by the Minecraft entity adapter.
+
+   Minecraft 1.20.1's neutral entity projection reports e.g.
+   `entity.academy.entity_magmanip_block_body`, while V4 content addresses
+   the same type as `academy:entity_magmanip_block_body`. Keep this
+   normalization at the neutral query boundary so skills do not need
+   loader-specific type names and both spellings remain valid for older
+   adapters."
+  [types candidate]
+  (let [candidate (some-> candidate str)
+        description-ids (keep (fn [type-id]
+                                (let [type-id (str type-id)]
+                                  (when (str/includes? type-id ":")
+                                    (str "entity."
+                                         (str/replace-first type-id ":" ".")))))
+                              types)]
+    (or (empty? types)
+        (contains? types candidate)
+        (some #(= candidate %) description-ids))))
 
 (defn- entity-sort-key [by center entity]
   (let [[cx cy cz] center
@@ -235,8 +258,9 @@
           (->> candidates
              (filter map?)
              (remove #(= owner (str (or (:id %) (:uuid %) (:entity-id %)))))
-             (filter #(or (empty? types)
-                          (contains? types (or (:type %) (:entity-type %)))))
+             (filter #(entity-type-matches?
+                       types
+                       (or (:type %) (:entity-type %))))
              (filter #(let [id (str (or (:id %) (:uuid %) (:entity-id %)))]
                         (and (or (empty? ids) (contains? ids id))
                              (not (contains? excluded id)))))

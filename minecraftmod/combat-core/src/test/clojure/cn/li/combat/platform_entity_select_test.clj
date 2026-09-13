@@ -46,6 +46,16 @@
       (is (= [] (:entities result)))
       (is (= [] (:blocks result))))))
 
+(deftest entity-select-matches-registry-id-to-minecraft-description-id-test
+  (let [matches? (deref (ns-resolve 'cn.li.combat.platform
+                                    'entity-type-matches?))]
+    (is (matches? #{"academy:entity_magmanip_block_body"}
+                  "entity.academy.entity_magmanip_block_body"))
+    (is (matches? #{"entity.academy.entity_magmanip_block_body"}
+                  "entity.academy.entity_magmanip_block_body"))
+    (is (not (matches? #{"academy:entity_other"}
+                       "entity.academy.entity_magmanip_block_body")))))
+
 (deftest break-query-handler-accepts-engine-frame-context-test
   (with-redefs [blocks/available? (constantly false)]
     (let [handler (:block/break (platform/query-handlers))
