@@ -275,11 +275,16 @@
   (let [context (if (map? graphics) graphics {})
         ^GuiGraphics gg (if (map? graphics) (:graphics graphics) graphics)
         wanted (neutral/stage->render-stage stage)
-        ;; Loaders never submit :audio alone; fold AUDIO into the world
-        ;; translucent pass so VFX one-shots (arc_weak, etc.) actually play.
+        ;; Forge 1.20.1 exposes one level callback for the shared world
+        ;; presentation pass. Consume every world VFX stage there: the
+        ;; railgun charge billboard is WORLD_BEFORE_TRANSLUCENT while its
+        ;; shot is WORLD_AFTER_TRANSLUCENT, and dropping the former makes the
+        ;; charge invisible even though the VFX signal was delivered.
         pass-stages (cond-> #{wanted}
                       (= wanted RenderStage/WORLD_AFTER_TRANSLUCENT)
-                      (conj RenderStage/AUDIO))
+                      (conj RenderStage/WORLD_BEFORE_TRANSLUCENT
+                            RenderStage/WORLD_GLOW
+                            RenderStage/AUDIO))
         ^UiDrawList dl (.uiFor frame wanted)]
     (when (and dl (pos? (.count dl)) (instance? GuiGraphics gg))
       (draw-ui-draw-list! gg context stage dl))

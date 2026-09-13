@@ -87,6 +87,43 @@
      :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
      :texture texture :color color}))
 
+(defn- glow-board
+  [^V3 start ^V3 end ^V3 axis width texture color]
+  (assoc (beam-quad start end axis (* 0.5 (double width)) texture color)
+         :additive? true
+         :no-depth-write? true))
+
+(defn- beam-glow-ops
+  "Expand the three-board glow used by the main railgun renderer.
+
+  The V4 beam ABI keeps this as one declarative layer because the placement of
+  the boards is renderer geometry, not skill logic. Each board covers one
+  segment of the ray, so blend-in/blend-out textures remain end caps instead
+  of being stretched over the entire beam. Two crossed boards preserve the
+  visibility of the glow from arbitrary camera angles."
+  [^V3 start ^V3 end ^V3 right ^V3 up layer color]
+  (let [delta (V3/sub end start)
+        length (V3/length delta)]
+    (if (<= length 1.0e-5)
+      []
+      (let [direction (V3/scale delta (/ 1.0 length))
+            width (max 0.001 (number-or (or (:width layer) (get layer "width")) 1.1))
+            textures (or (:textures layer) (get layer "textures") {})
+            blend-in (or (:blend-in textures) (get textures "blend-in"))
+            tile (or (:tile textures) (get textures "tile"))
+            blend-out (or (:blend-out textures) (get textures "blend-out"))
+            gs (V3/sub start (V3/scale direction 0.3))
+            ge (V3/add end (V3/scale direction 0.3))
+            span (V3/length (V3/sub ge gs))
+            cap (min width (* 0.5 span))
+            mid1 (V3/add gs (V3/scale direction cap))
+            mid2 (V3/sub ge (V3/scale direction cap))
+            boards (fn [axis]
+                     [(glow-board gs mid1 axis width blend-in color)
+                      (glow-board mid1 mid2 axis width tile color)
+                      (glow-board mid2 ge axis width blend-out color)])]
+        (vec (concat (boards right) (boards up)))))))
+
 (defn- beam-layer-ops [^V3 start ^V3 end ^V3 right ^V3 up layer material]
   (let [shape (or (:shape layer) (get layer "shape") :tube)
         width (max 0.001 (number-or (or (:width layer) (get layer "width")
@@ -100,8 +137,9 @@
                                              1.0))
         texture (or (:texture layer) (get layer "texture")
                     (:texture material) beam-glow-texture)]
-    (if (= :line shape)
-      [(line-op start end color)]
+    (case shape
+      :line [(line-op start end color)]
+      :glow (beam-glow-ops start end right up layer color)
       [(assoc (beam-quad start end right width texture color)
               :additive? true :no-depth-write? true)
        (assoc (beam-quad start end up width texture color)

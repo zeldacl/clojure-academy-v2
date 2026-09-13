@@ -17,7 +17,12 @@
    :beam-at 0 :arc-at 3 :fade-at 30
    :fade-from-tick 30 :fade-to-tick 50
    :fade-from-alpha 1.0 :fade-to-alpha 0.0 :grow-ticks 3
-   :layers [{:shape :tube :radius 0.13
+   :layers [{:shape :glow :width 1.1
+             :textures {:blend-in "academy:textures/effects/railgun/blend_in.png"
+                        :tile "academy:textures/effects/railgun/tile.png"
+                        :blend-out "academy:textures/effects/railgun/blend_out.png"}
+             :color [255 255 255 170]}
+            {:shape :tube :radius 0.13
              :texture "academy:textures/effects/railgun/tile.png"
              :color [236 170 93 60]}
             {:shape :tube :radius 0.09
@@ -42,7 +47,12 @@
                 {:player-yaw-rad 0.0 :player-pitch-rad 0.0})]
       (is (= :beam (:kind beam-op)))
       (is (= "quad" (.primitive batch)))
-      (is (seq (:ops plan)))))
+      (is (= 11 (count (:ops plan))))
+      (is (= #{"academy:textures/effects/railgun/blend_in.png"
+               "academy:textures/effects/railgun/tile.png"
+               "academy:textures/effects/railgun/blend_out.png"
+               "academy:textures/effects/solid.png"}
+             (set (keep :texture (:ops plan)))))))
   (testing "charge session becomes a concrete animated billboard quad"
     (let [program (scene/compile-v4-document!
                    (load-v4 "ac/vfx-v4/billboard-session.edn"))
