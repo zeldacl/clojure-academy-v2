@@ -16,16 +16,11 @@
 (defn- key-for [content-id owner ability-id] [content-id owner ability-id])
 
 (defn start! [content-id owner ability-id intent]
-  ;; The caller's own VM run (execute!'s commit-ability-state! -> apply-
-  ;; actions! below) can fire before start! does -- apply-actions! uses
-  ;; update-in, which auto-vivifies a {:state {...}} entry at this key the
-  ;; moment the graph's first :state/write patch lands, ahead of start!
-  ;; ever being called for a brand new activation. Preserve whatever :state/
-  ;; :latches already accumulated at this key instead of resetting them to
-  ;; empty, or the ability's own :start-phase session-state defaults would
-  ;; be silently discarded the instant a session opens.
-(let [k (key-for content-id owner ability-id)
-        prior (get @sessions* k)
+  ;; A start is the lifecycle boundary for a new activation. State and
+  ;; latches belong to that activation and must never be inherited from a
+  ;; previous one. The caller supplies the compiled program's declared
+  ;; defaults as :initial-state before applying this run's patches.
+  (let [k (key-for content-id owner ability-id)
         entry {:owner owner
                :content-id content-id
                :ability-id ability-id
@@ -35,8 +30,11 @@
                                           (hash [content-id owner ability-id])))
                :tick (long (or (:server-tick intent) 0))
                :start-tick (long (or (:server-tick intent) 0))
-               :state (or (:state prior) {})
-               :latches (or (:latches prior) #{})}]
+               ;; A start always begins a fresh activation. The caller may
+               ;; provide the declaring program's defaults as :initial-state;
+               ;; never carry state from an older activation through start!.
+               :state (or (:initial-state intent) {})
+               :latches #{}}]
     (swap! sessions* assoc k entry)
     entry))
 

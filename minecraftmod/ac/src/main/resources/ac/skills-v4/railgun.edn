@@ -143,11 +143,6 @@
         :component :state/set,
         :inputs {:key :hold-ticks, :value 0},
         :nid :n/n--entry--start-7},
-       :n--entry--start-7-reset-fire-mode
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :fire-mode, :value nil},
-        :nid :n/n--entry--start-7-reset-fire-mode},
        :n--entry--start-8
        {:type :local-set,
         :operation :define,
@@ -282,10 +277,6 @@
     {:id :e/link017,
      :kind :exec,
      :from [:n/n--entry--start-7 :out],
-     :to [:n/n--entry--start-7-reset-fire-mode :in]}
-    {:id :e/link017a,
-     :kind :exec,
-     :from [:n/n--entry--start-7-reset-fire-mode :out],
      :to [:n/n--entry--start-8 :in]}
     {:id :e/link018,
      :kind :data,
@@ -839,26 +830,6 @@
          :operation :destroy,
          :instance-key [:activation :railgun-charge],
          :payload {}}},
-       :n--entry--release-cleanup-mode
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :mode, :value :armed},
-        :nid :n/n--entry--release-cleanup-mode},
-       :n--entry--release-cleanup-hold-ticks
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :hold-ticks, :value 0},
-        :nid :n/n--entry--release-cleanup-hold-ticks},
-       :n--entry--release-cleanup-fire-mode
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :fire-mode, :value nil},
-        :nid :n/n--entry--release-cleanup-fire-mode},
-       :n--entry--release-cleanup-coin-id
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :coin-id, :value nil},
-        :nid :n/n--entry--release-cleanup-coin-id},
        :n061 {:type :local-get, :key :beam-query-radius, :nid :n/n061},
        :n052 {:type :local-get, :key :fire-budget, :nid :n/n052},
        :n082 {:type :local-get, :key :hit-progression, :nid :n/n082},
@@ -1075,22 +1046,6 @@
     {:id :e/link067,
      :kind :exec,
      :from [:n/n--entry--release-6 :out],
-     :to [:n/n--entry--release-cleanup-mode :in]}
-    {:id :e/link067a,
-     :kind :exec,
-     :from [:n/n--entry--release-cleanup-mode :out],
-     :to [:n/n--entry--release-cleanup-hold-ticks :in]}
-    {:id :e/link067b,
-     :kind :exec,
-     :from [:n/n--entry--release-cleanup-hold-ticks :out],
-     :to [:n/n--entry--release-cleanup-fire-mode :in]}
-    {:id :e/link067c,
-     :kind :exec,
-     :from [:n/n--entry--release-cleanup-fire-mode :out],
-     :to [:n/n--entry--release-cleanup-coin-id :in]}
-    {:id :e/link067d,
-     :kind :exec,
-     :from [:n/n--entry--release-cleanup-coin-id :out],
      :to [:n/n--entry--release-7 :in]}
     {:id :e/link068,
      :kind :data,
@@ -1461,26 +1416,6 @@
          :operation :destroy,
          :instance-key [:activation :railgun-charge],
          :payload {}}},
-       :n--entry--abort-cleanup-mode
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :mode, :value :armed},
-        :nid :n/n--entry--abort-cleanup-mode},
-       :n--entry--abort-cleanup-hold-ticks
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :hold-ticks, :value 0},
-        :nid :n/n--entry--abort-cleanup-hold-ticks},
-       :n--entry--abort-cleanup-fire-mode
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :fire-mode, :value nil},
-        :nid :n/n--entry--abort-cleanup-fire-mode},
-       :n--entry--abort-cleanup-coin-id
-       {:type :component,
-        :component :state/set,
-        :inputs {:key :coin-id, :value nil},
-        :nid :n/n--entry--abort-cleanup-coin-id},
        :n--entry--abort-1
        {:type :end,
         :result {},
@@ -1490,22 +1425,6 @@
    [{:id :e/link157,
      :kind :exec,
      :from [:n/n--entry--abort-0 :out],
-     :to [:n/n--entry--abort-cleanup-mode :in]}
-    {:id :e/link157a,
-     :kind :exec,
-     :from [:n/n--entry--abort-cleanup-mode :out],
-     :to [:n/n--entry--abort-cleanup-hold-ticks :in]}
-    {:id :e/link157b,
-     :kind :exec,
-     :from [:n/n--entry--abort-cleanup-hold-ticks :out],
-     :to [:n/n--entry--abort-cleanup-fire-mode :in]}
-    {:id :e/link157c,
-     :kind :exec,
-     :from [:n/n--entry--abort-cleanup-fire-mode :out],
-     :to [:n/n--entry--abort-cleanup-coin-id :in]}
-    {:id :e/link157d,
-     :kind :exec,
-     :from [:n/n--entry--abort-cleanup-coin-id :out],
      :to [:n/n--entry--abort-1 :in]}
     {:id :e/link158,
      :kind :exec,

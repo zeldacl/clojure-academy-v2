@@ -127,30 +127,6 @@
                 :state {:mode :armed}})]
     (is (= :ignored (:outcome (.result frame))))))
 
-(deftest railgun-activation-state-is-reset-between-releases-test
-  "Every railgun activation owns ephemeral state. A second press must start
-   from the declared defaults even when a prior release/abort left patches in
-   the session accumulator."
-  (let [railgun (some #(when (= :railgun (:id %)) %)
-                      (:skills (skills-catalog/assemble)))
-        graph-nodes (fn [phase]
-                      (vals (get-in (:document railgun) [:graphs phase :nodes])))
-        state-writes (fn [phase]
-                       (set (keep (fn [node]
-                                    (when (= :state/set (:component node))
-                                      (select-keys (:inputs node) [:key :value])))
-                                  (graph-nodes phase))))]
-    (is (contains? (state-writes :start) {:key :fire-mode :value nil}))
-    (doseq [phase [:release :abort]]
-      (is (= #{{:key :mode :value :armed}
-               {:key :hold-ticks :value 0}
-               {:key :fire-mode :value nil}
-               {:key :coin-id :value nil}}
-             (set (filter #(contains? #{:mode :hold-ticks :fire-mode :coin-id}
-                                      (:key %))
-                          (state-writes phase))))
-          (str phase " must clear every ephemeral railgun state key")))))
-
 (deftest mag-manip-hand-capture-dispatches-the-hold-entity-test
   "The hand-held path must do more than consume the item: it must spawn and
    configure the tracked block body that pulse/release will address. This is

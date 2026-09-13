@@ -38,6 +38,23 @@
   (is (= 3 (get-in (session/session :ac "alice" :railgun) [:state :charge])))
   (is (nil? (get-in (session/session :ac "alice" :thunder-clap) [:state :charge]))))
 
+(deftest start-resets-state-and-latches-for-a-new-activation-test
+  "The session layer, not an individual skill, owns activation boundaries."
+  (session/reset-for-test! :ac)
+  (let [defaults {:mode :armed :hold-ticks 0 :fire-mode nil :coin-id nil}]
+    (session/start! :ac "alice" :railgun {:initial-state defaults})
+    (session/apply-actions!
+     :ac "alice" :railgun
+     [{:type :session-patch
+       :entries [{:path [:mode] :mode :assign :value :item-charge}
+                 {:path [:hold-ticks] :mode :assign :value 20}
+                 {:path [:fire-mode] :mode :assign :value :item}
+                 {:path [:coin-id] :mode :assign :value "coin-1"}]}
+      {:type :session-latches :latches #{:fired}}])
+    (session/start! :ac "alice" :railgun {:initial-state defaults})
+    (is (= defaults (get-in (session/session :ac "alice" :railgun) [:state])))
+    (is (= #{} (:latches (session/session :ac "alice" :railgun))))))
+
 (deftest remove-only-affects-its-own-tenant-test
   (session/reset-for-test!)
   (session/start! :ac "alice" :railgun {})

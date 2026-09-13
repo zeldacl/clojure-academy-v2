@@ -787,7 +787,12 @@
         context (activation-context owner ability-id intent seed)
         tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
         capabilities (final-capabilities-v2 owner ability-id intent seed state)]
-    {:tunables tunables :capabilities capabilities :state state :context context}))
+    {:tunables tunables :capabilities capabilities :state state
+     ;; Session lifecycle owns activation-state reset. Keep the program's
+     ;; declared defaults separate from the current session state so a new
+     ;; activation can be initialized generically by session/start!.
+     :initial-state declared-state
+     :context context}))
 
 (defn install-ac-host-capabilities!
   "Link AC's own domain capabilities (resource/progression/energy/mark) to
