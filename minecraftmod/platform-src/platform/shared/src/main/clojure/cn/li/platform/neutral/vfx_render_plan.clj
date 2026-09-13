@@ -66,6 +66,9 @@
     (if (and p1 p2) [(line-op p1 p2 color)] [])))
 
 (def ^:private beam-glow-texture "academy:textures/effects/glow_line.png")
+(def ^:private beam-tube-texture "academy:textures/effects/solid.png")
+(def ^:private tube-segments 12)
+(def ^:private tube-head-segments 4)
 
 (defn- scale-color-alpha [color alpha]
   (cond
@@ -124,6 +127,71 @@
                       (glow-board mid2 ge axis width blend-out color)])]
         (vec (concat (boards right) (boards up)))))))
 
+(defn- tube-profile
+  "Sample the short paraboloid noses and cylindrical body used by main's
+   RendererRayCylinder. Keeping the profile in the neutral plan makes the V4
+   :tube layer a real volume instead of a camera-angle-dependent strip."
+  [length radius head-fix]
+  (let [nose (* radius head-fix)
+        nose-points (for [i (range (inc tube-head-segments))
+                          :let [u (/ (double i) tube-head-segments)]]
+                      [(* nose u) (* radius (Math/sqrt u))])
+        tail-points (for [i (range 1 (inc tube-head-segments))
+                          :let [u (/ (double i) tube-head-segments)]]
+                      [(+ length (* nose u))
+                       (* radius (Math/sqrt (- 1.0 u)))])]
+    (if (<= length nose)
+      (concat nose-points tail-points)
+      (concat nose-points [[length radius]] tail-points))))
+
+(defn- tube-quad [p0 p1 p2 p3 color]
+  {:kind :quad
+   :p0 p0 :p1 p1 :p2 p2 :p3 p3
+   :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+   ;; RendererRayCylinder uses an untextured vertex-colour material. The
+   ;; neutral backend needs a texture-backed RenderType, so use the opaque
+   ;; white sprite rather than railgun's tapered glow sprite, which would
+   ;; make the tube appear hollow or disappear.
+   :texture beam-tube-texture :color color})
+
+(defn- tube-ops
+  "Expand one beam tube into a 12-sided surface with tapered end caps.
+
+   This is the V4 equivalent of main's inner/outer ray cylinders. It is
+   intentionally generated here, after the skill has supplied only radius and
+   colour, so every skill receives the same solid-beam silhouette."
+  [^V3 start ^V3 end radius color]
+  (let [delta (V3/sub end start)
+        length (V3/length delta)
+        radius (double radius)]
+    (if (or (<= length 1.0e-5) (<= radius 1.0e-5))
+      []
+      (let [direction (V3/scale delta (/ 1.0 length))
+            reference (if (> (Math/abs (.-y direction)) 0.9)
+                        (V3. 1.0 0.0 0.0)
+                        (V3. 0.0 1.0 0.0))
+            right (V3/normalize (V3/cross reference direction))
+            up (V3/normalize (V3/cross direction right))
+            dtheta (/ (* 2.0 Math/PI) tube-segments)
+            ring (vec (for [i (range (inc tube-segments))
+                            :let [angle (* (double i) dtheta)]]
+                        (V3/add (V3/scale right (Math/cos angle))
+                                (V3/scale up (Math/sin angle)))))
+            at (fn [distance width axis]
+                (V3/add (V3/add start (V3/scale direction (double distance)))
+                        (V3/scale axis (double width))))
+            profile (tube-profile length radius 1.0)]
+        (vec
+          (for [[[d0 w0] [d1 w1]] (partition 2 1 profile)
+                i (range tube-segments)
+                :let [axis0 (nth ring i)
+                      axis1 (nth ring (inc i))]]
+            (tube-quad (at d0 w0 axis0)
+                       (at d0 w0 axis1)
+                       (at d1 w1 axis1)
+                       (at d1 w1 axis0)
+                       color)))))))
+
 (defn- beam-layer-ops [^V3 start ^V3 end ^V3 right ^V3 up layer material]
   (let [shape (or (:shape layer) (get layer "shape") :tube)
         width (max 0.001 (number-or (or (:width layer) (get layer "width")
@@ -140,6 +208,7 @@
     (case shape
       :line [(line-op start end color)]
       :glow (beam-glow-ops start end right up layer color)
+      :tube (tube-ops start end width color)
       [(assoc (beam-quad start end right width texture color)
               :additive? true :no-depth-write? true)
        (assoc (beam-quad start end up width texture color)

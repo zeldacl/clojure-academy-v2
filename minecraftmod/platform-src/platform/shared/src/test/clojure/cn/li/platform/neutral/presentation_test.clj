@@ -170,7 +170,7 @@
         (is (zero? @lifecycle-lookups)))
       (finally
         (presentation/reset-host-for-test!)))))
-(deftest beam-geometry-expands-to-crossed-textured-quads
+(deftest beam-geometry-expands-to-solid-volume-tubes
   (let [plan (vfx-plan/neutral-op->plan
                {:operation :draw-batch
                 :primitive :quad
@@ -185,10 +185,10 @@
                                      :texture "academy:textures/effects/solid.png"
                                      :color [241 240 222 200]}]}})
         ops (:ops plan)]
-    (is (= 4 (count ops)))
+    ;; 10 profile points make 9 longitudinal strips, each with 12 sides.
+    (is (= 216 (count ops)))
     (is (every? #(= :quad (:kind %)) ops))
-    (is (= #{"academy:textures/effects/glow_line.png"
-             "academy:textures/effects/solid.png"}
+    (is (= #{"academy:textures/effects/solid.png"}
            (set (map :texture ops))))))
 
 (deftest arc-end-points-fan-out-from-impact-to-entity-eyes

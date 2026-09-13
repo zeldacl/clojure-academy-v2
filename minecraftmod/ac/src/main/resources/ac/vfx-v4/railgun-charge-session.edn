@@ -3,6 +3,7 @@
  :lifecycle {:mode :session},
  :inputs
  {:anchor {:type :any},
+  :source-player-id {:type :any},
   :duration-ticks {:type :int},
   :texture-pattern {:type :string},
   :frame-count {:type :int},

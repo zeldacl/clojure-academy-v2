@@ -47,7 +47,9 @@
                 {:player-yaw-rad 0.0 :player-pitch-rad 0.0})]
       (is (= :beam (:kind beam-op)))
       (is (= "quad" (.primitive batch)))
-      (is (= 11 (count (:ops plan))))
+      ;; glow: 2 axes * 3 boards; two tubes: 2 * 9 strips * 12 sides;
+      ;; plus the core line.
+      (is (= 223 (count (:ops plan))))
       (is (= #{"academy:textures/effects/railgun/blend_in.png"
                "academy:textures/effects/railgun/tile.png"
                "academy:textures/effects/railgun/blend_out.png"
@@ -104,3 +106,20 @@
       (is (< (Math/abs (- center-x 9.74)) 1.0e-6))
       (is (< (Math/abs (- center-y 19.85)) 1.0e-6))
       (is (< (Math/abs (- center-z 29.76)) 1.0e-6)))))
+
+(deftest railgun-charge-payload-identifies-caster-test
+  (let [skill (load-v4 "ac/skills-v4/railgun.edn")
+        charge-node (some (fn [value]
+                            (when (and (map? value)
+                                       (= :effect/vfx (:component value))
+                                       (= :railgun-charge-session
+                                          (get-in value [:inputs :effect-id]))
+                                       (= :spawn (get-in value [:inputs :operation])))
+                              value))
+                          (tree-seq coll? identity skill))]
+    (is (= {:ref [:local :owner-id]}
+           (get-in charge-node [:inputs :payload :source-player-id]))
+        "first-person charge resolution needs the caster id")
+    (is (= :any
+           (get-in (load-v4 "ac/vfx-v4/railgun-charge-session.edn")
+                   [:inputs :source-player-id :type])))))
