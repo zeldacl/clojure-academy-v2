@@ -193,11 +193,11 @@
         :component :effect/vfx,
         :nid :n/n--entry--start-10,
         :inputs
-        {:effect-id :billboard-session,
+        {:effect-id :railgun-charge-session,
          :operation :spawn,
          :instance-key [:activation :railgun-charge],
          :audience {:type :nearby, :radius 32.0},
-         :payload
+          :payload
           {:anchor {:ref [:local :charge-anchor]},
           :duration-ticks 64,
           :texture-pattern "academy:textures/effects/arc_burst/%d.png",
@@ -609,7 +609,18 @@
         :n087 {:type :component, :component :vec3/normalize, :nid :n/n087},
         :n088 {:type :component, :component :vec3/scale, :nid :n/n088,
               :inputs {:arg1 0.35}},
-        :n089 {:type :component, :component :vec3/add, :nid :n/n089},
+       :n089 {:type :component, :component :vec3/add, :nid :n/n089},
+       :n090 {:type :component, :component :vec3/cross, :nid :n/n090,
+             :inputs {:arg1 [0.0 1.0 0.0]}},
+       :n091 {:type :component, :component :vec3/normalize, :nid :n/n091},
+       :n092 {:type :component, :component :vec3/scale, :nid :n/n092,
+             :inputs {:arg1 0.3}},
+       :n093 {:type :component, :component :vec3/cross, :nid :n/n093},
+       :n094 {:type :component, :component :vec3/normalize, :nid :n/n094},
+       :n095 {:type :component, :component :vec3/scale, :nid :n/n095,
+             :inputs {:arg1 -0.15}},
+       :n096 {:type :component, :component :vec3/add, :nid :n/n096},
+       :n097 {:type :component, :component :vec3/add, :nid :n/n097},
         :n--entry--release-20
         {:type :local-set,
          :operation :define,
@@ -815,7 +826,7 @@
         :component :effect/vfx,
         :nid :n/n--entry--release-6,
         :inputs
-        {:effect-id :billboard-session,
+        {:effect-id :railgun-charge-session,
          :operation :destroy,
          :instance-key [:activation :railgun-charge],
          :payload {}}},
@@ -955,7 +966,51 @@
      {:id :e/link059e,
       :kind :data,
       :from [:n/n089 :value],
-      :to [:n/n--entry--release-20 :value]}
+      :to [:n/n096 :arg0]}
+    {:id :e/link059h,
+     :kind :data,
+     :from [:n/n087 :value],
+     :to [:n/n090 :arg0]}
+    {:id :e/link059i,
+     :kind :data,
+     :from [:n/n090 :value],
+     :to [:n/n091 :arg0]}
+    {:id :e/link059j,
+     :kind :data,
+     :from [:n/n091 :value],
+     :to [:n/n092 :arg0]}
+    {:id :e/link059k,
+     :kind :data,
+     :from [:n/n091 :value],
+     :to [:n/n093 :arg0]}
+    {:id :e/link059l,
+     :kind :data,
+     :from [:n/n087 :value],
+     :to [:n/n093 :arg1]}
+    {:id :e/link059m,
+     :kind :data,
+     :from [:n/n093 :value],
+     :to [:n/n094 :arg0]}
+    {:id :e/link059n,
+     :kind :data,
+     :from [:n/n094 :value],
+     :to [:n/n095 :arg0]}
+    {:id :e/link059o,
+     :kind :data,
+     :from [:n/n092 :value],
+     :to [:n/n096 :arg1]}
+    {:id :e/link059p,
+     :kind :data,
+     :from [:n/n096 :value],
+     :to [:n/n097 :arg0]}
+    {:id :e/link059q,
+     :kind :data,
+     :from [:n/n095 :value],
+     :to [:n/n097 :arg1]}
+    {:id :e/link059r,
+     :kind :data,
+     :from [:n/n097 :value],
+     :to [:n/n--entry--release-20 :value]}
      {:id :e/link059f,
       :kind :exec,
       :from [:n/n--entry--release-2 :out],
@@ -1357,7 +1412,7 @@
         :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
-        {:effect-id :billboard-session,
+        {:effect-id :railgun-charge-session,
          :operation :destroy,
          :instance-key [:activation :railgun-charge],
          :payload {}}},

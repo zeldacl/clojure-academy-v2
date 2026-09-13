@@ -228,8 +228,34 @@
       [right (V3/normalize (V3/cross right forward))])
     [(V3. 1.0 0.0 0.0) (V3. 0.0 0.0 1.0)]))
 
-(defn- marker-quad [anchor color particle view-ctx]
-  (let [center (v3-from anchor)
+(defn- hand-origin-center [anchor geometry view-ctx]
+  "Resolve the Railgun charge at the caster's rendered hand.
+
+   The server anchor remains the fallback for remote viewers. For the local
+   caster, use the interpolated hand center supplied by the MC adapter and
+   main's first-person charge offsets; this keeps the billboard off the
+   crosshair while preserving the remote-viewer network anchor."
+  (if (and view-ctx
+           (true? (:hand-origin? geometry))
+           (:player-uuid view-ctx)
+           (= (str (:player-uuid view-ctx))
+              (str (:source-player-id geometry)))
+           (number? (:x view-ctx))
+           (number? (:y view-ctx))
+           (number? (:z view-ctx)))
+    (let [[right up] (view-basis view-ctx)
+          forward (V3/normalize (V3/cross right up))
+          hand (V3. (double (:x view-ctx))
+                    (double (:y view-ctx))
+                    (double (:z view-ctx)))]
+      (V3/add hand
+              (V3/add (V3/scale right 0.26)
+                      (V3/add (V3/scale up -0.15)
+                              (V3/scale forward 0.24)))))
+    (v3-from anchor)))
+
+(defn- marker-quad [anchor color particle geometry view-ctx]
+  (let [center (hand-origin-center anchor geometry view-ctx)
         half (max 0.001 (number-or (or (:size particle) (:scale particle)) 0.08))
         texture (animated-texture particle)
         [right up] (view-basis view-ctx)
@@ -273,7 +299,7 @@
       (and start end) [(line-op start end color)]
       (and (sequential? points) (> (count points) 1)) (point-chain-ops points color)
       (and center (number? radius)) (ring-ops {:center center :radius radius :segments 16} color)
-      :else (marker-quad center color nil nil))))
+      :else (marker-quad center color nil nil nil))))
 
 (defn neutral-op->plan
   "Return the mc-* geometry plan for one neutral draw-batch operation.
@@ -300,7 +326,8 @@
                    :quad (case (:kind geometry)
                            :beam (beam-ops geometry material)
                            :arc (arc-geometry/arc-quad-ops geometry material color)
-                           :emitter (marker-quad (:anchor geometry) color (:particle geometry) view-ctx)
+                           :emitter (marker-quad (:anchor geometry) color (:particle geometry)
+                                                 geometry view-ctx)
                            (quad-ops geometry color material))
                    :particle (if-let [particles (:particle-buffer op)]
                                (if (instance? ParticleBuffer particles)

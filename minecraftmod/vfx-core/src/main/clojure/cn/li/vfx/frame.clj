@@ -135,7 +135,9 @@
                      :alpha (double (or (:alpha op) 1.0))}}
     :emitter {:operation :draw-batch :stage :world-translucent :primitive :quad
               :geometry {:kind :emitter :anchor (:anchor op) :rate-per-tick (:rate-per-tick op)
-                        :limit (:limit op) :age (:age op) :particle (:particle op)}
+                        :limit (:limit op) :age (:age op) :particle (:particle op)
+                        :hand-origin? (boolean (:hand-origin? op))
+                        :source-player-id (:source-player-id op)}
               :material {:particle (:particle op)}}
     :audio-one-shot {:operation :audio :stage :audio :sound-id (:sound-id op)
                       :volume (:volume op) :pitch (:pitch op) :position (:position op)

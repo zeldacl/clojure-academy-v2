@@ -97,7 +97,8 @@
    ;; since none of them do per-particle server/headless simulation).
    :emitter
    (node {:anchor (p* :vec3) :rate-per-tick (opt :double nil) :limit (opt :long nil)
-         :chance (opt :double nil) :particle (opt :any nil)})
+         :chance (opt :double nil) :particle (opt :any nil)
+         :hand-origin? (opt :boolean false) :source-player-id (opt :any nil)})
 
    ;; --- audio -------------------------------------------------------------
    :audio-one-shot

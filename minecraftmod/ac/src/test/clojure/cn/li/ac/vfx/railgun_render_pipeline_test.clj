@@ -72,4 +72,35 @@
                 {:player-yaw-rad 0.0 :player-pitch-rad 0.0})]
       (is (= :emitter (:kind emitter-op)))
       (is (= "quad" (.primitive batch)))
-      (is (seq (:ops plan))))))
+      (is (seq (:ops plan)))))
+  (testing "Railgun charge uses the local caster's rendered hand center"
+    (let [program (scene/compile-v4-document!
+                   (load-v4 "ac/vfx-v4/railgun-charge-session.edn"))
+          [emitter-op] (scene/sample!
+                        program
+                        {:capabilities {:anchor {:x 100.0 :y 200.0 :z 300.0}
+                                        :duration-ticks 64
+                                        :texture-pattern "academy:textures/effects/arc_burst/%d.png"
+                                        :frame-count 40 :frame-duration-ms 40
+                                        :half-size 0.4 :age 0.0 :progress 0.0
+                                        :seed 42 :source-player-id "owner"}})
+          java-frame (frame/->java-frame 1 0 {[:railgun]
+                                               {:scene [emitter-op] :emitters []}})
+          batch (first (.batches java-frame))
+          plan (render-plan/neutral-op->plan
+                (.payload batch)
+                {:player-uuid "owner"
+                 :first-person? true
+                 :x 10.0 :y 20.0 :z 30.0
+                 :player-yaw-rad 0.0 :player-pitch-rad 0.0})
+          quad (first (:ops plan))
+          center-x (/ (+ (.-x (:p0 quad)) (.-x (:p1 quad))
+                         (.-x (:p2 quad)) (.-x (:p3 quad))) 4.0)
+          center-y (/ (+ (.-y (:p0 quad)) (.-y (:p1 quad))
+                         (.-y (:p2 quad)) (.-y (:p3 quad))) 4.0)
+          center-z (/ (+ (.-z (:p0 quad)) (.-z (:p1 quad))
+                         (.-z (:p2 quad)) (.-z (:p3 quad))) 4.0)]
+      ;; yaw=0/pitch=0: right=-X, up=+Y, forward=-Z in the neutral view basis.
+      (is (< (Math/abs (- center-x 9.74)) 1.0e-6))
+      (is (< (Math/abs (- center-y 19.85)) 1.0e-6))
+      (is (< (Math/abs (- center-z 29.76)) 1.0e-6)))))

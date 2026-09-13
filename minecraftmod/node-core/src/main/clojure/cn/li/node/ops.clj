@@ -28,6 +28,7 @@
    :vec3/normalize {:params [:vec3]                   :returns :vec3}
    :vec3/distance  {:params [:vec3 :vec3]             :returns :double}
    :vec3/dot       {:params [:vec3 :vec3]             :returns :double}
+   :vec3/cross     {:params [:vec3 :vec3]             :returns :vec3}
    :vec3/x         {:params [:vec3]                   :returns :double}
    :vec3/y         {:params [:vec3]                   :returns :double}
    :vec3/z         {:params [:vec3]                   :returns :double}

@@ -210,7 +210,7 @@
         effects (:by-id (fx-catalog/assemble))
         missing (set/difference effect-ids (set (keys effects)))]
     (is (= 50 (count skill-files)))
-    (is (= 37 (count effects)))
+    (is (= 38 (count effects)))
     (is (empty? missing)
         (str "skill V4 graph references unregistered VFX effect(s): "
              (sort missing)))))
@@ -272,8 +272,8 @@
   (let [files (resource-files "ac/vfx-v4")
         docs (mapv read-edn-file files)
         ids (map :id docs)]
-    (is (= 37 (count files)))
-    (is (= 37 (count (set ids))))
+    (is (= 38 (count files)))
+    (is (= 38 (count (set ids))))
     (is (every? #(= :ac/vfx-v4 (:schema %)) docs))
     (is (every? #(contains? (:graphs %) :render) docs)
         "every V4 VFX document must declare a render graph, including explicit side-channels")))

@@ -12,6 +12,10 @@
   (is (= {:vec3 [4.0 6.0 8.0]}
          (expr/evaluate :vec3/add [{:vec3 [1.0 2.0 3.0]} {:vec3 [3.0 4.0 5.0]}]))))
 
+(deftest vec3-cross-test
+  (is (= {:vec3 [0.0 0.0 1.0]}
+         (expr/evaluate :vec3/cross [[1.0 0.0 0.0] [0.0 1.0 0.0]]))))
+
 (deftest vec3-distance-accepts-the-real-host-query-xyz-shape-test
   ;; :owner/snapshot's :position projection, :target/saved-location's
   ;; resolved point, and every raycast hit position are real {:x :y :z}

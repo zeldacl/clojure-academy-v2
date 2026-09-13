@@ -247,6 +247,12 @@
     :vec3/dot
     (let [[ax ay az] (vec3-components (nth args 0)) [bx by bz] (vec3-components (nth args 1))]
       (+ (* (double ax) (double bx)) (* (double ay) (double by)) (* (double az) (double bz))))
+    :vec3/cross
+    (let [[ax ay az] (vec3-components (nth args 0))
+          [bx by bz] (vec3-components (nth args 1))]
+      {:vec3 [(- (* (double ay) (double bz)) (* (double az) (double by)))
+              (- (* (double az) (double bx)) (* (double ax) (double bz)))
+              (- (* (double ax) (double by)) (* (double ay) (double bx)))]})
     :vec3/distance
     (let [[ax ay az] (vec3-components (nth args 0)) [bx by bz] (vec3-components (nth args 1))]
       (Math/sqrt (+ (Math/pow (- (double ax) (double bx)) 2)
