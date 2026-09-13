@@ -174,6 +174,10 @@
                                :rng/seed 1}})]
     (is (some #(= :entity/spawn (first %)) @queries)
         "hand capture must spawn the tracked block body")
+    (is (some #(= [0.0 65.5 2.0]
+                  (get-in (second %) [:position :vec3]))
+              (filter #(= :entity/spawn (first %)) @queries))
+        "hand capture must spawn the block body at the eye-relative hold focus")
     (is (some #(and (= :entity/configure (first %))
                     (= "minecraft:iron_block" (get-in (second %) [:block-id])))
               @actions)

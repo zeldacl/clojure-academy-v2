@@ -252,6 +252,36 @@
         :nid :n/n--entry--start-9-else-1-then-0,
         :inputs {:drop? false}},
        :n052 {:type :local-get, :key :body, :nid :n/n052},
+       :n/start-hold-focus-offset
+       {:type :component,
+        :component :vec3/scale,
+        :nid :n/start-hold-focus-offset,
+        :inputs {:arg0 [0.0 1.0 0.0]}},
+       :n/start-hold-focus-origin
+       {:type :component,
+        :component :vec3/sub,
+        :nid :n/start-hold-focus-origin},
+       :n/start-hold-focus-delta
+       {:type :component,
+        :component :vec3/scale,
+        :nid :n/start-hold-focus-delta},
+       :n/start-hold-head-y-offset
+       {:type :parameter-ref,
+        :key :movement-hold-head-y-offset,
+        :nid :n/start-hold-head-y-offset},
+       :n/start-hold-distance
+       {:type :parameter-ref,
+        :key :movement-hold-distance,
+        :nid :n/start-hold-distance},
+       :n/start-hold-focus
+       {:type :component,
+        :component :vec3/add,
+        :nid :n/start-hold-focus},
+       :n/start-block-center
+       {:type :component,
+        :component :vec3/add,
+        :nid :n/start-block-center,
+        :inputs {:arg1 [0.5 0.5 0.5]}},
        :n--entry--start-9-then-3
        {:type :component,
         :component :state/set,
@@ -589,7 +619,7 @@
      :to [:n/n023 :world-id]}
     {:id :e/link036,
      :kind :data,
-     :from [:n/n025 :value],
+     :from [:n/start-hold-focus :value],
      :to [:n/n023 :position]}
     {:id :e/link037,
      :kind :data,
@@ -695,6 +725,38 @@
      :kind :data,
      :from [:n/n042 :value],
      :to [:n/n041 :value]}
+    {:id :e/link058-focus-offset,
+     :kind :data,
+     :from [:n/n030 :value],
+     :to [:n/start-hold-focus-delta :arg0]}
+    {:id :e/link058-focus-distance,
+     :kind :data,
+     :from [:n/start-hold-distance :value],
+     :to [:n/start-hold-focus-delta :arg1]}
+    {:id :e/link058-focus-eye,
+     :kind :data,
+     :from [:n/n029 :value],
+     :to [:n/start-hold-focus-origin :arg0]}
+    {:id :e/link058-focus-head-offset,
+     :kind :data,
+     :from [:n/start-hold-focus-offset :value],
+     :to [:n/start-hold-focus-origin :arg1]}
+    {:id :e/link058-focus-offset-axis,
+     :kind :data,
+     :from [:n/start-hold-head-y-offset :value],
+     :to [:n/start-hold-focus-offset :arg1]}
+    {:id :e/link058-focus-origin,
+     :kind :data,
+     :from [:n/start-hold-focus-origin :value],
+     :to [:n/start-hold-focus :arg0]}
+    {:id :e/link058-focus-delta,
+     :kind :data,
+     :from [:n/start-hold-focus-delta :value],
+     :to [:n/start-hold-focus :arg1]}
+    {:id :e/link058-block-center,
+     :kind :data,
+     :from [:n/n041 :value],
+     :to [:n/start-block-center :arg0]}
     {:id :e/link059,
      :kind :data,
      :from [:n/n041 :value],
@@ -753,7 +815,7 @@
      :to [:n/n050 :world-id]}
     {:id :e/link072,
      :kind :data,
-     :from [:n/n052 :value],
+     :from [:n/start-block-center :value],
      :to [:n/n050 :position]}
     {:id :e/link073,
      :kind :data,
