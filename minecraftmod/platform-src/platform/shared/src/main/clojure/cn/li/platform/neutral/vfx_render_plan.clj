@@ -395,6 +395,7 @@
                    :quad (case (:kind geometry)
                            :beam (beam-ops geometry material)
                            :arc (arc-geometry/arc-quad-ops geometry material color)
+                           :surround-arc (arc-geometry/surround-arc-quad-ops geometry material color)
                            :emitter (marker-quad (:anchor geometry) color (:particle geometry)
                                                  geometry view-ctx)
                            (quad-ops geometry color material))

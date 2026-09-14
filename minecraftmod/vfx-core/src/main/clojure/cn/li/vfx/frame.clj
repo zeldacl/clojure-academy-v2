@@ -145,6 +145,11 @@
     :audio-loop {:operation :audio :stage :audio :sound-id (:sound-id op)
                  :volume (:volume op) :pitch (:pitch op) :position (:position op)
                  :looping? true}
+    :surround-arc {:operation :draw-batch :stage :world-after-translucent :primitive :quad
+                   :geometry (assoc (select-keys op [:origin :mode :good? :block-pos :block-bounds
+                                                     :age :seed :source-player-id])
+                                    :kind :surround-arc)
+                   :material {:color [190 244 255 255]}}
     :camera-fov {:operation :camera-fov :stage :camera :value (:value op)}
     :camera-shake {:operation :camera-shake :stage :camera
                    :amplitude (:amplitude op) :duration (:duration op)}

@@ -33,7 +33,7 @@
 ;; deriving from a namespace that does not exist.
 (def ^:private category-by-id
   {:ring :geometry :beam :geometry :ray-beam :geometry :line :geometry
-   :quad :geometry :arc :geometry :emitter :geometry
+   :quad :geometry :arc :geometry :surround-arc :geometry :emitter :geometry
    :audio-one-shot :audio :audio-loop :audio
    :camera-fov :camera :camera-shake :camera :post-process :camera
    :first-person-motion :geometry})
@@ -86,6 +86,18 @@
           :bolt-count (opt :any 1)
           :life-ratio (opt :double 0.0) :alpha (opt :double 1.0)
           :hand-origin? (opt :boolean false)
+          :source-player-id (opt :any nil)})
+   ;; EntitySurroundArc-equivalent short sparks used by current-charging.
+   ;; The neutral renderer owns the geometry so skill graphs only describe
+   ;; the target body and lifecycle, without embedding client code.
+   :surround-arc
+   (node {:origin (p* :vec3)
+          :mode (opt :resource-id :block)
+          :good? (opt :boolean true)
+          :block-pos (opt :any nil)
+          :block-bounds (opt :any nil)
+          :age (opt :double 0.0)
+          :seed (opt :long 0)
           :source-player-id (opt :any nil)})
    ;; :vfx/emitter is a single
    ;; declarative "spawn an emitter here" draw-batch op per sample, not a

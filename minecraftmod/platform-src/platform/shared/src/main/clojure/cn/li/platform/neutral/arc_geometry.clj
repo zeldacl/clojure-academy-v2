@@ -19,8 +19,11 @@
   ;; Zigzag is reseeded per age tick (main hash[seed,ttl]) so the bolt
   ;; crackles instead of holding one frozen path for its whole life.
   {:weak {:segments 24 :amplitude 0.12 :width 0.1 :show-wiggle 0.2 :hide-wiggle 0.2}
+   :charging {:segments 20 :amplitude 0.06 :width 0.1 :show-wiggle 0.2 :hide-wiggle 0.2}
    :strong {:segments 20 :amplitude 0.07 :width 0.3 :show-wiggle 0.2 :hide-wiggle 0.2}
-   :aoe {:segments 20 :amplitude 0.06 :width 0.13 :show-wiggle 0.2 :hide-wiggle 0.2}})
+   :aoe {:segments 20 :amplitude 0.06 :width 0.13 :show-wiggle 0.2 :hide-wiggle 0.2}
+   :current-spark {:segments 6 :amplitude 0.23 :width 0.09 :show-wiggle 0.2 :hide-wiggle 0.2}
+   :current-spark-item {:segments 6 :amplitude 0.46 :width 0.06 :show-wiggle 0.2 :hide-wiggle 0.2}})
 
 (defn- pattern-of [key]
   (get patterns (keyword key) (:weak patterns)))
@@ -292,3 +295,82 @@
             (mapcat (fn [bolt-seed]
                       (single-bolt-quad-ops geometry material color bolt-seed)))
             (bolt-seeds seed bolt-count)))))
+
+(defn- valid-position-vector?
+  [value size]
+  (and (sequential? value)
+       (= size (count value))
+       (every? number? value)))
+
+(defn- surround-body
+  [geometry]
+  (let [mode (keyword (or (:mode geometry) :block))
+        origin (as-v3 (:origin geometry))
+        block-pos (:block-pos geometry)
+        bounds (:block-bounds geometry)]
+    (if (and (= mode :block) (valid-position-vector? block-pos 3))
+      (if (valid-position-vector? bounds 6)
+        (let [[min-x min-y min-z max-x max-y max-z] (map double bounds)
+              width (inc (- max-x min-x))
+              height (inc (- max-y min-y))
+              depth (inc (- max-z min-z))]
+          {:x (+ min-x (* 0.5 width))
+           :y min-y
+           :z (+ min-z (* 0.5 depth))
+           :width width :height height :depth depth})
+        (let [[x y z] (map double block-pos)]
+          {:x (+ x 0.5) :y y :z (+ z 0.5)
+           :width 1.0 :height 1.0 :depth 1.0}))
+      {:x (.-x origin) :y (- (.-y origin) 0.9) :z (.-z origin)
+       :width 0.78 :height 2.34 :depth 0.78})))
+
+(defn- surround-spark-quad-ops
+  [geometry material color]
+  (let [mode (keyword (or (:mode geometry) :block))
+        good? (if (= mode :block) (boolean (:good? geometry)) true)
+        body (surround-body geometry)
+        count* (if (= mode :item) 4 6)
+        pattern-key (if (= mode :item) :current-spark-item :current-spark)
+        age (long (or (:age geometry) 0))
+        seed (long (or (:seed geometry) 0))]
+    (if-not good?
+      []
+      (vec
+       (mapcat
+        (fn [idx]
+          (let [rng (java.util.Random. (long (hash [seed idx :surround])))
+                face (.nextInt rng 6)
+                u (- (.nextDouble rng) 0.5)
+                v (- (.nextDouble rng) 0.5)
+                [ox oy oz] (case face
+                             0 [(* 0.5 (:width body)) u v]
+                             1 [(* -0.5 (:width body)) u v]
+                             2 [u (* 0.5 (:height body)) v]
+                             3 [u (* -0.5 (:height body)) v]
+                             4 [u v (* 0.5 (:depth body))]
+                             5 [u v (* -0.5 (:depth body))])
+                start (V3. (+ (:x body) ox) (+ (:y body) oy) (+ (:z body) oz))
+                theta (* 2.0 Math/PI (.nextDouble rng))
+                z (- (* 2.0 (.nextDouble rng)) 1.0)
+                r (Math/sqrt (max 0.0 (- 1.0 (* z z))))
+                direction (V3. (* r (Math/cos theta)) z (* r (Math/sin theta)))
+                length (+ (if (= mode :item) 0.45 0.9)
+                          (* (.nextDouble rng) (if (= mode :item) 0.15 0.3)))
+                end (v+ start (v* direction length))]
+            (single-bolt-quad-ops
+             {:start start :end end :pattern pattern-key
+              :age age :arc-life-ticks 30
+              :seed (long (hash [seed idx :shape]))}
+             material
+             (or color [190 244 255 255])
+             (long (hash [seed idx :shape])))
+        (range count*))))))))
+
+(defn surround-arc-quad-ops
+  "Expand an EntitySurroundArc-equivalent current-charging operation.
+
+   Block mode emits six sparks around the target body only when charging is
+   effective; item mode emits four thin sparks around the caster. The random
+   anchors are deterministic per VFX instance and frame age."
+  [geometry material color]
+  (surround-spark-quad-ops geometry material color))
