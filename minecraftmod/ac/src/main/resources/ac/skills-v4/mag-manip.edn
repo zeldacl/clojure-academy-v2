@@ -126,9 +126,9 @@
         :inputs {:field :block-id}},
        :n--entry--start-9-then-0
        {:type :component,
-        :component :inventory/consume,
+        :component :inventory/settle,
         :nid :n/n--entry--start-9-then-0,
-        :inputs {:source :main-hand, :count 1}},
+        :inputs {:source :main-hand, :count 1, :drop? false}},
        :n033
        {:type :component,
         :component :value/eq,
@@ -251,6 +251,30 @@
         :component :block/break,
         :nid :n/n--entry--start-9-else-1-then-0,
         :inputs {:drop? false}},
+       :n/start-break-status
+       {:type :local-set,
+        :operation :define,
+        :key :break-status,
+        :nid :n/start-break-status},
+       :n/start-break-status-get
+       {:type :local-get,
+        :key :break-status,
+        :nid :n/start-break-status-get},
+       :n/start-break-applied
+       {:type :component,
+        :component :value/eq,
+        :nid :n/start-break-applied,
+        :inputs {:arg1 :applied}},
+       :n/start-break-ok {:type :branch, :nid :n/start-break-ok},
+       :n/start-break-failed
+       {:type :end,
+        :result {},
+        :nid :n/start-break-failed,
+        :inputs {:outcome :capture-failed, :end-ability? true}},
+       :n/start-creative
+       {:type :context-ref,
+        :key :caster/creative?,
+        :nid :n/start-creative},
        :n052 {:type :local-get, :key :body, :nid :n/n052},
        :n/start-hold-focus-offset
        {:type :component,
@@ -585,6 +609,14 @@
      :kind :exec,
      :from [:n/n--entry--start-9-then-0 :out],
      :to [:n/n--entry--start-9-then-1 :in]}
+     {:id :e/start-hand-position,
+      :kind :data,
+      :from [:n/n029 :value],
+      :to [:n/n--entry--start-9-then-0 :position]}
+     {:id :e/start-hand-creative,
+      :kind :data,
+      :from [:n/start-creative :value],
+      :to [:n/n--entry--start-9-then-0 :creative?]}
     {:id :e/link029,
      :kind :data,
      :from [:n/n022 :value],
@@ -769,10 +801,34 @@
      :kind :data,
      :from [:n/n043 :value],
      :to [:n/n--entry--start-9-else-1-then-0 :expected-block-id]}
-    {:id :e/link062,
-     :kind :exec,
-     :from [:n/n--entry--start-9-else-1-then-0 :out],
-     :to [:n/n--entry--start-9-else-1-then-1 :in]}
+     {:id :e/start-break-status-value,
+      :kind :data,
+      :from [:n/n--entry--start-9-else-1-then-0 :value],
+      :to [:n/start-break-status :value]}
+     {:id :e/start-break-status-exec,
+      :kind :exec,
+      :from [:n/n--entry--start-9-else-1-then-0 :out],
+      :to [:n/start-break-status :in]}
+     {:id :e/start-break-status-compare,
+      :kind :data,
+      :from [:n/start-break-status-get :value],
+      :to [:n/start-break-applied :arg0]}
+     {:id :e/start-break-condition,
+      :kind :data,
+      :from [:n/start-break-applied :value],
+      :to [:n/start-break-ok :condition]}
+     {:id :e/start-break-branch-exec,
+      :kind :exec,
+      :from [:n/start-break-status :out],
+      :to [:n/start-break-ok :in]}
+     {:id :e/start-break-success,
+      :kind :exec,
+      :from [:n/start-break-ok :true],
+      :to [:n/n--entry--start-9-else-1-then-1 :in]}
+     {:id :e/start-break-failure,
+      :kind :exec,
+      :from [:n/start-break-ok :false],
+      :to [:n/start-break-failed :in]}
     {:id :e/link063,
      :kind :data,
      :from [:n/n047 :value],
