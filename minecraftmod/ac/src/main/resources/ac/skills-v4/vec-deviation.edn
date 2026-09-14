@@ -396,12 +396,17 @@
          {:difficulty-entries
           {:nid :n/n--entry--pulse-2-th-e515240c,
            :ref [:parameter :affected-entity-difficulty]},
+          :difficulty-entry-limit 1,
           :excluded-entity-ids
-          {:nid :n/n--entry--pulse-2-th-1745cc84,
-           :ref [:parameter :excluded-entity-ids]},
+           {:nid :n/n--entry--pulse-2-th-1745cc84,
+            :ref [:parameter :excluded-entity-ids]},
           :excluded-tags
-          {:nid :n/n--entry--pulse-2-th-194ad9d0,
-           :ref [:parameter :excluded-tags]}},
+           {:nid :n/n--entry--pulse-2-th-194ad9d0,
+           :ref [:parameter :excluded-tags]},
+          :projection [:id :type :position :eye-height :width :height
+                       :age-ms :motion-progress :owner-id :velocity
+                       :difficulty :explosion-power :item? :projectile?
+                       :arrow? :behavior-hit? :living? :mob? :multipart? :tags]},
          :limit 64}},
        :n074 {:type :local-get, :key :projectile, :nid :n/n074},
        :n012 {:type :component, :component :cost/spend, :nid :n/n012},
@@ -439,14 +444,26 @@
           :fade-to-tick 15,
           :fade-color [255 255 255 120],
           :fade-segments 12,
-          :position
-          {:nid :n/n--entry--pulse-2-th-7440e334,
-           :component :value/field,
-           :inputs
-           {:field :position,
-            :value
-            {:nid :n/n--entry--pulse-2-th-a35fd7e4,
-             :ref [:local :projectile]}}},
+           :position
+           {:nid :n/n--entry--pulse-2-th-7440e334,
+            :component :vec3/add,
+            :args
+            [{:nid :n/n--entry--pulse-2-th-a35fd7e4,
+              :component :value/field,
+              :inputs
+              {:field :position,
+               :value
+               {:nid :n/n--entry--pulse-2-th-a35fd7e4-pos,
+                :ref [:local :projectile]}}}
+             [0.0
+              {:nid :n/n--entry--pulse-2-th-a35fd7e4-eye,
+               :component :value/field,
+               :inputs
+               {:field :eye-height,
+                :value
+                {:nid :n/n--entry--pulse-2-th-a35fd7e4-eye-projectile,
+                 :ref [:local :projectile]}}}
+              0.0]]},
           :ring-from 0.15,
           :ring-color [255 255 255 180],
           :ring-segments 12}}},

@@ -213,15 +213,24 @@
         excluded (set (map str (or (:excluded-entity-ids entity-filter) [])))
         excluded-tags (set (or (:excluded-tags entity-filter) []))
         required-tags (set (or (:required-tags entity-filter) []))
-        difficulty-map (reduce (fn [result entry]
-                                 (if (string? entry)
+        ;; VecDeviation's main implementation intentionally consumes only
+        ;; the first valid difficulty entry. Keep that legacy query contract
+        ;; explicit instead of making each skill reimplement parser details.
+        difficulty-entry-limit (when (contains? entity-filter :difficulty-entry-limit)
+                                  (max 0 (min 256 (long (or (:difficulty-entry-limit entity-filter) 0)))))
+        difficulty-entries (or (:difficulty-entries entity-filter) [])
+        parse-difficulty-entry (fn [entry]
+                                 (when (string? entry)
                                    (let [index (.lastIndexOf ^String entry ":")]
-                                     (if (pos? index)
-                                       (try (assoc result (subs entry 0 index)
-                                                    (Double/parseDouble (subs entry (inc index))))
-                                            (catch Throwable _ result))
-                                       result))
-                                   result)) {} (or (:difficulty-entries entity-filter) []))
+                                     (when (pos? index)
+                                       (try [(subs entry 0 index)
+                                             (Double/parseDouble (subs entry (inc index)))]
+                                            (catch Throwable _ nil))))))
+        parsed-difficulty-entries (keep parse-difficulty-entry difficulty-entries)
+        difficulty-map (into {}
+                             (if (some? difficulty-entry-limit)
+                               (take difficulty-entry-limit parsed-difficulty-entries)
+                               parsed-difficulty-entries))
         owner-filter (some-> (or (:owner entity-filter) (:owner-id entity-filter)) str)
         living-filter (when (contains? entity-filter :living?) (boolean (:living? entity-filter)))
         mob-filter (when (contains? entity-filter :mob?) (boolean (:mob? entity-filter)))
