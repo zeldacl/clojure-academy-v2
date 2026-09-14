@@ -4,9 +4,7 @@
             [cn.li.node.graph-document :as graph-document]
             [cn.li.node.graph-compile :as graph-compile]
             [cn.li.node.schema-export :as schema-export]
-            [cn.li.node.scope :as scope]
             [cn.li.node.cost :as cost]
-            [cn.li.node.validate :as validate]
             [cn.li.node.environment :as environment]
             [cn.li.node.static-check :as static-check]))
 
@@ -21,7 +19,5 @@
 (defn compile-v4-skill-document! [value opts mode] (graph-compile/compile-skill! value opts mode))
 (defn compile-v4-vfx-document! [value opts mode] (graph-compile/compile-vfx! value opts mode))
 (defn cost-summary [ir vocab] (cost/analyze ir vocab))
-(defn validate-in-environment! [node-environment program] (validate/validate-in-environment! node-environment program))
-(defn check-scope-in-environment! [node-environment program] (scope/check-in-environment! node-environment program))
 (defn export-schema [node-environment] (schema-export/export-environment node-environment))
 (defn build-environment [opts] (environment/build opts))
