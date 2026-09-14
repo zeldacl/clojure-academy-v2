@@ -9,6 +9,10 @@
   (edn/read-string
    (slurp (io/resource "ac/vfx-v4/arc-strike-transient.edn"))))
 
+(defn- load-thunder-bolt-skill []
+  (edn/read-string
+   (slurp (io/resource "ac/skills-v4/thunder-bolt.edn"))))
+
 (deftest thunder-bolt-v4-renders-main-and-chain-arcs-test
   (let [program (scene/compile-v4-document! (load-thunder-bolt-vfx))
         ops (scene/sample!
@@ -39,3 +43,19 @@
                           :eye-height 1.8}]}
            (select-keys (second arcs) [:pattern :end-points])))
     (is (= 1 (count (filter #(= :audio-one-shot (:kind %)) ops))))))
+
+(deftest thunder-bolt-v4-effect-contract-matches-main-test
+  (let [skill (load-thunder-bolt-skill)
+        values (tree-seq coll? identity skill)
+        lightning-nodes (filter #(and (map? %)
+                                      (= :world/lightning (:component %))) values)
+        vfx-node (some #(when (and (map? %)
+                                   (= :effect/vfx (:component %))
+                                   (= :arc-strike-transient
+                                      (get-in % [:inputs :effect-id])))
+                        values)]
+    ;; Main renders the strike with the arc VFX only; it does not add a second
+    ;; vanilla lightning effect at the impact point.
+    (is (empty? lightning-nodes))
+    (is (= {:ref [:local :caster-id]}
+           (get-in vfx-node [:inputs :payload :source-player-id])))))

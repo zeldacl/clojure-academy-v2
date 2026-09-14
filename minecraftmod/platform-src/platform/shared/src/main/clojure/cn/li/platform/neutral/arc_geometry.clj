@@ -276,7 +276,13 @@
     (if (seq (:end-points geometry))
       (into []
             (mapcat (fn [[endpoint endpoint-index]]
-                      (let [geometry* (assoc geometry :end (endpoint-position endpoint))
+                      (let [;; Main's chained EntityArcs use a fresh 15..25 tick
+                            ;; lifetime for each AOE endpoint. Keep that
+                            ;; variation deterministic for V4 frame sampling.
+                            aoe-life (+ 15 (mod (hash [seed endpoint-index]) 11))
+                            geometry* (assoc geometry
+                                             :end (endpoint-position endpoint)
+                                             :arc-life-ticks aoe-life)
                             bolt-seed (long (hash [seed endpoint-index]))]
                         (mapcat (fn [seed*]
                                   (single-bolt-quad-ops geometry* material color seed*))

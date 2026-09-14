@@ -77,7 +77,6 @@
         :nid :n/n--entry--default-2-then-7},
        :n072
        {:type :component, :component :random/chance, :nid :n/n072},
-       :n093 {:type :local-get, :key :wid, :nid :n/n093},
        :n010
        {:type :component,
         :component :target/raycast,
@@ -129,11 +128,6 @@
         :key :target-type,
         :nid :n/n--entry--default-2--6b10032e},
        :start-default {:type :start, :nid :n/start-default},
-       :n--entry--default-2-then-15
-       {:type :component,
-        :component :world/lightning,
-        :nid :n/n--entry--default-2-then-15,
-        :inputs {:visual-only? true}},
        :n--entry--default-2-then-5
        {:type :local-set,
         :operation :define,
@@ -194,6 +188,9 @@
           :start
           {:nid :n/n--entry--default-2--c45916c0, :ref [:local :eye]},
           :sound-id "academy:em.arc_strong",
+          :source-player-id
+          {:nid :n/n--entry--default-2--source-player-id,
+           :ref [:local :caster-id]},
           :arc-life-ticks 20,
           :duration-ticks 20,
           :aoe-points
@@ -378,11 +375,6 @@
         :nid :n/n--entry--default-2-then-4},
        :n066 {:type :component, :component :bool/or, :nid :n/n066},
        :n005 {:type :context-ref, :key :caster/eye, :nid :n/n005},
-       :n094
-       {:type :component,
-        :component :value/field,
-        :nid :n/n094,
-        :inputs {:field :position}},
        :n061 {:type :local-get, :key :target, :nid :n/n061},
        :n--entry--default-2--43169cdc
        {:type :component,
@@ -478,7 +470,6 @@
         :component :value/field,
         :nid :n/n027,
         :inputs {:field :id}},
-       :n095 {:type :local-get, :key :aim-hit, :nid :n/n095},
        :n067
        {:type :component,
         :component :value/eq,
@@ -1163,25 +1154,9 @@
      :kind :exec,
      :from [:n/n058 :out],
      :to [:n/n--entry--default-2-then-14 :in]}
-    {:id :e/link146,
-     :kind :data,
-     :from [:n/n093 :value],
-     :to [:n/n--entry--default-2-then-15 :world-id]}
-    {:id :e/link147,
-     :kind :data,
-     :from [:n/n095 :value],
-     :to [:n/n094 :value]}
-    {:id :e/link148,
-     :kind :data,
-     :from [:n/n094 :value],
-     :to [:n/n--entry--default-2-then-15 :position]}
-    {:id :e/link149,
-     :kind :exec,
-     :from [:n/n--entry--default-2-then-14 :completed],
-     :to [:n/n--entry--default-2-then-15 :in]}
     {:id :e/link150,
      :kind :exec,
-     :from [:n/n--entry--default-2-then-15 :out],
+     :from [:n/n--entry--default-2-then-14 :completed],
      :to [:n/n--entry--default-2-then-16 :in]}
     {:id :e/link151,
      :kind :data,
