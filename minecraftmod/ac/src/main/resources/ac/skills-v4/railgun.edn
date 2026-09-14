@@ -30,6 +30,10 @@
  :name-key "ability.skill.electromaster.railgun",
  :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :costs nil,
+ :external-triggers
+ [{:source :item/use,
+   :filter {:item-ids ["ac:coin" "academy:coin"]},
+   :dispatch {:ability :railgun, :event :coin-thrown}}],
  :mark-policies nil,
  :requires
  [:caster/eye
@@ -178,7 +182,10 @@
         :component :state/set,
         :inputs {:key :mode, :value :item-charge},
         :nid :n/n--entry--start-9-do-0},
-       :n017 {:type :merge, :nid :n/n017},
+        :n017 {:type :merge, :nid :n/n017},
+        :n--entry--start-charge-guard
+        {:type :branch,
+         :nid :n/n--entry--start-charge-guard},
        :n018 {:type :component, :component :vec3/normalize, :nid :n/n018},
        :n019 {:type :component, :component :vec3/scale, :nid :n/n019,
              :inputs {:arg1 0.24}},
@@ -196,16 +203,21 @@
         {:effect-id :railgun-charge-session,
          :operation :spawn,
          :instance-key [:activation :railgun-charge],
-         :audience {:type :nearby, :radius 32.0},
+          :audience {:type :owner},
           :payload
           {:anchor {:ref [:local :charge-anchor]},
           :source-player-id {:ref [:local :owner-id]},
-          :duration-ticks 64,
+          :duration-ticks 32,
           :texture-pattern "academy:textures/effects/arc_burst/%d.png",
           :frame-count 40,
           :frame-duration-ms 40,
           :half-size 0.4}}},
-       :n--entry--start-11
+        :n--entry--start-no-charge
+        {:type :end,
+         :result {},
+         :nid :n/n--entry--start-no-charge,
+         :inputs {:outcome :started}},
+        :n--entry--start-11
        {:type :end,
         :result {},
         :nid :n/n--entry--start-11,
@@ -315,18 +327,30 @@
      :kind :exec,
      :from [:n/n--entry--start-9-do-0 :out],
      :to [:n/n017 :in]}
-    {:id :e/link027,
-     :kind :exec,
-     :from [:n/n--entry--start-9 :false],
-     :to [:n/n017 :in]}
+     {:id :e/link027,
+      :kind :exec,
+      :from [:n/n--entry--start-9 :false],
+      :to [:n/n017 :in]}
     {:id :e/link028,
      :kind :exec,
      :from [:n/n--entry--start-8 :out],
      :to [:n/n--entry--start-9 :in]}
-    {:id :e/link029,
-     :kind :exec,
-     :from [:n/n017 :out],
-     :to [:n/n--entry--start-10-anchor :in]}
+     {:id :e/link029,
+      :kind :exec,
+      :from [:n/n017 :out],
+      :to [:n/n--entry--start-charge-guard :in]}
+     {:id :e/railgun-start-charge-condition,
+      :kind :data,
+      :from [:n/n010 :value],
+      :to [:n/n--entry--start-charge-guard :condition]}
+     {:id :e/railgun-start-charge-true,
+      :kind :exec,
+      :from [:n/n--entry--start-charge-guard :true],
+      :to [:n/n--entry--start-10-anchor :in]}
+     {:id :e/railgun-start-charge-false,
+      :kind :exec,
+      :from [:n/n--entry--start-charge-guard :false],
+      :to [:n/n--entry--start-no-charge :in]}
     {:id :e/link029a,
      :kind :data,
      :from [:n/n002 :value],
@@ -529,6 +553,32 @@
         :key :beam-result,
         :nid :n/n--entry--release-19-then-1},
        :n029 {:type :state-ref, :key :fire-mode, :nid :n/n029},
+       :n--entry--release-fire-mode
+       {:type :local-get,
+        :key :fire-mode,
+        :nid :n/n--entry--release-fire-mode},
+       :n--entry--release-fire-mode-valid
+       {:type :component,
+        :component :collection/contains?,
+        :nid :n/n--entry--release-fire-mode-valid,
+        :inputs {:arg0 [:item :coin]}},
+       :n--entry--release-fire-mode-guard
+       {:type :branch,
+        :nid :n/n--entry--release-fire-mode-guard},
+       :n--entry--release-cancel-vfx
+       {:type :component,
+        :component :effect/vfx,
+        :nid :n/n--entry--release-cancel-vfx,
+        :inputs
+        {:effect-id :railgun-charge-session,
+         :operation :destroy,
+         :instance-key [:activation :railgun-charge],
+         :payload {}}},
+       :n--entry--release-cancel
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--release-cancel,
+        :inputs {:outcome :cancelled, :end-ability? true}},
        :n--entry--release-3
        {:type :local-set,
         :operation :define,
@@ -936,10 +986,30 @@
      :kind :data,
      :from [:n/n030 :value],
      :to [:n/n--entry--release-1 :value]}
-    {:id :e/link057,
-     :kind :exec,
-     :from [:n/n--entry--release-0 :out],
-     :to [:n/n--entry--release-1 :in]}
+     {:id :e/link057,
+      :kind :exec,
+      :from [:n/n--entry--release-0 :out],
+      :to [:n/n--entry--release-fire-mode-guard :in]}
+     {:id :e/railgun-release-fire-mode-value,
+      :kind :data,
+      :from [:n/n--entry--release-fire-mode :value],
+      :to [:n/n--entry--release-fire-mode-valid :arg1]}
+     {:id :e/railgun-release-fire-mode-condition,
+      :kind :data,
+      :from [:n/n--entry--release-fire-mode-valid :value],
+      :to [:n/n--entry--release-fire-mode-guard :condition]}
+     {:id :e/railgun-release-fire-mode-true,
+      :kind :exec,
+      :from [:n/n--entry--release-fire-mode-guard :true],
+      :to [:n/n--entry--release-1 :in]}
+     {:id :e/railgun-release-fire-mode-false,
+      :kind :exec,
+      :from [:n/n--entry--release-fire-mode-guard :false],
+      :to [:n/n--entry--release-cancel-vfx :in]}
+     {:id :e/railgun-release-cancel-end,
+      :kind :exec,
+      :from [:n/n--entry--release-cancel-vfx :out],
+      :to [:n/n--entry--release-cancel :in]}
     {:id :e/link058,
      :kind :data,
      :from [:n/n031 :value],
