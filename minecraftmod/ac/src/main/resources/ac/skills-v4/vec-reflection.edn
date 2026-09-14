@@ -6,7 +6,13 @@
  {:target-radius {:type :double, :default nil},
   :affected-entity-difficulty {:type :any, :default nil},
   :excluded-entity-ids {:type :any, :default nil},
-  :large-fireball-ids {:type :any, :default nil}},
+  :large-fireball-ids {:type :any, :default nil},
+  :small-fireball-ids {:type :any, :default nil},
+  :damage-multiplier {:type :any, :default nil},
+  :min-reflected-damage {:type :double, :default nil},
+  :damage-cp {:type :any, :default nil},
+  :max-reflections {:type :long, :default nil},
+  :exp-damage-scale {:type :double, :default nil}},
  :state {:visited-projectiles {:type :any, :default nil}},
  :description-key "ability.skill.vecmanip.vec_reflection.desc",
  :name-key "ability.skill.vecmanip.vec_reflection",
@@ -26,6 +32,12 @@
   :affected-entity-difficulty {:curve :const, :type :string-list},
   :excluded-entity-ids {:curve :const, :type :string-list},
   :large-fireball-ids {:curve :const, :type :string-list},
+  :small-fireball-ids {:curve :const, :type :string-list},
+  :damage-multiplier {:curve :mastery-lerp},
+  :min-reflected-damage {:curve :const},
+  :damage-cp {:curve :mastery-lerp},
+  :max-reflections {:curve :const, :type :int},
+  :exp-damage-scale {:curve :const},
   :reflect-entity-cp {:curve :mastery-lerp},
   :exp-reflect-entity-scale {:curve :const}},
  :invariants
@@ -43,24 +55,24 @@
     :multiplier
     {:expr :math/lerp,
      :args
-     [{:ref [:input :params :damage-multiplier 0]}
-      {:ref [:input :params :damage-multiplier 1]}
+     [{:ref [:input :tunables :damage-multiplier 0]}
+      {:ref [:input :tunables :damage-multiplier 1]}
       {:ref [:input :context :skill-exp]}]},
     :cost-per-damage
     {:expr :math/lerp,
      :args
-     [{:ref [:input :params :damage-cp 0]}
-      {:ref [:input :params :damage-cp 1]}
+     [{:ref [:input :tunables :damage-cp 0]}
+      {:ref [:input :tunables :damage-cp 1]}
       {:ref [:input :context :skill-exp]}]},
-    :minimum {:ref [:input :params :min-reflected-damage]},
-    :max-depth {:ref [:input :params :max-reflections]},
+    :minimum {:ref [:input :tunables :min-reflected-damage]},
+    :max-depth {:ref [:input :tunables :max-reflections]},
     :cost-resource :cp,
     :progression-tag :damaged,
-    :progression-scale {:ref [:input :params :exp-damage-scale]}}}],
+    :progression-scale {:ref [:input :tunables :exp-damage-scale]}}}],
  :progression
  {:reflect-entity
   {:per-mark {:ref [:input :tunables :exp-reflect-entity-scale]}},
-  :damaged {:per-mark {:ref [:input :params :exp-damage-scale]}}},
+  :damaged {:per-mark {:ref [:input :tunables :exp-damage-scale]}}},
  :graphs
  {:start
   {:on :phase/start,
@@ -307,6 +319,9 @@
           :excluded-entity-ids
           {:nid :n/n--entry--pulse-4-th-1101bc0,
            :ref [:parameter :excluded-entity-ids]},
+          :living? false,
+          :mob? false,
+          :multipart? false,
           :excluded-tags []},
          :limit 64}},
        :n042 {:type :local-get, :key :difficulty, :nid :n/n042},
@@ -398,8 +413,18 @@
        :n025 {:type :local-get, :key :projectile-id, :nid :n/n025},
        :n016 {:type :local-get, :key :aim, :nid :n/n016},
        :n023 {:type :component, :component :value/eq, :nid :n/n023},
-       :n043
-       {:type :parameter-ref, :key :large-fireball-ids, :nid :n/n043},
+       :n051
+       {:type :component,
+        :component :collection/concat,
+        :nid :n/n051},
+       :n052
+       {:type :parameter-ref,
+        :key :large-fireball-ids,
+        :nid :n/n052},
+       :n053
+       {:type :parameter-ref,
+        :key :small-fireball-ids,
+        :nid :n/n053},
        :n041 {:type :local-get, :key :projectile, :nid :n/n041},
        :n050 {:type :loop-end, :nid :n/n050},
        :n014
@@ -618,8 +643,16 @@
      :to [:n/n--entry--pulse-4-th-61e0f5b1 :difficulty]}
     {:id :e/link060,
      :kind :data,
-     :from [:n/n043 :value],
+     :from [:n/n051 :value],
      :to [:n/n--entry--pulse-4-th-61e0f5b1 :replacement-types]}
+    {:id :e/link093,
+     :kind :data,
+     :from [:n/n052 :value],
+     :to [:n/n051 :arg0]}
+    {:id :e/link094,
+     :kind :data,
+     :from [:n/n053 :value],
+     :to [:n/n051 :arg1]}
     {:id :e/link061,
      :kind :data,
      :from [:n/n044 :value],

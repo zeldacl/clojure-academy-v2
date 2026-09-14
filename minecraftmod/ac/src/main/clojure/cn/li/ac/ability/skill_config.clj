@@ -194,6 +194,12 @@
     :affected-entity-difficulty :targeting.affected-entity-difficulty
     :excluded-entity-ids :targeting.excluded-entity-ids
     :large-fireball-ids :targeting.large-fireball-ids
+    :small-fireball-ids :targeting.small-fireball-ids
+    :damage-multiplier :combat.damage-multiplier
+    :min-reflected-damage :combat.min-reflected-damage
+    :damage-cp :cost.damage.cp
+    :max-reflections :combat.max-reflections
+    :exp-damage-scale :progression.exp-damage-scale
     :reflect-entity-cp :cost.reflect-entity.cp
     :exp-reflect-entity-scale :progression.exp-reflect-entity-scale}
    :vec-deviation

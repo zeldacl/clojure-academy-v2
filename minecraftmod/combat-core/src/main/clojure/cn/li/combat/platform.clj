@@ -223,7 +223,10 @@
                                        result))
                                    result)) {} (or (:difficulty-entries entity-filter) []))
         owner-filter (some-> (or (:owner entity-filter) (:owner-id entity-filter)) str)
-        living-filter (when (contains? entity-filter :living?) (boolean (:living? entity-filter)))]
+        living-filter (when (contains? entity-filter :living?) (boolean (:living? entity-filter)))
+        mob-filter (when (contains? entity-filter :mob?) (boolean (:mob? entity-filter)))
+        multipart-filter (when (contains? entity-filter :multipart?)
+                           (boolean (:multipart? entity-filter)))]
     (if (and world-id center (pos? limit)
              (if cone?
                (and direction eye-origin (<= 0.0 distance 128.0))
@@ -272,6 +275,10 @@
                                                    (:owner-uuid %))))))
              (filter #(or (nil? living-filter)
                           (= living-filter (boolean (:living? %)))))
+             (filter #(or (nil? mob-filter)
+                          (= mob-filter (boolean (:mob? %)))))
+             (filter #(or (nil? multipart-filter)
+                          (= multipart-filter (boolean (:multipart? %)))))
              (filter (fn [candidate]
                        (or (and line? (segment-intersects-aabb?
                                        line-start line-end candidate))
