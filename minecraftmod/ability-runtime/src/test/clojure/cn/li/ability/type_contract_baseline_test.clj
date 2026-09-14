@@ -1,0 +1,169 @@
+(ns cn.li.ability.type-contract-baseline-test
+  "Ratchet on how much of the node-language's type surface is untyped.
+
+   The recurring V4 authoring bugs -- a node call missing an argument, a map
+   passed where a list is wanted, nil reaching a :double -- are not escaping
+   because the checks are wrong. cn.li.node.compile reports ~30 diagnostic
+   codes and cn.li.node.graph-document enforces ~60 structural invariants.
+   They escape because the CONTRACT those checks read is nearly vacuous:
+   cn.li.node.types/assignable? has exactly four rules and two of them are
+   :any passing in either direction, so every :any-typed declaration is a
+   hole the checker is obliged to accept.
+
+   Worse, :any actively DISABLES checks that already exist:
+   cn.li.node.types' :missing-vfx-input and :nil-vfx-input both skip an
+   input whose declared type is :any.
+
+   So this namespace asserts the EXACT count of untyped declarations in
+   every source of truth the compiler consults. Exact, not an upper bound:
+   an upper bound silently absorbs progress, and these numbers are supposed
+   to be driven down phase by phase (each drop is a deliberate edit that
+   should update the number here in the same commit). A number going UP is
+   a new hole; a number going DOWN without this file changing is
+   impossible, which is the point.
+
+   Lives in ability-runtime, not node-core: node-core has zero project
+   dependencies on purpose (verifyNodeCoreDependencyDirection forbids
+   adding any), and this has to read combat-core's and vfx-core's
+   vocabularies alongside node-core's op table. ability-runtime is the
+   lowest module that `api`-depends on all three."
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
+            [cn.li.combat.dsl-vocabulary :as combat-vocab]
+            [cn.li.combat.lib :as combat-lib]
+            [cn.li.node.ops :as ops]
+            [cn.li.node.types :as types]
+            [cn.li.vfx.dsl-vocabulary :as vfx-vocab]))
+
+;; --- shared extraction ------------------------------------------------------
+;;
+;; A vocab node's :params is {param-key {:type t :default d?}}. The `opt`
+;; helper in dsl_vocabulary always sets :default (even to nil), while `p`
+;; and `p*` never do -- so (contains? spec :default) is the reliable
+;; required/optional test. `(nil? (:default spec))` is NOT: (opt :any nil)
+;; is optional with a nil default.
+
+(defn- param-rows
+  "vocab nodes map -> [{:node :param :type :optional?}], one per declared param."
+  [nodes]
+  (for [[node-id spec] nodes
+        [param-key pspec] (:params spec)]
+    {:node node-id
+     :param param-key
+     :type (:type pspec)
+     :optional? (contains? pspec :default)}))
+
+(defn- any-typed
+  [rows]
+  (filter #(= :any (types/canonical-type (:type %))) rows))
+
+;; --- combat vocabulary ------------------------------------------------------
+
+(deftest combat-vocabulary-untyped-parameter-count-test
+  (let [rows (param-rows combat-vocab/nodes)
+        anys (any-typed rows)]
+    (testing "every :any parameter is a declaration assignable? is forced to accept"
+      (is (= 58 (count anys))
+          (str "combat vocab :any-typed params changed. Offenders:\n"
+               (str/join "\n" (map #(str "  " (:node %) " / " (:param %))
+                                   (sort-by (juxt :node :param) anys))))))
+    (testing "optional parameters are why a missing wire cannot raise :missing-param"
+      (is (= 116 (count (filter :optional? rows)))
+          "combat vocab optional param count changed")
+      (is (= 232 (count rows))
+          "combat vocab total param count changed"))))
+
+(deftest combat-vocabulary-return-type-count-test
+  (let [returns (map :returns (vals combat-vocab/nodes))
+        value-returning (remove nil? returns)
+        untyped (filter #(= :any (types/canonical-type %)) value-returning)]
+    (testing "an :any return is the root of :value/field having nothing to infer from"
+      (is (= 14 (count untyped))
+          (str "combat vocab :returns :any count changed. Offenders: "
+               (pr-str (sort (keep (fn [[k v]] (when (= :any v) k))
+                                   (map (juxt key (comp :returns val)) combat-vocab/nodes)))))))
+    (is (= 32 (count (filter nil? returns)))
+        "combat vocab action (nil :returns) count changed")))
+
+;; --- vfx vocabulary ---------------------------------------------------------
+
+(deftest vfx-vocabulary-untyped-parameter-count-test
+  (let [rows (param-rows vfx-vocab/nodes)]
+    (is (= 34 (count (any-typed rows)))
+        "vfx vocab :any-typed param count changed")
+    (is (= 57 (count (filter :optional? rows)))
+        "vfx vocab optional param count changed")
+    (is (= 127 (count rows))
+        "vfx vocab total param count changed")
+    (testing "vfx nodes are all scene actions -- nothing here returns a value"
+      (is (every? nil? (map :returns (vals vfx-vocab/nodes)))
+          "a vfx vocab node gained a :returns; P2's return-typing work now applies here too"))))
+
+;; --- node-core pure op table ------------------------------------------------
+
+(deftest pure-op-table-untyped-count-test
+  (let [rows (for [[op {:keys [params returns]}] ops/table]
+               {:op op
+                :any-params (count (filter #(= :any (types/canonical-type %)) params))
+                :any-return? (= :any (types/canonical-type returns))})]
+    (testing ":any in a pure op's signature is the same hole as in the vocabulary"
+      (is (= 15 (reduce + (map :any-params rows)))
+          "pure op :any-typed parameter count changed")
+      (is (= 4 (count (filter :any-return? rows)))
+          "pure op :any return count changed"))
+    (testing "an :any param whose op returns a primitive is a latent nil crash"
+      ;; :pair/first is the archetype: {:params [:any] :returns :double}. The
+      ;; result register is allocated in the :doubles bank (cn.li.node.
+      ;; compile's alloc-reg! via types/bank), so cn.li.mcmod.runtime.
+      ;; effect-emit's compile-writer throws :nil-primitive-write the moment
+      ;; the :any argument turns out to be nil at runtime. Counted, not
+      ;; fixed here -- fixing it is the deferred gap C round.
+      ;; The 3 today are :pair/first, :pair/second and :pair/third.
+      (is (= 3 (count (filter #(and (pos? (:any-params %))
+                                    (contains? #{:doubles :longs}
+                                               (types/bank (:returns (get ops/table (:op %))))))
+                              rows)))
+          "count of :any-in/primitive-out pure ops changed"))))
+
+;; --- combat :defn library ---------------------------------------------------
+
+(deftest defn-library-untyped-count-test
+  (let [rows (for [[fn-id doc] combat-lib/fns
+                   p (:params doc)]
+               {:fn fn-id :param (:name p) :type (:type p)})]
+    ;; Today's 8 are all genuinely structured values the type lattice has no
+    ;; name for yet -- a `policy` map (:target/hold-destination,
+    ;; :target/raycast-destination, :target/directional-destination,
+    ;; :combat/beam-strike's reflection-policy), a block list
+    ;; (:terrain/apply-break-budget), and :terrain/wave-plan's spread /
+    ;; energy-cost / block-transforms. They are T2/T5 material: each needs
+    ;; either an opaque tag or a :map-keys schema before it can stop being
+    ;; :any, which is exactly the work this ratchet is here to track.
+    (is (= 8 (count (any-typed rows)))
+        (str ":defn library :any-typed param count changed. Offenders: "
+             (pr-str (map (juxt :fn :param) (any-typed rows)))))
+    (is (= 0 (count (filter #(= :any (types/canonical-type (:returns %)))
+                            (vals combat-lib/fns))))
+        ":defn library :any return count changed")))
+
+;; --- the one invariant that must never regress ------------------------------
+
+(deftest assignable-is-the-only-type-judgement-test
+  (testing "both :any directions are still open -- this is the contract gap itself"
+    ;; Asserted, not assumed: the whole plan is built on assignable? being
+    ;; this permissive, and gap C (making `from :any` one-way) is a LATER
+    ;; round. If someone tightens it early, every count above shifts and
+    ;; the phase ordering needs revisiting -- better to fail here loudly.
+    (is (true? (types/assignable? :any :double))
+        "assignable? no longer lets an unknown flow into :double -- gap C landed early")
+    (is (true? (types/assignable? :double :any))
+        "assignable? no longer lets a concrete type flow into :any"))
+  (testing ":long widens to :double but :double does not narrow to :long"
+    (is (true? (types/assignable? :long :double)))
+    (is (false? (types/assignable? :double :long))))
+  (testing "there is still no structural rule for lists"
+    ;; P5 depends on this: [:list-of t] can only match by value equality
+    ;; today, which is why P5 reaches for the existing :entity-list/
+    ;; :block-list opaque tags instead of introducing [:list-of :any].
+    (is (false? (types/assignable? [:list-of :entity-ref] [:list-of :any]))
+        "assignable? gained a list-of rule -- P5's zero-change path may no longer be the right one")))
