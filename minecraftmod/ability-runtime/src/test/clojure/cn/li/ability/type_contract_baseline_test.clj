@@ -78,12 +78,43 @@
         value-returning (remove nil? returns)
         untyped (filter #(= :any (types/canonical-type %)) value-returning)]
     (testing "an :any return is the root of :value/field having nothing to infer from"
-      (is (= 14 (count untyped))
+      ;; Down from 14. The one left is :data/random-item, which returns an
+      ;; element of its own :items argument -- parametric, and node-core's
+      ;; signature is monomorphic. See its entry in dsl_vocabulary.
+      (is (= 1 (count untyped))
           (str "combat vocab :returns :any count changed. Offenders: "
                (pr-str (sort (keep (fn [[k v]] (when (= :any v) k))
                                    (map (juxt key (comp :returns val)) combat-vocab/nodes)))))))
     (is (= 32 (count (filter nil? returns)))
-        "combat vocab action (nil :returns) count changed")))
+        "combat vocab action (nil :returns) count changed")
+    (testing "every declared return is a type the checker actually knows"
+      (is (= [] (vec (remove types/known-type? value-returning)))
+          "a :returns naming something outside the type lattice checks nothing"))))
+
+(deftest returning-a-primitive-is-an-explicit-decision-test
+  ;; The guardrail for the deferred one-way-:any work, and the reason the
+  ;; return-typing pass above used only :objects-bank types.
+  ;;
+  ;; cn.li.node.compile allocates a query's destination register with
+  ;; (types/bank returns). :any banks to :objects, so today's results are
+  ;; boxed and a nil is harmless. Retyping a return to :double or :long
+  ;; moves that register into a primitive bank, where effect-emit's
+  ;; compile-writer throws :nil-primitive-write the first time the host
+  ;; hands back nil -- and :boolean is worse, because nil quietly becomes
+  ;; false instead of throwing. Either is a runtime behaviour change
+  ;; smuggled in under what looks like a declaration-only edit.
+  ;;
+  ;; So: primitive returns are allowed, but only by name, here.
+  (let [primitive-returns (set (keep (fn [[node-id spec]]
+                                       (when (and (:returns spec)
+                                                  (not= :objects (types/bank (:returns spec))))
+                                         node-id))
+                                     combat-vocab/nodes))]
+    (is (= #{:random/chance :random/int :random/uniform :cost/spend}
+           primitive-returns)
+        (str "a vocab node's :returns moved into a primitive register bank. "
+             "Confirm the host can never return nil for it, then list it here: "
+             (pr-str (sort primitive-returns))))))
 
 ;; --- vfx vocabulary ---------------------------------------------------------
 

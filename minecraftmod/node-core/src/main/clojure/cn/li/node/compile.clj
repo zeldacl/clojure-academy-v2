@@ -593,9 +593,10 @@
 
 (defn- compile-when [env locals block-id depth [_ cond-form & body :as stmt]]
   (let [{cond-reg :reg block-id :block-id} (compile-form env locals block-id depth cond-form false)]
-    (when-not (types/assignable? (type-of env cond-reg) :boolean)
+    (when-not (types/condition-type? (type-of env cond-reg))
       (report! env {:code :type-mismatch :form cond-form :want :boolean
-                   :message "when condition must be :boolean"}))
+                   :message (str "when condition must be :boolean or a nullable handle, got "
+                                 (pr-str (type-of env cond-reg)))}))
     (let [then-id (new-block! env)
           continue-id (new-block! env)]
       (append! env block-id {:op :branch :nid (nid-for! env stmt) :test cond-reg :then then-id :else continue-id})
@@ -627,9 +628,10 @@
    decompiler print the right form instead of guessing."
   [env locals block-id depth [_ cond-form then-stmts else-stmts :as stmt]]
   (let [{cond-reg :reg block-id :block-id} (compile-form env locals block-id depth cond-form false)]
-    (when-not (types/assignable? (type-of env cond-reg) :boolean)
+    (when-not (types/condition-type? (type-of env cond-reg))
       (report! env {:code :type-mismatch :form cond-form :want :boolean
-                   :message "if condition must be :boolean"}))
+                   :message (str "if condition must be :boolean or a nullable handle, got "
+                                 (pr-str (type-of env cond-reg)))}))
     (let [then-id (new-block! env) else-id (new-block! env)]
       (let [{then-final :block-id then-terminated? :terminated?}
             (compile-stmts! env locals then-id depth (vec then-stmts))

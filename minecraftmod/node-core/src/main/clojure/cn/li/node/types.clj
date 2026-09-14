@@ -16,6 +16,15 @@
   #{:hit-result :destination :block-placement :entity-ref :entity-list
     :entity-snapshot :block-list :owner-snapshot :item-snapshot
     :terrain-plan :beam-result :energy-target :render-op :map
+    ;; :break-result is :block/break's {:status :block-id :position} report.
+    ;; NOT a :block-placement -- that describes where a block would GO.
+    ;;
+    ;; No :hit-list tag here on purpose: list-ness already has a spelling,
+    ;; the structural [:list-of t] that :target/entities and :target/blocks
+    ;; return. (:entity-list and :block-list above are leftovers of a third
+    ;; spelling and are referenced by nothing -- see the collection-type
+    ;; phase.)
+    :break-result
     ;; :any is the one deliberate escape hatch, for genuinely generic
     ;; plumbing like :data/bind's :value field, which by design forwards
     ;; whatever type the caller's expression produces.
@@ -259,6 +268,31 @@
       (= t :long) :longs
       (= t :boolean) :booleans
       :else :objects)))
+
+(defn condition-type?
+  "May a value of static type `t` be used as a when/if condition?
+
+   :boolean obviously. Beyond that the test is CAN THIS REGISTER HOLD NIL,
+   which `bank` already answers: a :doubles/:longs slot is a primitive JVM
+   array element and cannot, so testing one is a condition that is always
+   true -- always an authoring bug. An :objects slot can, and the lattice
+   has no way to write `or nil`, so truthiness is how the language asks
+   \"did I get one?\". `(let loc (target/saved-location ...)) (if loc ...)`
+   is idiomatic and not a type confusion: that node returns nil when the
+   name was never saved.
+
+   [:list-of t] is the one :objects-bank exception. An EMPTY vector is
+   truthy in Clojure, so `(if some-list ...)` reads as \"if non-empty\" and
+   does not mean it. Use :collection/nonempty.
+
+   Separate from assignable? on purpose: this is not \"is a handle a
+   boolean\" (it is not, and nothing else should treat it as one), it is
+   the one position where truthiness is the language's defined semantics.
+   See NODE_LANGUAGE.md section 1's statement table."
+  [t]
+  (let [t (canonical-type t)]
+    (or (= t :boolean)
+        (and (= :objects (bank t)) (not (list-of? t))))))
 
 (defn assignable?
   "Can a value of static type `from` be passed where `to` is declared?

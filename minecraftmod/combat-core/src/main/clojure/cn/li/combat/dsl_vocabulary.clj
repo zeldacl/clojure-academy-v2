@@ -124,7 +124,7 @@
            :query-radius (opt :double nil) :entity-limit (opt :long 256)
            :damage (opt :double 0.0) :damage-type (opt :keyword :generic)
            :block-limit (opt :long 4096) :reflection-policy (opt :any nil) :step (opt :double nil)}
-          :any #{:world-write} :kernel/trace-beam 4)
+          :beam-result #{:world-write} :kernel/trace-beam 4)
 
     :kernel/terrain-wave-plan
     (node {:origin (p* :vec3) :direction (p* :vec3) :initial-energy (p* :double)
@@ -133,7 +133,7 @@
            :mastery-radius (p* :long) :mastery-hardness-cap (p* :double)
            :ground-break-probability (p* :double) :drop-probability (p* :double)
            :launch-base (p* :double) :launch-span (p* :double) :entity-search-radius (p* :double)}
-          :any #{:world-read} :kernel/terrain-wave-plan 4)
+          :terrain-plan #{:world-read} :kernel/terrain-wave-plan 4)
 
     ;; Real content (scatter_bomb.edn, S6) referenced :vec3/scatter-end as
     ;; a :vec3/* pure op, but a random scatter deviation needs the
@@ -195,7 +195,7 @@
     (node {:origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
            :yaw-range-degrees (opt :any 0.0) :pitch-angles (opt :any nil)
            :limit (opt :long 8) :seed (opt :long nil)}
-          :any #{:world-read} :raycast 3)
+          [:list-of :hit-result] #{:world-read} :raycast 3)
 
     :target/entities
     (node {:shape (p) :filter (opt :any nil) :limit (opt :long 128)
@@ -208,23 +208,32 @@
 
     :target/entity-snapshot
     (node {:entity-id (p* :entity-ref) :projection (opt :any nil)}
-          :any #{:world-read} :entity/snapshot 1)
+          :entity-snapshot #{:world-read} :entity/snapshot 1)
 
     :target/item-held
-    (node {:source (p)} :any #{:world-read} :item/held 1)
+    (node {:source (p)} :item-snapshot #{:world-read} :item/held 1)
 
     :target/saved-location
-    (node {:location-name (p* :keyword)} :any #{:owner-read} :saved-location 1)
+    ;; :vec3, NOT :destination, even though "saved location" sounds like one.
+    ;; The host returns {:name :world-id :x :y :z} -- coordinates at the top
+    ;; level, i.e. vec3-shaped with metadata alongside. A :destination is a
+    ;; different record: cn.li.combat.targeting/directional-destination
+    ;; returns {:position {...} :from {...} :distance ...}, where the
+    ;; coordinates are NESTED. Tagging both :destination would have declared
+    ;; two incompatible shapes interchangeable -- content passes this one
+    ;; straight to vec3/distance, which is correct and only type-checks
+    ;; because it really is a vec3.
+    (node {:location-name (p* :keyword)} :vec3 #{:owner-read} :saved-location 1)
 
     :target/resolve-destination
     (node {:hit (p) :origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
            :policy (opt :any nil)}
-          :any #{:world-read} :raycast 2)
+          :destination #{:world-read} :raycast 2)
 
     :target/block-placement
     (node {:hit (p) :origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
            :policy (opt :any nil)}
-          :any #{:world-read} :raycast 2)
+          :block-placement #{:world-read} :raycast 2)
 
     ;; :direction here is NOT a spatial vector despite the field-name
     ;; heuristic this whole table otherwise follows (see this namespace's
@@ -239,15 +248,15 @@
     :target/directional-destination-query
     (node {:look (p* :vec3) :eye-y (p* :double) :origin (p* :vec3) :direction (p* :keyword)
            :distance (p* :double) :policy (opt :any nil)}
-          :any #{:world-read} :raycast 2)
+          :destination #{:world-read} :raycast 2)
 
     :owner/snapshot
-    (node {:projection (opt :any nil)} :any #{:owner-read} :owner/snapshot 1)
+    (node {:projection (opt :any nil)} :owner-snapshot #{:owner-read} :owner/snapshot 1)
     :owner/can-fly
     (node {:enabled? (p* :boolean)} nil #{:owner-write})
 
     :energy/target
-    (node {:hit (p)} :any #{:world-read} :energy/target 1)
+    (node {:hit (p)} :energy-target #{:world-read} :energy/target 1)
 
     ;; current_charging.edn's (S6) counterpart to :energy/target: push
     ;; :amount energy units into either a held item (:mode :item, :target
@@ -259,6 +268,13 @@
     (node {:mode (p* :keyword) :world-id (opt :string nil) :target (p) :amount (p* :double)}
           nil #{:world-write})
 
+    ;; The one :returns that must stay :any, and the only one exempted by
+    ;; the every-return-is-typed test. It returns AN ELEMENT OF :items, so
+    ;; its result type is its argument's element type -- genuine parametric
+    ;; polymorphism, which node-core's monomorphic {:params [...] :returns t}
+    ;; signature cannot express (same wall cn.li.node.ops hits with
+    ;; :collection/first). Typing it concretely would be a lie; typing it
+    ;; :any is at least an honest "unknown".
     :data/random-item
     (node {:items (p)} :any #{} :data/random-item 1)}
 
@@ -289,7 +305,7 @@
     (node {:entity-type (p* :string) :position (p* :vec3) :velocity (opt :vec3 nil)
            :world-id (opt :string nil) :life-ticks (opt :long nil) :owner (opt :any nil)
            :add-tags (opt :any nil) :barrier? (opt :boolean false)}
-          :any #{:world-write} nil 2)
+          :entity-ref #{:world-write} nil 2)
     :entity/configure
     (node {:entity (p* :entity-ref) :velocity (opt :vec3 nil) :block-id (opt :any nil)
            :add-tags (opt :any nil) :place-when-collide? (opt :boolean false)
@@ -325,7 +341,7 @@
     (node {:position (p* :vec3) :expected-block-id (opt :any nil) :fortune-level (opt :long 0)
            :tool-tier-capped? (opt :boolean false) :drop? (opt :boolean true)
            :barrier? (opt :boolean false)}
-          :any #{:world-write} nil 2)
+          :break-result #{:world-write} nil 2)
     :block/set
     (node {:position (p* :vec3) :block-id (p) :expected-block-ids (opt :any nil)} nil #{:world-write})
 
