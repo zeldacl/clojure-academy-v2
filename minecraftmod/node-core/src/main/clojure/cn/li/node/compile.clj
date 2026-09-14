@@ -127,13 +127,21 @@
    dummy-register!) so compilation can keep going and surface every error
    in one pass, not just the first.
 
-   `:severity` defaults to :error, which is every existing caller. A
-   :warn diagnostic is ALWAYS collected and never throws, in either mode,
-   and does not suppress the IR (see compile-program's tail) -- it is for
-   something provably wrong that still runs, like a payload field the
-   target effect does not declare and will therefore ignore. Those exist in
-   shipped content today; failing the whole catalog on them would trade a
-   silent bug for an unbootable game."
+   `:severity` defaults to :error, which is every caller. The :warn
+   channel still works -- a :warn diagnostic is ALWAYS collected, never
+   throws in either mode, and does not suppress the IR (see
+   compile-program's tail) -- but nothing emits one, and
+   verifyNodeDiagnosticsSeverity fails the build if anything starts.
+
+   That gate is deliberate, not zeal. :unknown-vfx-field was the one warn
+   this channel existed for (a payload field the target effect does not
+   declare, so the runtime drops it): provably wrong, non-fatal, and
+   present in shipped content, where failing the catalog would have traded
+   a silent bug for an unbootable game. It was also invisible -- nothing
+   asserted on it and assembly only log/warn'd -- which is exactly why
+   three of them survived to release. Adding a warn is therefore a
+   decision about whether anyone will ever look at it, and the gate makes
+   that decision explicit instead of implicit."
   [env {:keys [code message form nid want severity] :as diag}]
   (let [severity (or severity :error)
         entry (merge {:severity severity :code code :message message :nid nid :want want}

@@ -1587,6 +1587,34 @@ tasks.register("verifyVocabularyPaletteMetadata") {
               ":ac:verifyPaletteMetadataAc"
 }
 
+tasks.register("verifyNodeDiagnosticsSeverity") {
+    group = "verification"
+    description = "Two halves of one rule: no compile diagnostic may be :warn, and no shipped V4 document may compile with a diagnostic at all. cn.li.node.compile/report! defaults to :error, so a :warn is always an explicit choice -- and the one that existed (:unknown-vfx-field, a payload field the target effect does not declare and therefore drops) is precisely how three real defects rode into released content: warn-level, logged by assembly and asserted on by nothing, so nobody ever looked. They were removed in c90018a3c and the code is now :error, which costs nothing today and is the only thing stopping a fourth. The text scan is a text property (a literal ':severity :warn' in a source file), which is what a Gradle scan is actually good at; the 'catalog compiles clean' half needs real EDN parsing and real node-core compilation, so it delegates to :ac:runAcEdnCoverageTests -- same split, and same reasoning, as verifyVocabularyPaletteMetadata and verifyCombatSkillCoverage. Re-enabling the warn channel is allowed; it just has to be a decision made here, in the open, rather than one that shows up as an unread log line."
+    dependsOn ":ac:runAcEdnCoverageTests"
+    doLast {
+        def offenders = []
+        ["node-core", "combat-core", "vfx-core", "ability-runtime", "mcmod"].each { module ->
+            fileTree("${module}/src/main/clojure").matching { include "**/*.clj" }.each { f ->
+                f.readLines("UTF-8").eachWithIndex { line, idx ->
+                    // Strip comments first: the rationale above, and report!'s
+                    // own docstring, both mention :warn in prose on purpose.
+                    def code = line.replaceAll(/;.*$/, "")
+                    if (code =~ /:severity\s+:warn/) {
+                        offenders << "${f.path}:${idx + 1}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException(
+                "a :warn-severity diagnostic was added. A warning nobody asserts on is invisible -- that is\n" +
+                "how :unknown-vfx-field's three cases reached released content. Either make it :error, or\n" +
+                "add the assertion that will actually read it and allow it here explicitly:\n" + offenders.join("\n"))
+        }
+        logger.lifecycle("[verifyNodeDiagnosticsSeverity] ok (no :warn diagnostics; catalog compiles clean)")
+    }
+}
+
 tasks.register("verifyContentEdnNoRawComments") {
     group = "verification"
     description = "All structured V4 content EDN must store authoring notes in :doc data and must not contain raw EDN comment lines."
@@ -2677,6 +2705,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyContentEdnNoRawComments",
               "verifyEditorLayoutSidecarNotLoaded",
               "verifyVocabularyPaletteMetadata",
+              "verifyNodeDiagnosticsSeverity",
               "verifyCombatSingleDamagePath",
               "verifyAcNoWorldCapabilities",
               "verifyAbilityVfxRegistryCoverage",

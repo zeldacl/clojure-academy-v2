@@ -163,11 +163,17 @@
                              " supplies nil for required input " k)}))
           unknown (for [k (keys payload)
                         :when (not (contains? input-specs k))]
-                    ;; :warn, not :error -- an undeclared field is dead weight
-                    ;; the effect ignores, not something that crashes it, and
-                    ;; shipped content has a few. Surfacing it must not make
-                    ;; the catalog refuse to boot.
-                    {:code :unknown-vfx-field :severity :warn :effect-id effect-id :key k
+                    ;; Was :warn, on the reasoning that an undeclared field is
+                    ;; dead weight the effect ignores rather than a crash, and
+                    ;; that shipped content had a few -- failing the catalog
+                    ;; on them would have traded a silent bug for an unbootable
+                    ;; game. That was true when written and is not now: the
+                    ;; three real cases were removed in c90018a3c, so :error
+                    ;; costs nothing today and is the only thing that stops
+                    ;; them coming back. A warning nobody asserts on is how
+                    ;; those three rode along in released content unnoticed in
+                    ;; the first place.
+                    {:code :unknown-vfx-field :severity :error :effect-id effect-id :key k
                      :message (str "effect " effect-id " declares no input " k
                                    " -- it would be silently ignored at runtime")})
           declared

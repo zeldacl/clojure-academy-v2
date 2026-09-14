@@ -67,38 +67,43 @@
     (is (= 1 (count msgs)))
     (is (re-find #":ring-radius\.:to.*wants :double" (first msgs)))))
 
-(deftest misspelled-input-name-is-a-warning-test
-  ;; Previously silently dropped at runtime -- the effect simply never saw
-  ;; it. Reported as a WARNING rather than an error: it is dead weight, not
-  ;; a crash, and shipped content still has a few, so making it fatal would
-  ;; trade a silent bug for an unbootable game.
+(deftest misspelled-input-name-is-an-error-test
+  ;; Was asserted as a WARNING, on the grounds that a dropped field is dead
+  ;; weight rather than a crash and shipped content still had a few, so
+  ;; fatal would have traded a silent bug for an unbootable game. Those
+  ;; three were removed in c90018a3c; :error now costs nothing and is what
+  ;; keeps a fourth out. The warning level is precisely why they survived:
+  ;; assembly log/warn'd them and no test read the log.
   (let [ds (diagnostics-full {:strat {:vec3 [0.0 0.0 0.0]}})]
     (is (= [:unknown-vfx-field] (mapv :code ds)))
-    (is (= [:warn] (mapv :severity ds)))
+    (is (= [:error] (mapv :severity ds)))
     (is (re-find #"declares no input :strat" (:message (first ds))))))
 
-(deftest a-warning-still-yields-a-usable-ir-test
-  (let [doc (surface/read-doc
-             (str "{:ability :t :activation :instant :do "
-                  "[(vfx! {:effect-id :beam-arc-fade :operation :update "
-                  ":payload {:strat 1}})]}"))
-        {:keys [ir diagnostics]} (compile/compile-program
-                                  (surface/normalize doc)
-                                  (assoc fx/opts :effect-inputs effect-inputs)
-                                  :collect)]
-    (is (some? ir) "a warning must not suppress the program")
-    (is (= [:warn] (mapv :severity diagnostics))))
-  (testing ":throw mode does not throw on a warning either"
-    (let [doc (surface/read-doc
-               (str "{:ability :t :activation :instant :do "
-                    "[(vfx! {:effect-id :beam-arc-fade :operation :update "
-                    ":payload {:strat 1}})]}"))
-          {:keys [ir diagnostics]} (compile/compile-program
-                                    (surface/normalize doc)
-                                    (assoc fx/opts :effect-inputs effect-inputs)
-                                    :throw)]
-      (is (some? ir))
-      (is (= [:warn] (mapv :severity diagnostics))))))
+(deftest an-undeclared-field-suppresses-the-program-test
+  ;; Replaces a-warning-still-yields-a-usable-ir-test, which pinned the
+  ;; opposite contract: that this diagnostic rode along WITH a runnable IR
+  ;; in both modes. That was the whole problem -- a program that still
+  ;; compiles is a program nobody goes back to fix.
+  (let [doc-text (str "{:ability :t :activation :instant :do "
+                      "[(vfx! {:effect-id :beam-arc-fade :operation :update "
+                      ":payload {:strat 1}})]}")]
+    (testing ":collect reports it and refuses the IR"
+      (let [{:keys [ir diagnostics]} (compile/compile-program
+                                      (surface/normalize (surface/read-doc doc-text))
+                                      (assoc fx/opts :effect-inputs effect-inputs)
+                                      :collect)]
+        (is (nil? ir) "an error must suppress the program")
+        (is (= [:error] (mapv :severity diagnostics)))
+        (is (= [:unknown-vfx-field] (mapv :code diagnostics)))))
+    (testing ":throw mode throws, carrying the code in ex-data"
+      (try
+        (compile/compile-program (surface/normalize (surface/read-doc doc-text))
+                                 (assoc fx/opts :effect-inputs effect-inputs)
+                                 :throw)
+        (is false "compile-program must throw on an undeclared vfx field")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :unknown-vfx-field (:code (ex-data e))))
+          (is (= :error (:severity (ex-data e)))))))))
 
 (deftest unknown-effect-id-test
   (let [doc (surface/read-doc
