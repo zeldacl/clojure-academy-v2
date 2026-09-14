@@ -29,20 +29,9 @@
         diags (check/diagnostics raw fx/opts)]
     (is (>= (count diags) 2))))
 
-(def ^:private effect-catalog
-  {:arc-strike {:user-types {:start :vec3 :end :vec3}}})
-
-(deftest unknown-vfx-fields-finds-the-typo-test
-  (let [node {:stmt :vfx! :effect-id :arc-strike :fields {:start "n1" :ende "n2"}}]
-    (is (= #{:ende} (check/unknown-vfx-fields node effect-catalog)))))
-
-(deftest unknown-vfx-fields-empty-when-every-field-is-declared-test
-  (let [node {:stmt :vfx! :effect-id :arc-strike :fields {:start "n1" :end "n2"}}]
-    (is (= #{} (check/unknown-vfx-fields node effect-catalog)))))
-
-(deftest unknown-vfx-fields-nil-when-effect-id-is-not-in-the-catalog-test
-  (let [node {:stmt :vfx! :effect-id :no-such-effect :fields {:start "n1"}}]
-    (is (nil? (check/unknown-vfx-fields node effect-catalog)))))
-
-(deftest unknown-vfx-fields-throws-on-a-non-vfx-node-test
-  (is (thrown? clojure.lang.ExceptionInfo (check/unknown-vfx-fields {:stmt :call} effect-catalog))))
+;; The four unknown-vfx-fields tests that used to close this file are gone
+;; with the function itself. The rule they covered (a vfx! payload naming a
+;; field the target effect does not declare) is not lost -- it is
+;; cn.li.node.types' :unknown-vfx-field, covered by
+;; cn.li.node.vfx-payload-check-test, and it now applies to every caller
+;; instead of only to graphs opened in the editor.

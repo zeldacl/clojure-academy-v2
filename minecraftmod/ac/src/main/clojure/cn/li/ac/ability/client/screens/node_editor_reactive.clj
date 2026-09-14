@@ -304,8 +304,10 @@
         source (if (.isFile ws) (.getAbsolutePath ws) path)
         raw (slurp source)
         wrapper-doc (binding [*read-eval* false] (read-string raw))
-        ;; Assembled once and shared by :vfx-catalog-by-id below AND by the
-        ;; compiler's vfx payload check -- see the caching note there.
+        ;; Assembled once, at mount, for the compiler's vfx payload check
+        ;; below. The catalog cannot change within one editor session (there
+        ;; is no in-editor VFX-catalog reload action), so mount time is the
+        ;; correct cache point -- same reasoning as :palette.
         vfx-catalog (:by-id (fx-catalog/assemble))
         opts (cond-> (mode-opts mode wrapper-doc)
                ;; Lets check/diagnostics type-check every vfx! spawn payload
@@ -317,7 +319,16 @@
                (= :skill mode)
                (assoc :vfx-operations vfx-contract/signal-ops
                       :effect-inputs
-                      (let [universal (into {} (map (fn [[k t]] [k {:type t}]))
+                      ;; :auto-provided? true is NOT decoration: cn.li.node.
+                      ;; types skips :missing-vfx-input and :nil-vfx-input for
+                      ;; an input carrying it, because a universal capability
+                      ;; (:age/:progress/:seed/:source-player-id) is supplied
+                      ;; by the scene runtime and a payload legitimately omits
+                      ;; it. This map was built without the flag while the
+                      ;; catalog's own effect-input-specs sets it, so the
+                      ;; editor reported "missing required input :seed"-class
+                      ;; diagnostics that the real build never produces.
+                      (let [universal (into {} (map (fn [[k t]] [k {:type t :auto-provided? true}]))
                                             (vfx-api/scene-capabilities-for {}))]
                         (into {}
                               (map (fn [[id e]]
@@ -331,16 +342,14 @@
          :opts opts
          :palette (vec (concat v4-fixed-palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
                                   :category-for (:category-for opts)})))
-         ;; Built once here, not by selected-node-info on every selection
-         ;; change: fx-catalog/assemble parses, validates and node-compiles
-         ;; every ac/vfx-v4/*.edn document (36 files) from scratch on each
-         ;; call, and selected-node-info re-derives on every :vfx! node
-         ;; selection -- clicking through a graph's vfx! calls used to
-         ;; reparse the whole catalog per click. The catalog cannot change
-         ;; within one editor session (no in-editor VFX-catalog reload
-         ;; action exists), so mount time is the correct cache point --
-         ;; same reasoning as :palette just above.
-         :vfx-catalog-by-id vfx-catalog
+         ;; :vfx-catalog-by-id used to be cached into state here so
+         ;; selected-node-info would not re-run fx-catalog/assemble (which
+         ;; parses, validates and node-compiles every ac/vfx-v4/*.edn from
+         ;; scratch) on every :vfx! selection. selected-node-info no longer
+         ;; looks at the catalog at all -- it reads the compile diagnostics
+         ;; the graph already produced -- so the state key is gone. The
+         ;; single assemble above is still needed: :effect-inputs feeds it
+         ;; to the compiler, which is what produces those diagnostics.
          :document (cond
                      (document/v4-document? wrapper-doc) (document/open-v4 raw)
                      :else (throw (ex-info "node editor requires a V4 graph document" {:path path :schema (:schema wrapper-doc)})))
@@ -364,15 +373,30 @@
          :status (if (.isFile ws) "Loaded (from workspace)" "Loaded")}
         recompute)))
 
-(defn- selected-node-info [{:keys [graph selected-nid mode vfx-catalog-by-id]}]
+(defn- selected-node-info
+  "Selected node -> {:nid :text}, where :text is the statement text plus any
+   compile diagnostics attributed to that same node.
+
+   The note used to come from check/unknown-vfx-fields, a second
+   implementation of a rule compile.clj already reports as
+   :unknown-vfx-field (see that namespace's own note on why it was
+   deleted). Reading the diagnostics vector instead means the inspector
+   line and the diagnostics panel can never disagree, and the note now
+   covers EVERY diagnostic the node has -- wrong payload type, missing
+   required input, nil into a primitive -- not just misspelled field names.
+
+   Both sides are the same namespaced keyword (:n/n004 -- V4 :nodes is a
+   #:n{...} map, so its keys carry the namespace and each node's own :nid
+   repeats it), so this compares them directly. Normalizing through
+   (keyword (name ...)) here would strip the namespace and match nothing;
+   that is exactly the bug diagnostic-item/focus-diagnostic had."
+  [{:keys [graph selected-nid diagnostics]}]
   (when (and selected-nid (get (:nodes graph) selected-nid))
-    (let [node (get (:nodes graph) selected-nid)
-          text (graph/stmt-text (:nodes graph) selected-nid)
-          vfx-note (when (and (= :skill mode) (= :vfx! (:stmt node)))
-                     (when-let [unknown (check/unknown-vfx-fields node vfx-catalog-by-id)]
-                       (when (seq unknown)
-                         (str " [unknown fields: " (str/join ", " (map name unknown)) "]"))))]
-      {:nid selected-nid :text (str text vfx-note)})))
+    (let [text (graph/stmt-text (:nodes graph) selected-nid)
+          here (filter #(= selected-nid (:nid %)) diagnostics)
+          note (when (seq here)
+                 (str " [" (str/join "; " (map #(name (or (:code %) :error)) here)) "]"))]
+      {:nid selected-nid :text (str text note)})))
 
 (defn- selected-signature
   "Selected V4 :component node -> a short 'N params -> type' signature
@@ -612,14 +636,23 @@
 (defn- diagnostic-item
   "compile.clj's :collect diagnostics carry no :severity (every entry is an
    error -- see check.clj's own docstring), so :code-tag is a plain wide-
-   enough label, not an invented severity color. :nid is stripped to its
-   bare name (no leading ':') so :editor/focus-diagnostic can (keyword ...)
-   it straight back without string surgery; check.clj's docstring is explicit
-   that :nid is nil for an unstamped form."
+   enough label, not an invented severity color.
+
+   :nid drops only the leading ':' and KEEPS the namespace, so
+   :editor/focus-diagnostic's (keyword ...) round-trips to the same
+   keyword the graph is keyed by. It used to use `name`, which also drops
+   the namespace: a :n/n004 diagnostic became \"n004\" became :n004, and
+   selecting :n004 in a graph whose nodes are :n/n004 highlighted nothing.
+   The unit test missed it by round-tripping a namespace-free \"n7\".
+   Nothing binds :nid in node_editor.ui.edn -- it only rides the action
+   payload -- so widening it costs no layout change.
+
+   check.clj's docstring is explicit that :nid is nil for an unstamped
+   form, hence some->."
   [d]
   {:code-tag (ui-label (name (or (:code d) :error)) 112.0)
    :message (ui-label (:message d) 420.0)
-   :nid (some-> (:nid d) name)
+   :nid (some-> (:nid d) str (subs 1))
    :line (str (or (:line d) "-"))})
 
 (defn- ui-label

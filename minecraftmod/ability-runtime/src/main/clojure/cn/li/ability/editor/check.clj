@@ -6,8 +6,7 @@
    only job is normalizing the raw :form (cn.li.node.surface/read-doc's
    output, cn.li.ability.editor.document's shape) into what compile-
    program expects, and shaping the result for editor consumption."
-  (:require [clojure.set :as set]
-            [cn.li.node.compile :as compile]
+  (:require [cn.li.node.compile :as compile]
             [cn.li.node.surface :as surface]
             [cn.li.node.cost :as cost]))
 
@@ -44,34 +43,18 @@
   [raw-form opts]
   (empty? (diagnostics raw-form opts)))
 
-;; --- vfx! field validation (editor-only value-add, not a compiler check) --
+;; vfx! field validation used to live here as `unknown-vfx-fields` +
+;; `vfx-field-names`, above a comment arguing that compile.clj
+;; "deliberately does NOT" check a vfx! call's field names and that only
+;; the editor could, because only the editor had the content-level effect
+;; catalog. That stopped being true: callers now pass the catalog into
+;; compile as :effect-inputs (cn.li.ac.ability.skills-catalog-v4/
+;; effect-input-specs, and the editor's own opts), and cn.li.node.types
+;; reports :unknown-vfx-field / :missing-vfx-input / :nil-vfx-input /
+;; :vfx-payload-shape from it at compile time.
 ;;
-;; cn.li.node.compile/compile-vfx deliberately does NOT validate a vfx!
-;; call's field names against the referenced effect's declared :inputs --
-;; it only requires a literal :effect-id keyword (see that function's own
-;; docstring: "every other field... compiles as an ordinary pure
-;; expression"). A typo'd field name compiles cleanly and is silently
-;; ignored at runtime. The editor can catch this because, unlike the
-;; compiler, it has the CONTENT-level effect catalog (:user-types per
-;; effect id) available -- see the node-editor plan's §2.2 on this being
-;; an editor-only capability, not something to push into compile.clj.
-
-(defn vfx-field-names
-  "A :vfx! graph node's :fields map -> its keys, e.g. #{:start :end}."
-  [vfx-node]
-  (set (keys (:fields vfx-node))))
-
-(defn unknown-vfx-fields
-  "vfx-node (cn.li.ability.editor.graph's :vfx! node shape, {:stmt :vfx!
-   :effect-id kw :fields {k nid}}), effect-catalog ({effect-id
-   {:user-types {field type} ...}}, cn.li.ac.vfx.fx-catalog/assemble's
-   own shape) -> the set of field names vfx-node passes that the
-   referenced effect does not declare in :user-types. Returns nil (not
-   an empty set) when effect-id is not in effect-catalog at all -- a
-   different, more serious problem (the effect id itself is wrong) that
-   a caller should report distinctly from 'field typo'."
-  [vfx-node effect-catalog]
-  (when-not (= :vfx! (:stmt vfx-node))
-    (throw (ex-info "not a vfx! node" {:node vfx-node})))
-  (when-let [{:keys [user-types]} (get effect-catalog (:effect-id vfx-node))]
-    (set/difference (vfx-field-names vfx-node) (set (keys user-types)))))
+;; Both functions are therefore deleted rather than kept in sync. A rule
+;; with two implementations is worse than the rule having one home: V4
+;; graphs can be produced without ever opening the editor, so an
+;; editor-only check protects nothing, and a drifting copy reports
+;; differently from the compiler for the same graph.

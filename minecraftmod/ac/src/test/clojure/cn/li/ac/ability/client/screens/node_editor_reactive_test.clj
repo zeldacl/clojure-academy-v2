@@ -61,6 +61,24 @@
 (deftest focus-diagnostic-jumps-to-the-attributed-node-test
   (is (= :n7 (:selected-nid (#'editor/focus-diagnostic {} {:item {:nid "n7"}})))))
 
+(deftest focus-diagnostic-round-trips-a-real-namespaced-nid-test
+  ;; The test above round-trips "n7" -- a nid with no namespace, which no
+  ;; real graph produces. V4 :nodes is a #:n{...} map, so every key and
+  ;; every node's :nid is :n/<id>. diagnostic-item used `name`, dropping
+  ;; the namespace, so focus-diagnostic rebuilt :n004 and selected a key
+  ;; the graph does not contain: "jump to the failing node" selected
+  ;; nothing, and no test noticed.
+  ;;
+  ;; So assert the WHOLE path a click takes -- diagnostic -> item ->
+  ;; focus-diagnostic -> :selected-nid -- lands on a nid that is actually
+  ;; present in the graph, rather than testing either half in isolation.
+  (let [graph {:nodes {:n/n004 {:nid :n/n004 :stmt :call}} :links []}
+        item (#'editor/diagnostic-item {:code :type-mismatch :nid :n/n004 :message "m"})
+        state (#'editor/focus-diagnostic {:graph graph} {:item item})]
+    (is (= :n/n004 (:selected-nid state)))
+    (is (contains? (:nodes graph) (:selected-nid state))
+        "the jumped-to nid must exist in the graph, or nothing highlights")))
+
 (deftest focus-diagnostic-is-a-safe-noop-without-an-attributed-nid-test
   (let [result (#'editor/focus-diagnostic {:selected-nid :untouched} {:item {:nid nil}})]
     (is (= :untouched (:selected-nid result)))
@@ -208,38 +226,53 @@
     (is (thrown? clojure.lang.ExceptionInfo (#'editor/remove-v4-node g :n/start)))
     (is (thrown? clojure.lang.ExceptionInfo (#'editor/remove-v4-node g :n/end)))))
 
-(deftest selected-node-info-reads-the-cached-catalog-not-a-fresh-assemble
-  ;; A3: open-document used to build state without a VFX catalog at all --
-  ;; selected-node-info called fx-catalog/assemble itself on EVERY :vfx!
-  ;; node selection, re-parsing and re-validating all 36 ac/vfx-v4/*.edn
-  ;; documents per click. open-document now assembles once and stores the
-  ;; result under :vfx-catalog-by-id; selected-node-info must read that
-  ;; field instead of calling assemble again -- these tests construct
-  ;; state by hand (no file I/O, no real catalog) precisely to prove
-  ;; selected-node-info's own correctness is independent of fx-catalog.
+(deftest selected-node-info-annotates-from-compile-diagnostics
+  ;; Replaces selected-node-info-reads-the-cached-catalog-not-a-fresh-assemble.
+  ;; That test pinned an editor-only rule: selected-node-info called
+  ;; check/unknown-vfx-fields against a :vfx-catalog-by-id cached in state,
+  ;; a second implementation of what compile.clj already reports as
+  ;; :unknown-vfx-field. V4 graphs can be produced without the editor, so an
+  ;; editor-only copy protects nothing and can drift; the function and the
+  ;; state key are both gone.
+  ;;
+  ;; The new contract: the inspector line annotates from the SAME
+  ;; diagnostics vector the panel renders, so the two can never disagree,
+  ;; and it covers every code -- not just field typos.
   (let [lit {:n/lit {:nid :n/lit :expr :literal :value 1.0}}
         vfx-node {:nid :n/fx :stmt :vfx! :effect-id :known-effect
                   :fields {:start :n/lit :bogus-field :n/lit}}
-        g {:nodes (assoc lit :n/fx vfx-node) :links []}
-        catalog {:known-effect {:user-types {:start :vec3}}}]
-    (testing "an unknown field on a known effect is reported"
+        g {:nodes (assoc lit :n/fx vfx-node) :links []}]
+    (testing "a diagnostic attributed to the selected node appears in its text"
       (let [info (#'editor/selected-node-info
-                  {:graph g :selected-nid :n/fx :mode :skill :vfx-catalog-by-id catalog})]
+                  {:graph g :selected-nid :n/fx
+                   :diagnostics [{:code :unknown-vfx-field :nid :n/fx :message "..."}]})]
         (is (some? info))
-        (is (re-find #"unknown fields: bogus-field" (:text info)))))
-    (testing "no note when every field is declared"
-      (let [clean-g {:nodes (assoc lit :n/fx (assoc vfx-node :fields {:start :n/lit})) :links []}
-            info (#'editor/selected-node-info
-                  {:graph clean-g :selected-nid :n/fx :mode :skill :vfx-catalog-by-id catalog})]
-        (is (not (re-find #"unknown fields" (:text info))))))
-    (testing "scene mode never surfaces the vfx note, regardless of the catalog"
+        (is (re-find #"unknown-vfx-field" (:text info)))))
+    (testing "any code is surfaced, not only vfx field typos"
       (let [info (#'editor/selected-node-info
-                  {:graph g :selected-nid :n/fx :mode :scene :vfx-catalog-by-id catalog})]
-        (is (not (re-find #"unknown fields" (:text info))))))
-    (testing "an effect-id absent from the catalog produces no note (a
-              different, more serious problem check/unknown-vfx-fields
-              deliberately reports as nil, not an empty set)"
-      (let [unknown-effect-g {:nodes (assoc lit :n/fx (assoc vfx-node :effect-id :does-not-exist)) :links []}
-            info (#'editor/selected-node-info
-                  {:graph unknown-effect-g :selected-nid :n/fx :mode :skill :vfx-catalog-by-id catalog})]
-        (is (not (re-find #"unknown fields" (:text info))))))))
+                  {:graph g :selected-nid :n/fx
+                   :diagnostics [{:code :type-mismatch :nid :n/fx :message "..."}]})]
+        (is (re-find #"type-mismatch" (:text info)))))
+    (testing "multiple diagnostics on one node are all listed"
+      (let [info (#'editor/selected-node-info
+                  {:graph g :selected-nid :n/fx
+                   :diagnostics [{:code :type-mismatch :nid :n/fx}
+                                 {:code :nil-vfx-input :nid :n/fx}]})]
+        (is (re-find #"type-mismatch" (:text info)))
+        (is (re-find #"nil-vfx-input" (:text info)))))
+    (testing "a diagnostic on a DIFFERENT node does not leak into this one"
+      (let [info (#'editor/selected-node-info
+                  {:graph g :selected-nid :n/fx
+                   :diagnostics [{:code :type-mismatch :nid :n/lit}]})]
+        (is (not (re-find #"type-mismatch" (:text info))))))
+    (testing "no diagnostics means no annotation at all"
+      (let [info (#'editor/selected-node-info {:graph g :selected-nid :n/fx :diagnostics []})]
+        (is (some? info))
+        (is (not (re-find #"\[" (:text info))))))
+    (testing "an unattributed diagnostic (:nid nil) never matches a node"
+      ;; check.clj's docstring is explicit that :nid is nil for an unstamped
+      ;; form; `(some-> nil name keyword)` must stay nil rather than throw.
+      (let [info (#'editor/selected-node-info
+                  {:graph g :selected-nid :n/fx
+                   :diagnostics [{:code :type-mismatch :nid nil}]})]
+        (is (not (re-find #"type-mismatch" (:text info))))))))

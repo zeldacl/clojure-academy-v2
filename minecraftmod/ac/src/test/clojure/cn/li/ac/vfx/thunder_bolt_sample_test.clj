@@ -53,9 +53,16 @@
                                    (= :effect/vfx (:component %))
                                    (= :arc-strike-transient
                                       (get-in % [:inputs :effect-id])))
-                        values)]
+                          %)
+                       values)]
     ;; Main renders the strike with the arc VFX only; it does not add a second
     ;; vanilla lightning effect at the impact point.
     (is (empty? lightning-nodes))
-    (is (= {:ref [:local :caster-id]}
-           (get-in vfx-node [:inputs :payload :source-player-id])))))
+    ;; Assert the :ref, not the whole map: cn.li.node.nid stamps every node
+    ;; in a V4 graph, so this value also carries an :nid
+    ;; (:n/n--entry--default-2--source-player-id) that is graph plumbing, not
+    ;; part of the contract being pinned here. The original `(= {:ref ...}
+    ;; ...)` could never hold; it was never observed because an unmatched
+    ;; delimiter three lines up meant this namespace had never compiled.
+    (is (= [:local :caster-id]
+           (:ref (get-in vfx-node [:inputs :payload :source-player-id]))))))
