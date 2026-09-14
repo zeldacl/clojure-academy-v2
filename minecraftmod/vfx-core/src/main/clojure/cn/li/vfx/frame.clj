@@ -105,18 +105,47 @@
     :ring {:operation :draw-batch :stage :world-after-translucent :primitive :line
            :geometry {:kind :ring :center (:center op) :radius (:radius op) :segments (:segments op)}
            :material {:color (:color op) :alpha (double (or (:alpha op) 1.0))}}
+    :vortex-column {:operation :draw-batch :stage :world-translucent :primitive :quad
+                     :geometry (select-keys op [:base :orientation :radius :seed :alpha :height
+                                                   :spacing :size :displacement-scale :age :fade-ratio
+                                                   :source-player-id])
+                     :material {:texture "academy:textures/effects/tornado_ring.png"
+                                :alpha (double (or (:alpha op) 1.0))}}
+    :plasma-body {:operation :draw-batch :stage :world-translucent :primitive :quad
+                  :geometry {:kind :plasma-body :center (:center op) :alpha (:alpha op)
+                             :age (:age op) :seed (:seed op)}
+                  :material {:alpha (double (or (:alpha op) 0.0))}}
+    :target-box {:operation :draw-batch :stage :world-after-translucent :primitive :line
+                 :geometry {:kind :target-box :center (:center op) :width (:width op) :height (:height op)}
+                 :material {:color (:color op)}}
     :beam {:operation :draw-batch :stage :world-after-translucent :primitive :quad
            :geometry {:kind :beam :start (:start op) :end (:end op)
                       :grow-ticks (:grow-ticks op)}
            :material (beam-material op)}
-    :ray-beam {:operation :draw-batch :stage :world-after-translucent :primitive :line
+    :ray-beam {:operation :draw-batch :stage :world-after-translucent :primitive :quad
                :geometry {:kind :beam :start (:start op) :end (:end op)}
                :material (:style op)}
+    :ray-fan {:operation :draw-batch :stage :world-after-translucent :primitive :quad
+              :geometry {:kind :ray-fan :origin (:origin op) :direction (:direction op)
+                         :count (:count op) :length (:length op)
+                         :yaw-range-degrees (:yaw-range-degrees op)
+                         :pitch-range-degrees (:pitch-range-degrees op)
+                         :seed (:seed op) :grow-ticks (:grow-ticks op)
+                         :age (:age op) :life-ticks (:life-ticks op)}
+              :material (:style op)}
     :line {:operation :draw-batch :stage :world-after-translucent :primitive :line
            :geometry {:from (:from op) :to (:to op)}
            :material (:material op)}
     :quad {:operation :draw-batch :stage :world-after-translucent :primitive :quad
            :geometry (:geometry op) :material (:material op)}
+    :trajectory {:operation :draw-batch :stage :world-after-translucent :primitive :quad
+                 :geometry (select-keys op [:origin :look-dir :init-vel :dt :drag :gravity
+                                            :lateral-offset :vertical-offset :forward-offset
+                                            :width :segments :can-perform? :style])
+                 :material {:texture "academy:textures/effects/glow_line.png"
+                            :color (if (:can-perform? op)
+                                     [255 255 255 255]
+                                     [255 51 51 255])}}
     :arc {:operation :draw-batch :stage :world-after-translucent :primitive :quad
           :geometry {:kind :arc
                      :start (:start op) :end (:end op)
@@ -139,15 +168,22 @@
                         :hand-origin? (boolean (:hand-origin? op))
                         :source-player-id (:source-player-id op)}
               :material {:particle (:particle op)}}
+    :particle-trail {:operation :draw-batch :stage :world-translucent
+                     :primitive :quad
+                     :geometry (select-keys op [:start :end :count-limit :spacing
+                                                  :radius :size :velocity :texture
+                                                  :alpha :life-ticks :fade-in :fade-out
+                                                  :age :seed])
+                     :material {:texture (:texture op)}}
     :audio-one-shot {:operation :audio :stage :audio :sound-id (:sound-id op)
                       :volume (:volume op) :pitch (:pitch op) :position (:position op)
                       :looping? false}
     :audio-loop {:operation :audio :stage :audio :sound-id (:sound-id op)
                  :volume (:volume op) :pitch (:pitch op) :position (:position op)
-                 :looping? true}
+                 :looping? (if (contains? op :looping?) (boolean (:looping? op)) true)}
     :surround-arc {:operation :draw-batch :stage :world-after-translucent :primitive :quad
                    :geometry (assoc (select-keys op [:origin :mode :good? :block-pos :block-bounds
-                                                     :age :seed :source-player-id])
+                                                     :age :seed :count :source-player-id])
                                     :kind :surround-arc)
                    :material {:color [190 244 255 255]}}
     :camera-fov {:operation :camera-fov :stage :camera :value (:value op)}

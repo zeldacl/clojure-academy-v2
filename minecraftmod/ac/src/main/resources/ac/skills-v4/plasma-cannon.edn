@@ -23,6 +23,7 @@
   :destination {:type :any, :default nil},
   :flight-ticks {:type :long, :default 0},
   :sync-ticks {:type :long, :default 0},
+  :charged-cue-shown? {:type :boolean, :default false},
   :overload-floor {:type :double, :default 0.0}},
  :description-key "ability.skill.vecmanip.plasma_cannon.desc",
  :name-key "ability.skill.vecmanip.plasma_cannon",
@@ -245,29 +246,22 @@
         :component :state/set,
         :inputs {:key :sync-ticks, :value 0},
         :nid :n/n--entry--start-12-then-6},
+       :n--entry--start-12-then-6b
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :charged-cue-shown?, :value false},
+        :nid :n/n--entry--start-12-then-6b},
        :n--entry--start-12-then-7
        {:type :component,
         :component :effect/vfx,
         :nid :n/n--entry--start-12-then-7,
         :inputs
-        {:effect-id :energy-orb-session,
+        {:effect-id :plasma-body-session,
          :operation :spawn,
          :instance-key [:activation :energy-orb],
          :audience {:type :nearby, :radius 96.0},
          :payload
-         {:limit 256,
-          :segments 24,
-          :radius 2.2,
-          :particle
-          {:material :additive,
-           :life-ticks 12,
-           :speed 0.06,
-           :color [165 230 255 180]},
-          :inner-color [241 240 222 210],
-          :core-color [165 230 255 230],
-          :outer-color [236 170 93 160],
-          :rate-per-tick 12,
-          :position
+         {:center
           {:nid :n/n--entry--start-12-t-7732b93d,
            :ref [:local :charge-position]}}}},
        :n--entry--start-12-then-8
@@ -275,29 +269,19 @@
         :component :effect/vfx,
         :nid :n/n--entry--start-12-then-8,
         :inputs
-        {:effect-id :vortex-column-session,
+        {:effect-id :plasma-tornado-session,
          :operation :spawn,
          :instance-key [:activation :vortex-column],
          :audience {:type :nearby, :radius 96.0},
          :payload
-         {:base
+         {:origin-base
           {:nid :n/n--entry--start-12-t-5421e43d,
            :component :value/field,
            :inputs
            {:field :position,
             :value
             {:nid :n/n--entry--start-12-t-fc2f197b,
-             :ref [:local :ground-hit]}}},
-          :axis [0.0 1.0 0.0],
-          :height 15.0,
-          :spacing {:min 1.0, :max 2.0},
-          :radius {:min 0.15, :max 0.7},
-          :count-limit 128,
-          :life-ticks 30,
-          :alpha 0.0,
-          :seed
-          {:nid :n/n--entry--start-12-t-121b49aa,
-           :ref [:local :seed]}}}},
+             :ref [:local :ground-hit]}}}}}},
        :n--entry--start-12-then-9
        {:type :component,
         :component :effect/vfx,
@@ -313,7 +297,8 @@
            :ref [:local :charge-position]},
           :sound-id "academy:vecmanip.plasma_cannon",
           :volume 0.8,
-          :pitch 1.0}}},
+          :pitch 1.0,
+          :looping? false}}},
        :n--entry--start-12-then-10
        {:type :end,
         :result {},
@@ -537,6 +522,10 @@
     {:id :e/link053,
      :kind :exec,
      :from [:n/n--entry--start-12-then-6 :out],
+     :to [:n/n--entry--start-12-then-6b :in]}
+    {:id :e/link053b,
+     :kind :exec,
+     :from [:n/n--entry--start-12-then-6b :out],
      :to [:n/n--entry--start-12-then-7 :in]}
     {:id :e/link054,
      :kind :exec,
@@ -671,13 +660,10 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-8629b4cb,
         :inputs
-        {:effect-id :vortex-column-session,
+        {:effect-id :plasma-tornado-session,
          :operation :update,
          :instance-key [:activation :vortex-column],
-         :payload
-         {:base
-          {:nid :n/n--entry--pulse-5-el-85c3d89b,
-           :ref [:local :next-position]}}}},
+         :payload {}}},
        :n088
        {:type :local-get, :key :destination-epsilon, :nid :n/n088},
        :n096 {:type :context-ref, :key :cooldown/main, :nid :n/n096},
@@ -741,10 +727,10 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-6230c4a1,
         :inputs
-        {:effect-id :energy-orb-session,
+        {:effect-id :plasma-body-session,
          :operation :destroy,
          :instance-key [:activation :energy-orb],
-         :payload {:fade-ticks 8}}},
+         :payload {:fade-ticks 20}}},
        :n--entry--pulse-5-th-a6775292
        {:type :end,
         :result {},
@@ -756,10 +742,10 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-5-th-b7f1b0d4,
         :inputs
-        {:effect-id :vortex-column-session,
+        {:effect-id :plasma-tornado-session,
          :operation :destroy,
          :instance-key [:activation :vortex-column],
-         :payload {:fade-ticks 8}}},
+         :payload {:fade-ticks 20}}},
        :n--entry--pulse-5-el-c59cbfa7
        {:type :local-set,
         :operation :define,
@@ -850,10 +836,10 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-5-th-eb6103f0,
         :inputs
-        {:effect-id :energy-orb-session,
+        {:effect-id :plasma-body-session,
          :operation :destroy,
          :instance-key [:activation :energy-orb],
-         :payload {:fade-ticks 8}}},
+         :payload {:fade-ticks 20}}},
        :n061
        {:type :parameter-ref, :key :sync-interval-ticks, :nid :n/n061},
        :n--entry--pulse-5-el-a5a83703
@@ -958,21 +944,48 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-16348d62,
         :inputs
-        {:effect-id :vortex-column-session,
+        {:effect-id :plasma-tornado-session,
          :operation :destroy,
          :instance-key [:activation :vortex-column],
-         :payload {:fade-ticks 8}}},
+         :payload {:fade-ticks 20}}},
        :n067 {:type :local-get, :key :delta, :nid :n/n067},
        :n--entry--pulse-5-el-1001b197
        {:type :component,
         :component :cooldown/start,
         :nid :n/n--entry--pulse-5-el-1001b197,
         :inputs {:name :main}},
-       :n--entry--pulse-5-then-0-else-0
+       :charged-cue-state {:type :state-ref, :key :charged-cue-shown?, :nid :n/charged-cue-state},
+       :charged-cue-not {:type :component, :component :bool/not, :nid :n/charged-cue-not},
+       :charged-cue-audio
+       {:type :component,
+        :component :effect/vfx,
+        :nid :n/charged-cue-audio,
+        :inputs
+        {:effect-id :audio-one-shot,
+         :operation :spawn,
+         :audience {:type :owner},
+         :payload
+         {:position {:nid :n/charged-cue-eye, :ref [:context :caster/eye]},
+          :sound-id "academy:vecmanip.plasma_cannon_t",
+          :volume 0.5,
+          :pitch 1.0}}},
+       :charged-cue-mark
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :charged-cue-shown?, :value true},
+        :nid :n/charged-cue-mark},
+       :charged-cue-end
        {:type :end,
         :result {},
-        :nid :n/n--entry--pulse-5-then-0-else-0,
+        :nid :n/charged-cue-end,
         :inputs {:outcome :charged}},
+       :charged-cue-end-unchanged
+       {:type :end,
+        :result {},
+        :nid :n/charged-cue-end-unchanged,
+        :inputs {:outcome :charged}},
+       :n--entry--pulse-5-then-0-else-0
+       {:type :branch, :nid :n/n--entry--pulse-5-then-0-else-0},
        :n038 {:type :state-ref, :key :overload-floor, :nid :n/n038},
        :n051
        {:type :component,
@@ -984,37 +997,13 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-e580e155,
         :inputs
-        {:effect-id :endpoint-burst,
+        {:effect-id :plasma-explosion-transient,
          :operation :spawn,
          :audience {:type :nearby, :radius 96.0},
          :payload
-         {:sound-pitch 0.8,
-          :limit 256,
-          :duration-ticks 12,
-          :sound-volume 1.0,
-          :sound-id "minecraft:entity.generic.explode",
-          :particle
-          {:material :additive,
-           :life-ticks 16,
-           :speed 0.12,
-           :color [236 170 93 220]},
-          :from
-          {:nid :n/n--entry--pulse-5-el-623a18e1,
-           :component :value/field,
-           :inputs
-           {:field :position,
-            :value
-            {:nid :n/n--entry--pulse-5-el-37d081b,
-             :ref [:local :destination]}}},
-          :rate-per-tick 16,
-          :to
-          {:nid :n/n--entry--pulse-5-el-96f33eda,
-           :component :value/field,
-           :inputs
-           {:field :position,
-            :value
-            {:nid :n/n--entry--pulse-5-el-910276f8,
-             :ref [:local :destination]}}}}}},
+         {:position
+          {:nid :n/n--entry--pulse-5-el-37d081b,
+           :ref [:local :destination]}}}},
        :n109 {:type :local-get, :key :flight-ticks, :nid :n/n109},
        :n043 {:type :component, :component :math/lt, :nid :n/n043},
        :n--entry--pulse-5-el-ec055e20
@@ -1061,11 +1050,11 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-26a7647d,
         :inputs
-        {:effect-id :energy-orb-session,
+        {:effect-id :plasma-body-session,
          :operation :update,
          :instance-key [:activation :energy-orb],
          :payload
-         {:position
+         {:center
           {:nid :n/n--entry--pulse-5-el-7f37663b,
            :ref [:local :next-position]}}}},
        :n101 {:type :local-get, :key :owner-id, :nid :n/n101},
@@ -1184,6 +1173,30 @@
      :kind :exec,
      :from [:n/n--entry--pulse-5-then-0 :false],
      :to [:n/n--entry--pulse-5-then-0-else-0 :in]}
+    {:id :e/plasma-charged-state,
+     :kind :data,
+     :from [:n/charged-cue-state :value],
+     :to [:n/charged-cue-not :arg0]}
+    {:id :e/plasma-charged-not,
+     :kind :data,
+     :from [:n/charged-cue-not :value],
+     :to [:n/n--entry--pulse-5-then-0-else-0 :condition]}
+    {:id :e/plasma-charged-true,
+     :kind :exec,
+     :from [:n/n--entry--pulse-5-then-0-else-0 :true],
+     :to [:n/charged-cue-audio :in]}
+    {:id :e/plasma-charged-audio,
+     :kind :exec,
+     :from [:n/charged-cue-audio :out],
+     :to [:n/charged-cue-mark :in]}
+    {:id :e/plasma-charged-mark,
+     :kind :exec,
+     :from [:n/charged-cue-mark :out],
+     :to [:n/charged-cue-end :in]}
+    {:id :e/plasma-charged-false,
+     :kind :exec,
+     :from [:n/n--entry--pulse-5-then-0-else-0 :false],
+     :to [:n/charged-cue-end-unchanged :in]}
     {:id :e/link089,
      :kind :data,
      :from [:n/n052 :value],
@@ -1800,11 +1813,11 @@
         :component :effect/vfx,
         :nid :n/n--entry--release-3--80125e3c,
         :inputs
-        {:effect-id :energy-orb-session,
+        {:effect-id :plasma-body-session,
          :operation :update,
          :instance-key [:activation :energy-orb],
          :payload
-         {:position
+         {:center
           {:nid :n/n--entry--release-3--672db04,
            :component :value/field,
            :inputs
@@ -1817,18 +1830,10 @@
         :component :effect/vfx,
         :nid :n/n--entry--release-3--a6e709a5,
         :inputs
-        {:effect-id :vortex-column-session,
+        {:effect-id :plasma-tornado-session,
          :operation :update,
          :instance-key [:activation :vortex-column],
-         :payload
-         {:base
-          {:nid :n/n--entry--release-3--4ab05175,
-           :component :value/field,
-           :inputs
-           {:field :position,
-            :value
-            {:nid :n/n--entry--release-3--fa63d40e,
-             :ref [:local :destination]}}}}}},
+         :payload {}}},
        :n--entry--release-3--7f93adc9
        {:type :component,
         :component :effect/vfx,
@@ -1856,19 +1861,19 @@
         :component :effect/vfx,
         :nid :n/n--entry--release-3--93baaaf,
         :inputs
-        {:effect-id :energy-orb-session,
+        {:effect-id :plasma-body-session,
          :operation :destroy,
          :instance-key [:activation :energy-orb],
-         :payload {:fade-ticks 8}}},
+         :payload {:fade-ticks 20}}},
        :n--entry--release-3--6bdfd710
        {:type :component,
         :component :effect/vfx,
         :nid :n/n--entry--release-3--6bdfd710,
         :inputs
-        {:effect-id :vortex-column-session,
+        {:effect-id :plasma-tornado-session,
          :operation :destroy,
          :instance-key [:activation :vortex-column],
-         :payload {:fade-ticks 8}}},
+         :payload {:fade-ticks 20}}},
        :n--entry--release-3--1acbe61
        {:type :component,
         :component :effect/vfx,
@@ -2126,19 +2131,19 @@
         :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
-        {:effect-id :energy-orb-session,
+        {:effect-id :plasma-body-session,
          :operation :destroy,
          :instance-key [:activation :energy-orb],
-         :payload {:fade-ticks 8}}},
+         :payload {:fade-ticks 20}}},
        :n--entry--abort-1
        {:type :component,
         :component :effect/vfx,
         :nid :n/n--entry--abort-1,
         :inputs
-        {:effect-id :vortex-column-session,
+        {:effect-id :plasma-tornado-session,
          :operation :destroy,
          :instance-key [:activation :vortex-column],
-         :payload {:fade-ticks 8}}},
+         :payload {:fade-ticks 20}}},
        :n--entry--abort-2
        {:type :component,
         :component :effect/vfx,

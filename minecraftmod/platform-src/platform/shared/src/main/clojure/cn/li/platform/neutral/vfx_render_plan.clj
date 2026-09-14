@@ -60,6 +60,40 @@
                color)))
           (range segments))))
 
+(defn- target-box-ops [{:keys [center width height]} color]
+  (let [center (v3-from center)
+        width (max 0.001 (number-or width 0.5))
+        height (max 0.001 (number-or height 0.5))
+        len (* 0.2 width)
+        rots [0.0 -90.0 -180.0 -270.0 0.0 -90.0 -180.0 -270.0]
+        axis (fn [theta]
+               (let [r (Math/toRadians theta)
+                     c (Math/cos r)
+                     s (Math/sin r)]
+                 {:x1 c :z1 (- s) :x2 s :z2 c}))
+        ox (- (.-x center) (* 0.5 width))
+        oy (.-y center)
+        oz (- (.-z center) (* 0.5 width))
+        corners [[0 0 0] [1 0 0] [1 0 1] [0 0 1]
+                 [0 1 0] [1 1 0] [1 1 1] [0 1 1]]]
+    (vec
+     (mapcat (fn [[cx cy cz] theta]
+               (let [x (+ ox (* cx width))
+                     y (+ oy (* cy height))
+                     z (+ oz (* cz width))
+                     rev (< cy 0.5)
+                     vert (if rev len (- len))
+                     {ax1 :x1 az1 :z1 ax2 :x2 az2 :z2} (axis theta)
+                     translucent-line (fn [p1 p2]
+                                        (assoc (line-op p1 p2 color) :translucent? true))]
+                 [(translucent-line (V3. x y z) (V3. x (+ y vert) z))
+                  (translucent-line (V3. x y z)
+                                     (V3. (+ x (* ax1 len)) y (+ z (* az1 len))))
+                  (translucent-line (V3. x y z)
+                                     (V3. (+ x (* ax2 len)) y (+ z (* az2 len))))]))
+             corners
+             rots))))
+
 (defn- line-ops [geometry color]
   (let [p1 (or (:p1 geometry) (:start geometry) (:from geometry))
         p2 (or (:p2 geometry) (:end geometry) (:to geometry))]
@@ -127,6 +161,78 @@
                       (glow-board mid2 ge axis width blend-out color)])]
         (vec (concat (boards right) (boards up)))))))
 
+(defn- trajectory-start
+  "Match VecAccel's first-person start offset from the main renderer.
+
+   The server supplies the rendered eye position as `origin`; the remaining
+   offset is derived from look direction so the ribbon begins at the same
+   weapon-relative point in every frame."
+  ^V3 [^V3 origin ^V3 look-dir lateral-offset vertical-offset forward-offset]
+  (let [lx (.-x look-dir) ly (.-y look-dir) lz (.-z look-dir)
+        horizontal (Math/sqrt (+ (* lx lx) (* lz lz)))
+        safe-horizontal (max 1.0e-8 horizontal)
+        lateral (number-or lateral-offset 0.0)
+        vertical (number-or vertical-offset 0.0)
+        forward (number-or forward-offset 0.0)]
+    (V3/add origin
+            (V3. (- (* -1.0 lateral (/ lz safe-horizontal)) (* lx forward))
+                 (- vertical (* ly forward))
+                 (+ (* lateral (/ lx safe-horizontal)) (* -1.0 lz forward))))))
+
+(defn- integrate-trajectory
+  "Integrate the same drag/gravity path as main VecAccel."
+  [^V3 init-vel segments dt drag gravity]
+  (let [segments (long (max 2 (min 256 (number-or segments 100))))
+        dt (number-or dt 0.02) drag (number-or drag 0.98)
+        gravity (number-or gravity 1.9)]
+    (loop [idx 0 ^V3 pos (V3. 0.0 0.0 0.0) ^V3 vel init-vel
+           positions [(V3. 0.0 0.0 0.0)]]
+      (if (>= idx (dec segments))
+        positions
+        (let [vel2 (V3. (* (.-x vel) drag) (* (.-y vel) drag) (* (.-z vel) drag))
+              pos2 (V3. (+ (.-x pos) (* (.-x vel2) dt))
+                        (+ (.-y pos) (* (.-y vel2) dt))
+                        (+ (.-z pos) (* (.-z vel2) dt)))
+              vel3 (V3. (.-x vel2) (- (.-y vel2) (* dt gravity)) (.-z vel2))]
+          (recur (inc idx) pos2 vel3 (conj positions pos2)))))))
+
+(defn- trajectory-color
+  [style can-perform? alpha]
+  (let [style (or style {})
+        color (or (if can-perform?
+                    (or (:ready-color style) (get style "ready-color"))
+                    (or (:blocked-color style) (get style "blocked-color")))
+                   (if can-perform? [255 255 255] [255 51 51]))
+        [r g b] (concat color [255 255 255])]
+    [(number-or r 255.0) (number-or g 255.0) (number-or b 255.0) alpha]))
+
+(defn- trajectory-ops
+  [geometry material view-ctx]
+  (if-not (get-in view-ctx [:hand-center-pos :first-person?] true)
+    []
+    (let [origin (v3-from (or (:camera-pos view-ctx) (:origin geometry)))
+        look-dir (v3-from (:look-dir geometry)) init-vel (v3-from (:init-vel geometry))
+        start (trajectory-start origin look-dir (:lateral-offset geometry)
+                                (:vertical-offset geometry) (:forward-offset geometry))
+        positions (integrate-trajectory init-vel (:segments geometry) (:dt geometry)
+                                        (:drag geometry) (:gravity geometry))
+        style (:style geometry) can-perform? (boolean (:can-perform? geometry))
+        height (max 0.001 (number-or (or (:height style) (get style "height")
+                                         (:width geometry)) 0.02))
+        texture (or (:texture material) beam-glow-texture)]
+    (mapv (fn [idx]
+            (let [^V3 prev (V3/add start (nth positions (dec idx)))
+                  ^V3 pos (V3/add start (nth positions idx))
+                  alpha (int (* 255.0 (max 0.0 (- 0.7 (* (double idx) 0.021)))))
+                  color (trajectory-color style can-perform? alpha)]
+              {:kind :quad
+               :p0 (V3. (.-x prev) (+ (.-y prev) height) (.-z prev))
+               :p1 (V3. (.-x prev) (- (.-y prev) height) (.-z prev))
+               :p2 (V3. (.-x pos) (- (.-y pos) height) (.-z pos))
+               :p3 (V3. (.-x pos) (+ (.-y pos) height) (.-z pos))
+               :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+               :texture texture :color color :additive? true :no-depth-write? true}))
+          (range 1 (dec (count positions)))))))
 (defn- tube-profile
   "Sample the short paraboloid noses and cylindrical body used by main's
    RendererRayCylinder. Keeping the profile in the neutral plan makes the V4
@@ -227,6 +333,61 @@
                    [material])]
     (into [] (mapcat #(beam-layer-ops start end right up % material) layers))))
 
+(defn- range-value [value fallback]
+  (cond
+    (and (map? value) (number? (:min value)) (number? (:max value)))
+    [(double (:min value)) (double (:max value))]
+    (and (sequential? value) (= 2 (count value)) (every? number? value))
+    (mapv double value)
+    :else [fallback fallback]))
+
+(defn- fan-direction [yaw-degrees pitch-degrees]
+  (let [yaw (Math/toRadians (double yaw-degrees))
+        pitch (Math/toRadians (double pitch-degrees))
+        cp (Math/cos pitch)]
+    (V3. (* -1.0 (Math/sin yaw) cp)
+         (Math/sin pitch)
+         (* (Math/cos yaw) cp))))
+
+(defn- ray-fan-ops
+  "Expand the main RayBarrage fan into deterministic textured rays.
+
+   Main chooses one yaw half-angle in [50,60], then uses that same random
+   angle for yaw +/- angle and pitch +/- angle/2. The V4 fan keeps the
+   server-provided count/seed while reproducing that geometry client-side."
+  [geometry material]
+  (let [origin (v3-from (:origin geometry))
+        base (V3/normalize (v3-from (:direction geometry)))
+        yaw-center (Math/toDegrees (Math/atan2 (- (.-x base)) (.-z base)))
+        pitch-center (Math/toDegrees (Math/asin (max -1.0 (min 1.0 (.-y base)))))
+        [yaw-min yaw-max] (range-value (:yaw-range-degrees geometry) 0.0)
+        [_pitch-min pitch-max-raw] (range-value (:pitch-range-degrees geometry) 0.0)
+        pitch-max (Math/abs (double (number-or pitch-max-raw 0.0)))
+        count (long (max 0 (min 128 (number-or (:count geometry) 0))))
+        length (max 0.0 (number-or (:length geometry) 0.0))
+        age (max 0.0 (number-or (:age geometry) 0.0))
+        life (max 1.0 (number-or (:life-ticks geometry) 1.0))
+        grow (max 0.0 (number-or (:grow-ticks geometry) 0.0))
+        fade-in (max 0.0 (number-or (or (:fade-in-ticks material) (get material "fade-in-ticks")) 0.0))
+        fade-out (max 0.0 (number-or (or (:fade-out-ticks material) (get material "fade-out-ticks")) 0.0))
+        grow-ratio (if (pos? grow) (min 1.0 (/ age grow)) 1.0)
+        alpha (* (if (pos? fade-in) (min 1.0 (/ age fade-in)) 1.0)
+                 (if (pos? fade-out) (min 1.0 (/ (- life age) fade-out)) 1.0))
+        rng (java.util.Random. (long (or (:seed geometry) 0)))
+        fan-material (assoc material :alpha (max 0.0 (min 1.0 alpha)))]
+    (vec
+      (mapcat
+        (fn [_]
+          (let [half-angle (+ yaw-min (* (.nextDouble rng) (- yaw-max yaw-min)))
+                yaw-offset (- (* 2.0 half-angle (.nextDouble rng)) half-angle)
+                pitch-half (* 0.5 half-angle (if (pos? pitch-max) (/ pitch-max 30.0) 1.0))
+                pitch-offset (- (* 2.0 pitch-half (.nextDouble rng)) pitch-half)
+                dir (fan-direction (+ yaw-center yaw-offset)
+                                   (+ pitch-center pitch-offset))
+                end (V3/add origin (V3/scale dir (* length grow-ratio)))]
+            (beam-ops {:start origin :end end} fan-material)))
+        (range count)))))
+
 
 (defn- quad-ops [geometry color material]
   (let [corners (map #(get geometry %) [:p0 :p1 :p2 :p3])]
@@ -270,6 +431,101 @@
                :texture texture :color color}))
           (range n))))
 
+(defn- range-pair [value fallback]
+  (cond
+    (map? value)
+    (let [lo (number-or (or (:min value) (get value "min")) fallback)
+          hi (number-or (or (:max value) (get value "max")) lo)]
+      [(min lo hi) (max lo hi)])
+
+    (and (sequential? value) (seq value))
+    (let [lo (number-or (first value) fallback)
+          hi (number-or (second value) lo)]
+      [(min lo hi) (max lo hi)])
+
+    :else [fallback fallback]))
+
+(defn- random-between [^java.util.Random rng [lo hi]]
+  (+ lo (* (.nextDouble rng) (- hi lo))))
+
+(defn- particle-trail-billboard [center cam-pos half color texture]
+  (let [center (v3-from center)
+        cam (v3-from cam-pos)
+        to-camera (V3/sub cam center)
+        distance (V3/length to-camera)
+        forward (if (> distance 1.0e-6)
+                  (V3/scale to-camera (/ 1.0 distance))
+                  (V3. 0.0 0.0 1.0))
+        reference (if (> (Math/abs (.-y forward)) 0.9)
+                   (V3. 1.0 0.0 0.0)
+                   (V3. 0.0 1.0 0.0))
+        right (V3/normalize (V3/cross forward reference))
+        up (V3/normalize (V3/cross right forward))
+        side (V3/scale right half)
+        lift (V3/scale up half)]
+    {:kind :quad
+     :p0 (V3/sub (V3/sub center side) lift)
+     :p1 (V3/add (V3/sub center side) lift)
+     :p2 (V3/add (V3/add center side) lift)
+     :p3 (V3/sub (V3/add center side) lift)
+     :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+     :texture texture :color color}))
+
+(defn- particle-trail-ops [geometry material view-ctx]
+  "Reproduce main's shift-teleport TPParticleFactory burst.
+
+  The V4 scene supplies immutable burst inputs and age; this adapter expands
+  them into camera-facing quads and applies main's drift/fade curve."
+  (let [start (v3-from (:start geometry))
+        end (v3-from (:end geometry))
+        delta (V3/sub end start)
+        distance (V3/length delta)
+        direction (if (> distance 1.0e-6)
+                    (V3/scale delta (/ 1.0 distance))
+                    (V3. 0.0 0.0 0.0))
+        limit (long (max 0 (min 256 (number-or (:count-limit geometry) 128))))
+        spacing (range-pair (:spacing geometry) 1.0)
+        radius (range-pair (:radius geometry) 0.15)
+        alpha (range-pair (:alpha geometry) 180.0)
+        velocity (:velocity geometry)
+        velocity-range (fn [axis fallback]
+                         (range-pair (or (get velocity axis)
+                                         (get velocity (name axis))) fallback))
+        vx (velocity-range :x 0.0)
+        vy (velocity-range :y 0.0)
+        vz (velocity-range :z 0.0)
+        life (long (max 0 (number-or (:life-ticks geometry) 20)))
+        fade-in (long (max 0 (number-or (:fade-in geometry) 5)))
+        fade-out (long (max 1 (number-or (:fade-out geometry) 20)))
+        age (long (max 0 (number-or (:age geometry) 0.0)))
+        texture (or (:texture geometry) (:texture material) default-texture)
+        cam-pos (or (:camera-pos view-ctx) [0.0 0.0 0.0])
+        rng (java.util.Random. (long (hash [:particle-trail (or (:seed geometry) 0)])))]
+    (if (or (zero? limit) (<= distance 1.0e-6))
+      []
+      (loop [along 1.0
+             particles []]
+        (if (or (>= (count particles) limit) (> along distance))
+          particles
+          (let [point (V3/add start (V3/scale direction along))
+                alpha0 (random-between rng alpha)
+                particle-age (double age)
+                fade-factor (cond
+                              (and (pos? fade-in) (< age fade-in)) (/ particle-age fade-in)
+                              (<= age life) 1.0
+                              :else (max 0.0 (- 1.0 (/ (- particle-age life) fade-out))))
+                color {:r 255 :g 255 :b 255
+                       :a (* alpha0 (max 0.0 (min 1.0 fade-factor)))}
+                drift (V3. (* (random-between rng vx) particle-age)
+                           (* (random-between rng vy) particle-age)
+                           (* (random-between rng vz) particle-age))
+                center (V3/add point drift)
+                size (random-between rng radius)
+                next-step (random-between rng spacing)]
+            (recur (+ along next-step)
+                   (conj particles
+                         (particle-trail-billboard center cam-pos
+                                                    (* 0.5 size) color texture)))))))))
 (defn- animated-texture [particle]
   (let [texture (:texture particle)
         frame-count (long (max 1.0 (number-or (:frame-count particle) 1)))
@@ -370,17 +626,219 @@
       (and center (number? radius)) (ring-ops {:center center :radius radius :segments 16} color)
       :else (marker-quad center color nil nil nil))))
 
+(def ^:private vortex-ring-segments 20)
+(def ^:private vortex-divisions 40)
+(def ^:private vortex-texture "academy:textures/effects/tornado_ring.png")
+
+(defn- vortex-range-value [value fallback]
+  (if (map? value)
+    (let [lo (number-or (or (:min value) (get value "min")) fallback)
+          hi (number-or (or (:max value) (get value "max")) lo)]
+      (max lo hi))
+    (number-or value fallback)))
+
+(defn- vortex-ring-stack [height seed]
+  (let [height (max 0.1 (double height))
+        step (/ height (double vortex-divisions))
+        rng (java.util.Random. (long (hash [:storm-wing-vortex seed])))]
+    (loop [y 0.0 rings []]
+      (if (>= y height)
+        rings
+        (let [next-y (+ y (* step (+ 1.0 (* 0.2 (.nextGaussian rng)))))
+              y* (max (+ y 0.01) next-y)
+              ring {:y y*
+                    :w (* step (+ 1.8 (* 0.4 (.nextDouble rng))))
+                    :phase (* 360.0 (.nextDouble rng))
+                    :scale (+ 0.9 (* 0.3 (.nextDouble rng)))}
+              rings* (conj rings ring)]
+          (recur y* (if (< (.nextDouble rng) 0.35)
+                      (conj rings* (assoc ring
+                                          :phase (* 360.0 (.nextDouble rng))
+                                          :scale (+ 1.2 (* 0.5 (.nextDouble rng)))))
+                      rings*)))))))
+
+(defn- vortex-outer-linear [yaw phi x y z]
+  (let [cy (Math/cos (- (double yaw)))
+        sy (Math/sin (- (double yaw)))
+        cp (Math/cos (double phi))
+        sp (Math/sin (double phi))
+        qy (- (* (double y) cp) (* (double z) sp))
+        qz (+ (* (double y) sp) (* (double z) cp))]
+    [(+ (* (double x) cy) (* qz sy))
+     qy
+     (- (* qz cy) (* (double x) sy))]))
+
+(defn- vortex-linear [yaw phi sep-y sep-z]
+  (let [cy (Math/cos (Math/toRadians (double sep-y)))
+        sy (Math/sin (Math/toRadians (double sep-y)))
+        cz (Math/cos (Math/toRadians (double sep-z)))
+        sz (Math/sin (Math/toRadians (double sep-z)))]
+    (fn [x y z]
+      (let [a (- (* (double x) cz) (* (double y) sz))
+            b (+ (* (double x) sz) (* (double y) cz))
+            c (- (* (double z) cy) (* a sy))
+            d (+ (* a cy) (* (double z) sy))]
+        (vortex-outer-linear yaw phi d b c)))))
+
+(defn- vortex-add [^V3 base [x y z]]
+  (V3. (+ (.-x base) (double x))
+       (+ (.-y base) (double y))
+       (+ (.-z base) (double z))))
+
+(defn- vortex-ring-ops [^V3 origin linear alpha age height seed size displacement-scale]
+  (let [rings (vortex-ring-stack height seed)
+        axis (vortex-linear 0.0 0.0 0.0 0.0)
+        [ux uy uz] (axis 0.0 1.0 0.0)
+        color {:r 255 :g 255 :b 255
+               :a (max 0 (min 255 (int (* 255.0 (double alpha) 0.7))))}
+        circle (mapv (fn [i]
+                       (let [rad (* 2.0 Math/PI (/ (double i)
+                                                    (double vortex-ring-segments)))]
+                         [(Math/sin rad) (Math/cos rad)]))
+                     (range vortex-ring-segments))]
+    (mapcat
+     (fn [{:keys [y w phase scale]}]
+       (let [ny (/ (double y) (max 0.1 (double height)))
+             sway (* (+ 0.3 (Math/pow (Math/abs (* 2.0 ny)) 1.4))
+                     (double size) (double displacement-scale))
+             radius (* (+ 0.5 (* 0.3 (Math/sin (+ (* ny 7.0)
+                                                  (* 0.2 (double age))
+                                                  phase)))
+                        (* 0.5 (Math/pow (* 1.5 ny) 2.0))
+                        (Math/cos (+ (* ny 11.0)
+                                     (* 0.2 (double age))
+                                     (* 0.37 phase))))
+                     (double size) (double scale))
+             dx (* (Math/sin (+ (* ny 9.0) (* 0.2 (double age)) phase)) sway)
+             dz (* (Math/cos (+ (* ny 7.0) (* 0.2 (double age)) phase)) sway)
+             edges (mapv (fn [[s c]]
+                           (linear (+ dx (* s radius)) y (+ dz (* c radius))))
+                         circle)
+             hw (* 0.5 (double w))
+             scroll (- (+ (* 0.1 (+ 1.0 (* 0.5 ny)) (double age))
+                          (* 0.01 phase))
+                       (Math/floor (+ (* 0.1 (+ 1.0 (* 0.5 ny)) (double age))
+                                      (* 0.01 phase))))]
+         (map (fn [i]
+                (let [[x0 y0 z0] (nth edges i)
+                      [x1 y1 z1] (nth edges (rem (inc i) vortex-ring-segments))
+                      [xux xuy xuz] [(+ x0 (* ux hw)) (+ y0 (* uy hw)) (+ z0 (* uz hw))]
+                      [xlx xly xlz] [(- x0 (* ux hw)) (- y0 (* uy hw)) (- z0 (* uz hw))]
+                      [xrx xry xrz] [(+ x1 (* ux hw)) (+ y1 (* uy hw)) (+ z1 (* uz hw))]
+                      [xll xlyy xllz] [(- x1 (* ux hw)) (- y1 (* uy hw)) (- z1 (* uz hw))]
+                      p0 (vortex-add origin [xux xuy xuz])
+                      p1 (vortex-add origin [xlx xly xlz])
+                      p2 (vortex-add origin [xll xlyy xllz])
+                      p3 (vortex-add origin [xrx xry xrz])
+                      u0 (- (/ (double i) vortex-ring-segments) scroll)]
+                  {:kind :quad :p0 p0 :p1 p1 :p2 p2 :p3 p3
+                   :u0 u0 :u1 (+ u0 (/ 1.0 vortex-ring-segments))
+                   :v0 0.0 :v1 1.0 :texture vortex-texture :color color}))
+              (range vortex-ring-segments))))
+     rings)))
+
+(defn- vortex-column-ops [geometry view-ctx]
+  (let [orientation (or (:orientation geometry) {})
+        view (or (:hand-center-pos view-ctx) view-ctx)
+        source (some-> (:source-player-id geometry) str)
+        own? (and source (:player-uuid view)
+                   (= source (str (:player-uuid view))))
+        base0 (v3-from (:base geometry))
+        base (if (and own? (number? (:player-x view))
+                       (number? (:player-y view)) (number? (:player-z view)))
+               (V3. (double (:player-x view))
+                    (double (:player-y view))
+                    (double (:player-z view)))
+               base0)
+        yaw (if (and own? (number? (:player-body-yaw-rad view)))
+              (double (:player-body-yaw-rad view))
+              0.0)
+        pitch (if (and own? (number? (:player-pitch-rad view)))
+                (double (:player-pitch-rad view))
+                0.0)
+        phi (- (* 0.2 pitch)
+               (Math/toRadians (number-or (:back-tilt-degrees orientation) 70.0)))
+        offset (v3-from (or (:anchor-offset orientation) [0.0 1.6 0.0]))
+        pre (v3-from (or (:pre-translation orientation) [0.0 0.2 -0.5]))
+        local (v3-from (or (:local-offset orientation) [0.0 0.0 0.0]))
+        [hx hy hz] (vortex-outer-linear yaw phi (.-x pre) (.-y pre) (.-z pre))
+        [lx ly lz] (vortex-outer-linear yaw phi (.-x local) (.-y local) (.-z local))
+        origin (vortex-add base [(+ (.-x offset) hx lx)
+                                 (+ (.-y offset) hy ly)
+                                 (+ (.-z offset) hz lz)])
+        linear (vortex-linear yaw phi
+                              (number-or (:separation-y-degrees orientation) 0.0)
+                              (number-or (:separation-z-degrees orientation) 0.0))
+        fade (max 0.0 (min 1.0 (number-or (:fade-ratio geometry) 1.0)))
+        size (max 0.0 (number-or (:size geometry) 0.16))
+        displacement-scale (max 0.0 (number-or (:displacement-scale geometry) 2.0))
+        alpha (* (max 0.0 (min 1.0 (number-or (:alpha geometry) 1.0))) fade)]
+    (vortex-ring-ops origin linear alpha
+                     (number-or (:age geometry) 0.0)
+                     (number-or (:height geometry) 2.0)
+                     (long (or (:seed geometry) 0))
+                     size displacement-scale)))
+
+(defn- plasma-ranged ^double [^java.util.Random rng ^double lo ^double hi]
+  (+ lo (* (.nextDouble rng) (- hi lo))))
+
+(defn- plasma-ball-spec
+  "NOTE: the four size/spread/amp params are deliberately UNHINTED. Clojure
+   refuses to compile a fn that mixes primitive hints with more than four
+   args ('fns taking primitives support only 4 or fewer args'), and this one
+   takes five counting rng. The hints bought nothing anyway -- the return is
+   a map, so there is no primitive return path, and both call sites below
+   pass double literals that plasma-ranged (3 args, still hinted) receives
+   as primitives regardless."
+  [^java.util.Random rng size-lo size-hi spread amp-scale]
+  (let [size (plasma-ranged rng size-lo size-hi)
+        cx (plasma-ranged rng (- spread) spread)
+        cy (plasma-ranged rng (- spread) spread)
+        cz (plasma-ranged rng (- spread) spread)
+        h-amp (* (plasma-ranged rng 1.4 2.0) amp-scale size)
+        h-speed (plasma-ranged rng 0.5 0.7)
+        h-phase (plasma-ranged rng 0.0 (* 2.0 Math/PI))
+        v-amp (* (plasma-ranged rng 1.4 2.0) amp-scale size)
+        v-speed (plasma-ranged rng 0.5 0.7)
+        v-phase (plasma-ranged rng 0.0 (* 2.0 Math/PI))]
+    {:size size :cx cx :cy cy :cz cz
+     :h-amp h-amp :h-speed h-speed :h-phase h-phase
+     :v-amp v-amp :v-speed v-speed :v-phase v-phase}))
+
+(defn- plasma-body-ops [geometry]
+  (let [center (v3-from (:center geometry))
+        age (number-or (:age geometry) 0.0)
+        seconds (* 0.05 (double age))
+        alpha (max 0.0 (min 1.0 (number-or (:alpha geometry) 0.0)))
+        seed (long (or (:seed geometry) 0))
+        rng (java.util.Random. seed)
+        specs (vec (concat
+                    (repeatedly 4 #(plasma-ball-spec rng 1.0 1.5 3.0 1.0))
+                    (repeatedly (+ 4 (.nextInt rng 2))
+                      #(plasma-ball-spec rng 0.1 0.3 3.0 0.35))))
+        balls (mapv (fn [{:keys [size cx cy cz h-amp h-speed h-phase
+                                  v-amp v-speed v-phase]}]
+                      (let [hp (- (* h-speed seconds) h-phase)
+                            vp (- (* v-speed seconds) v-phase)]
+                        {:x (+ (.-x center) cx (* h-amp (Math/sin hp)))
+                         :y (+ (.-y center) cy (* v-amp (Math/sin vp)))
+                         :z (+ (.-z center) cz (* h-amp (Math/cos hp)))
+                         :size size}))
+                    specs)]
+    [{:kind :plasma-body :center center :alpha alpha :balls balls}]))
 (defn neutral-op->plan
   "Return the mc-* geometry plan for one neutral draw-batch operation.
 
    Particle and typed-vfx payloads are lowered through explicit neutral rules;
    no legacy payload is read and no recognized operation is silently discarded.
 
-   Optional `view-ctx` (presentation-world hand-center-pos) applies main's
-   ViewOptimize hand-origin translation to `:arc` geometry before expansion."
+   Optional `view-ctx` is the presentation-frame-context. Its
+   `:hand-center-pos` applies main ViewOptimize hand-origin translation to
+   `:arc`; its `:camera-pos` anchors first-person trajectory geometry."
   ([op] (neutral-op->plan op nil))
   ([op view-ctx]
-   (let [op (arc-geometry/with-hand-origin-view op view-ctx)]
+   (let [hand-view-ctx (or (:hand-center-pos view-ctx) view-ctx)
+         op (arc-geometry/with-hand-origin-view op hand-view-ctx)]
      (when (and (map? op) (= :draw-batch (:operation op)))
        (let [geometry (or (:geometry op) {})
              material (or (:material op) {})
@@ -389,15 +847,21 @@
              ops (case primitive
                    :line (case (:kind geometry)
                            :ring (ring-ops geometry color)
+                           :target-box (target-box-ops geometry color)
                            :beam (line-ops {:start (:start geometry)
                                             :end (:end geometry)} color)
                            (line-ops geometry color))
                    :quad (case (:kind geometry)
                            :beam (beam-ops geometry material)
+                           :ray-fan (ray-fan-ops geometry material)
+                           :trajectory (trajectory-ops geometry material view-ctx)
                            :arc (arc-geometry/arc-quad-ops geometry material color)
+                           :vortex-column (vortex-column-ops geometry view-ctx)
+                           :plasma-body (plasma-body-ops geometry)
                            :surround-arc (arc-geometry/surround-arc-quad-ops geometry material color)
                            :emitter (marker-quad (:anchor geometry) color (:particle geometry)
                                                  geometry view-ctx)
+                           :particle-trail (particle-trail-ops geometry material view-ctx)
                            (quad-ops geometry color material))
                    :particle (if-let [particles (:particle-buffer op)]
                                (if (instance? ParticleBuffer particles)

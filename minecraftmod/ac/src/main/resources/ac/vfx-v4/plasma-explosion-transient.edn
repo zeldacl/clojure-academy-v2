@@ -1,0 +1,27 @@
+{:schema :ac/vfx-v4,
+ :id :plasma-explosion-transient,
+ :lifecycle {:mode :transient},
+ :inputs {:position {:type :vec3}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :explosion {:type :component, :component :emitter, :nid :n/explosion,
+                   :inputs {:rate-per-tick 1.0, :limit 1,
+                            :particle {:particle-type :explosion-large,
+                                       :speed 0.0}}},
+       :smoke {:type :component, :component :emitter, :nid :n/smoke,
+               :inputs {:rate-per-tick 1.0, :limit 1,
+                        :particle {:particle-type :smoke-large,
+                                   :speed 0.1}}},
+       :position {:type :context-ref, :key :position, :nid :n/position},
+       :end {:type :end, :result {}, :nid :n/end,
+             :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/position-explosion, :kind :data,
+     :from [:n/position :value], :to [:n/explosion :anchor]}
+    {:id :e/position-smoke, :kind :data,
+     :from [:n/position :value], :to [:n/smoke :anchor]}
+    {:id :e/start, :kind :exec, :from [:n/start :out], :to [:n/explosion :in]}
+    {:id :e/explosion-smoke, :kind :exec, :from [:n/explosion :out], :to [:n/smoke :in]}
+    {:id :e/smoke-end, :kind :exec, :from [:n/smoke :out], :to [:n/end :in]}]}}}

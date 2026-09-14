@@ -32,8 +32,10 @@
 ;; shape), so a per-id table here is both simpler and more precise than
 ;; deriving from a namespace that does not exist.
 (def ^:private category-by-id
-  {:ring :geometry :beam :geometry :ray-beam :geometry :line :geometry
+  {:ring :geometry :vortex-column :geometry :plasma-body :geometry :target-box :geometry :beam :geometry :ray-beam :geometry :ray-fan :geometry :line :geometry
    :quad :geometry :arc :geometry :surround-arc :geometry :emitter :geometry
+   :particle-trail :geometry
+   :trajectory :geometry
    :audio-one-shot :audio :audio-loop :audio
    :camera-fov :camera :camera-shake :camera :post-process :camera
    :first-person-motion :geometry})
@@ -60,9 +62,42 @@
    :ring
    (node {:center (p* :vec3) :radius (p* :double) :segments (opt :long 16) :color (opt :any nil)
          :alpha (opt :double 1.0)})
+   ;; Main Storm Wing's four TornadoEffect columns. The renderer owns the
+   ;; randomized ring stack, scrolling texture and column transform; the
+   ;; skill graph supplies only authoritative pose and lifecycle inputs.
+   :vortex-column
+   (node {:base (p* :vec3) :orientation (p* :any) :radius (p* :any)
+         :seed (p* :long) :alpha (p* :double) :height (p* :double)
+         :spacing (p* :any) :size (opt :double 0.16)
+         :displacement-scale (opt :double 2.0)
+         :age (opt :double 0.0)
+         :fade-ratio (opt :double 1.0) :source-player-id (opt :any nil)})
+   :plasma-body
+   (node {:center (p* :vec3) :alpha (p* :double)
+          :age (opt :double 0.0) :seed (opt :long 0)})
+   :target-box
+   (node {:center (p* :vec3) :width (p* :double) :height (p* :double)
+          :color (opt :any nil)})
    :beam
    (node {:start (p* :vec3) :end (p* :vec3) :layers (opt :any nil) :grow-ticks (opt :long 0)
          :alpha (opt :double 1.0)})
+   ;; VecAccel's first-person parabola. Keep the physics inputs explicit so
+   ;; the V4 compiler rejects an incomplete trajectory at build time instead
+   ;; of allowing a nil to reach the renderer during sampling.
+   :trajectory
+   (node {:origin (p* :vec3) :look-dir (p* :vec3) :init-vel (p* :vec3)
+          :dt (p* :double) :drag (p* :double) :gravity (p* :double)
+          :lateral-offset (p* :double) :vertical-offset (p* :double)
+          :forward-offset (p* :double) :width (p* :double)
+          :segments (p* :long) :can-perform? (p* :boolean)
+          :style (p* :any)})
+   :ray-fan
+   (node {:origin (p* :vec3) :direction (p* :vec3)
+          :count (p* :long) :length (p* :double)
+          :yaw-range-degrees (p* :any) :pitch-range-degrees (p* :any)
+          :seed (p* :long) :grow-ticks (opt :long 0)
+          :age (opt :double 0.0) :life-ticks (p* :long)
+          :style (opt :any nil)})
    :ray-beam
    (node {:start (p* :vec3) :end (p* :vec3) :style (opt :any nil) :grow-ticks (opt :long 0)})
    :line
@@ -98,6 +133,7 @@
           :block-bounds (opt :any nil)
           :age (opt :double 0.0)
           :seed (opt :long 0)
+          :count (opt :long nil)
           :source-player-id (opt :any nil)})
    ;; :vfx/emitter is a single
    ;; declarative "spawn an emitter here" draw-batch op per sample, not a
@@ -111,13 +147,25 @@
    (node {:anchor (p* :vec3) :rate-per-tick (opt :double nil) :limit (opt :long nil)
          :chance (opt :double nil) :particle (opt :any nil)
          :hand-origin? (opt :boolean false) :source-player-id (opt :any nil)})
+   ;; Main shift-teleport uses a bounded burst of camera-facing particles
+   ;; distributed along a segment. Keeping all inputs explicit lets V4 reject
+   ;; incomplete trail definitions during compilation.
+   :particle-trail
+   (node {:start (p* :vec3) :end (p* :vec3)
+          :count-limit (p* :long) :spacing (p* :any)
+          :radius (p* :any) :size (p* :any)
+          :velocity (p* :any) :texture (p* :string)
+          :alpha (p* :any) :life-ticks (p* :long)
+          :fade-in (p* :long) :fade-out (p* :long)
+          :age (opt :double 0.0) :seed (opt :long 0)})
 
    ;; --- audio -------------------------------------------------------------
    :audio-one-shot
    (node {:sound-id (p* :string) :volume (opt :double 1.0) :pitch (opt :double 1.0) :position (p* :vec3)})
    :audio-loop
    (node {:sound-id (p* :string) :volume (opt :double 1.0) :pitch (opt :double 1.0) :position (p* :vec3)
-         :instance-key (opt :any nil) :stop-on-destroy? (opt :boolean true)})
+         :instance-key (opt :any nil) :looping? (opt :boolean true)
+         :stop-on-destroy? (opt :boolean true)})
 
    ;; --- camera/post ---------------------------------------------------------
    :camera-fov
