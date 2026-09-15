@@ -1,33 +1,30 @@
 {:schema :ac/vfx-v4,
  :id :plasma-tornado-session,
- :lifecycle {:mode :session},
- :inputs {:origin-base {:type :vec3}},
- :graphs
+ :activation :instant,
+ :parameters {:origin-base {:type :vec3}},
+ :entry-triggers {:render :vfx/render},
+ :phases
  {:render
-  {:nodes
-   #:n{:start {:type :start, :nid :n/start},
-       :origin-base {:type :context-ref, :key :origin-base, :nid :n/origin-base},
-       :age {:type :context-ref, :key :age, :nid :n/age},
-       :fade-ratio {:type :context-ref, :key :fade-ratio, :nid :n/fade-ratio},
-       :seed {:type :context-ref, :key :seed, :nid :n/seed},
-       :fade-in-div {:type :component, :component :math/div, :nid :n/fade-in-div, :inputs {:arg1 20.0}},
-       :fade-in {:type :component, :component :math/clamp, :nid :n/fade-in, :inputs {:arg1 0.0, :arg2 1.0}},
-       :alpha-ramp {:type :component, :component :math/mul, :nid :n/alpha-ramp},
-       :alpha {:type :component, :component :math/mul, :nid :n/alpha, :inputs {:arg1 0.5}},
-       :vortex {:type :component, :component :vortex-column, :nid :n/vortex,
-                :inputs {:orientation {}, :radius 8.0, :height 12.0,
-                         :spacing {:min 1.0, :max 2.0}, :size 8.0,
-                         :displacement-scale 0.3}},
-       :end {:type :end, :result {}, :nid :n/end, :inputs {:outcome :performed}}},
-   :links
-   [{:id :e/age-div, :kind :data, :from [:n/age :value], :to [:n/fade-in-div :arg0]}
-    {:id :e/age-clamp, :kind :data, :from [:n/fade-in-div :value], :to [:n/fade-in :arg0]}
-    {:id :e/fade-in, :kind :data, :from [:n/fade-in :value], :to [:n/alpha-ramp :arg0]}
-    {:id :e/fade-ratio, :kind :data, :from [:n/fade-ratio :value], :to [:n/alpha-ramp :arg1]}
-    {:id :e/alpha-ramp, :kind :data, :from [:n/alpha-ramp :value], :to [:n/alpha :arg0]}
-    {:id :e/base, :kind :data, :from [:n/origin-base :value], :to [:n/vortex :base]}
-    {:id :e/age, :kind :data, :from [:n/age :value], :to [:n/vortex :age]}
-    {:id :e/alpha, :kind :data, :from [:n/alpha :value], :to [:n/vortex :alpha]}
-    {:id :e/seed, :kind :data, :from [:n/seed :value], :to [:n/vortex :seed]}
-    {:id :e/start, :kind :exec, :from [:n/start :out], :to [:n/vortex :in]}
-    {:id :e/end, :kind :exec, :from [:n/vortex :out], :to [:n/end :in]}]}}}
+  [^{:nid "n/fade-in-div"}
+   (let __v4_fade-in-div (math/div ?age 20.0))
+   ^{:nid "n/fade-in"}
+   (let __v4_fade-in (math/clamp __v4_fade-in-div 0.0 1.0))
+   ^{:nid "n/alpha-ramp"}
+   (let __v4_alpha-ramp (math/mul __v4_fade-in ?fade-ratio))
+   ^{:nid "n/alpha"}
+   (let __v4_alpha (math/mul __v4_alpha-ramp 0.5))
+   ^{:nid "n/vortex"}
+   (vortex-column
+    {:age ?age,
+     :displacement-scale 0.3,
+     :orientation {},
+     :radius 8.0,
+     :seed ?seed,
+     :size 8.0,
+     :alpha __v4_alpha,
+     :base ?origin-base,
+     :height 12.0,
+     :spacing {:min 1.0, :max 2.0}})
+   ^{:nid "n/end"}
+   (finish {:outcome :performed})]},
+ :lifecycle {:mode :session}}

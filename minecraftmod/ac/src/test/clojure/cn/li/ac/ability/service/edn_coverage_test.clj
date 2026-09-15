@@ -195,16 +195,6 @@
         (str "compiled skill IR references capabilities the host cannot dispatch: "
              (vec gaps)))))
 
-(deftest v4-skill-graph-components-resolve-test
-  (let [failures (mapcat
-                  (fn [file]
-                    (map #(assoc % :skill (.getName ^java.io.File file))
-                         (combat-api/skill-unresolvable-components (read-edn-file file))))
-                  (resource-files "ac/skills-v4"))]
-    (is (empty? failures)
-        (str "V4 skill graph :component keywords that cannot resolve: "
-             (vec failures)))))
-
 (deftest every-skill-effect-id-is-registered-v4-test
   (let [skill-files (resource-files "ac/skills-v4")
         effect-ids (into #{}
@@ -272,12 +262,18 @@
     (is (empty? failures)
         (str "spawned VFX payload(s) disagree with effect :map-keys: " failures))))
 
-(deftest v4-vfx-resources-have-unique-ids-and-render-graphs-test
+(deftest v4-vfx-resources-have-unique-ids-and-render-phases-test
   (let [files (resource-files "ac/vfx-v4")
         docs (mapv read-edn-file files)
         ids (map :id docs)]
     (is (= 41 (count files)))
     (is (= 41 (count (set ids))))
     (is (every? #(= :ac/vfx-v4 (:schema %)) docs))
-    (is (every? #(contains? (:graphs %) :render) docs)
-        "every V4 VFX document must declare a render graph, including explicit side-channels")))
+    ;; :phases, not :graphs: effects are surface DSL. The claim is the same
+    ;; one -- every effect declares the render entry, side-channel effects
+    ;; included, so an empty body is an explicit statement rather than an
+    ;; absent key.
+    (is (every? #(contains? (:phases %) :render) docs)
+        "every V4 VFX document must declare a render phase, including explicit side-channels")
+    (is (every? #(= {:render :vfx/render} (:entry-triggers %)) docs)
+        "the render phase must be wired to the render trigger")))

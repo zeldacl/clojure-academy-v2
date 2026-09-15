@@ -1,7 +1,7 @@
 {:schema :ac/vfx-v4,
  :id :block-scan-transient,
- :lifecycle {:mode :transient},
- :inputs
+ :activation :instant,
+ :parameters
  {:life-ticks {:type :int},
   :rescan-interval {:type :int},
   :max-results {:type :int},
@@ -12,4 +12,17 @@
   :base-color {:type :any},
   :texture {:type :string},
   :advanced? {:type :bool},
-  :range {:type :float}}, :graphs {:render {:nodes #:n{:start {:type :start,:nid :n/start},:n--entry--default-0 {:type :component,:component :emitter,:nid :n/n--entry--default-0,:inputs {:rate-per-tick 1.0,:limit 64,:particle {:texture {:nid :n/n/texture,:ref [:context :texture]},:life-ticks {:nid :n/n/life,:ref [:context :life-ticks]},:color {:nid :n/n/color,:ref [:context :base-color]}}}},:n001 {:type :context-ref,:key :origin,:nid :n/n001},:n--entry--default-1 {:type :end,:result {},:nid :n/n--entry--default-1,:inputs {:outcome :performed}}},:links [{:id :e/scan-1,:kind :data,:from [:n/n001 :value],:to [:n/n--entry--default-0 :anchor]} {:id :e/scan-2,:kind :exec,:from [:n/start :out],:to [:n/n--entry--default-0 :in]} {:id :e/scan-3,:kind :exec,:from [:n/n--entry--default-0 :out],:to [:n/n--entry--default-1 :in]}]}}}
+  :range {:type :float}},
+ :entry-triggers {:render :vfx/render},
+ :phases
+ {:render
+  [^{:nid "n/n--entry--default-0"}
+   (emitter
+    {:rate-per-tick 1.0,
+     :limit 64,
+     :particle
+     {:texture ?texture, :life-ticks ?life-ticks, :color ?base-color},
+     :anchor ?origin})
+   ^{:nid "n/n--entry--default-1"}
+   (finish {:outcome :performed})]},
+ :lifecycle {:mode :transient}}

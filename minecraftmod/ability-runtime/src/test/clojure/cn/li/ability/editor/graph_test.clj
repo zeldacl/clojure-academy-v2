@@ -207,3 +207,31 @@
     (is (= :call (:stmt call)))
     (is (= :data (:kind (get-in next-graph [:nodes (get-in call [:args :amount])]))))
     (is (some #(= 'combat/damage (first %)) form))))
+
+(deftest every-inserted-statement-is-immediately-printable-test
+  ;; The property that makes the statement palette safe to ship: the moment
+  ;; a statement exists on the canvas, graph->form must be able to print it.
+  ;; Otherwise the next save throws on a node the author has not finished
+  ;; filling in, which is the worst time to find out.
+  ;;
+  ;; Control flow used to come from a palette of GRAPH structure nodes
+  ;; (:branch, :merge, :foreach). Those spellings went with the graph form;
+  ;; this is the capability, in the surface model.
+  (doseq [entry graph/statement-palette]
+    (let [{:keys [graph nid]} (graph/insert-statement {:nodes {} :order []} entry "t")
+          forms (graph/graph->form graph)]
+      (is (= 1 (count forms)) (str (:id entry) " inserted more than one statement"))
+      (is (seq? (first forms)) (str (:id entry) " did not produce a call form"))
+      (is (= (:id entry) (first (first forms)))
+          (str (:id entry) " printed as " (pr-str (first (first forms)))))
+      (is (= nid (:nid (meta (first forms))))
+          (str (:id entry) " lost its node id, so selection cannot follow it")))))
+
+(deftest inserting-a-statement-refuses-a-call-entry-test
+  ;; The two palettes produce different node shapes and must not be
+  ;; confused: a vocab/op entry routed here would build a statement with no
+  ;; call in it.
+  (is (thrown? clojure.lang.ExceptionInfo
+               (graph/insert-statement {:nodes {} :order []}
+                                       {:id :math/add :params {}} "t")))
+  (is (not (graph/statement-entry? {:id :math/add :source :op}))))

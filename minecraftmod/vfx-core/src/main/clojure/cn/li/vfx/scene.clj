@@ -17,7 +17,7 @@
   (:require [cn.li.node.compile :as compile]
             [cn.li.node.ops :as ops]
             [cn.li.node.surface :as surface]
-            [cn.li.node.graph-compile :as graph-compile]
+            [cn.li.node.api :as node-api]
             [cn.li.vfx.dsl-vocabulary :as vocab]
             [cn.li.mcmod.runtime.effect-emit :as emit])
   (:import [cn.li.mcmod.runtime.effect CompiledProgram ExecutionFrame]))
@@ -63,11 +63,20 @@
 
 ;; ---------------------------------------------------------------------------
 (defn compile-v4-document!
-  "Compile persisted :ac/vfx-v4 graph documents."
+  "Compile a persisted :ac/vfx-v4 document.
+
+   Surface DSL, like everything else persisted now -- normalize, then the
+   same compile-program every other entry point reaches. The graph lowering
+   that used to sit in front of this produced these exact forms first, which
+   is why nothing downstream changed."
   [document]
-  (let [input-types (into {} (map (fn [[k spec]] [k (:type spec)]) (or (:inputs document) (:parameters document))))
-        {:keys [ir diagnostics]} (graph-compile/compile-vfx! document {:vocab vocab/nodes :capabilities (capabilities-for input-types) :fns {}} :throw)]
-    (when (seq diagnostics) (throw (ex-info "V4 VFX graph compilation failed" {:diagnostics diagnostics})))
+  (let [input-types (into {} (map (fn [[k spec]] [k (:type spec)]) (:parameters document)))
+        {:keys [ir diagnostics]}
+        (node-api/compile-surface-document!
+         document
+         {:vocab vocab/nodes :capabilities (capabilities-for input-types) :fns {}}
+         :throw)]
+    (when (seq diagnostics) (throw (ex-info "V4 VFX compilation failed" {:diagnostics diagnostics})))
     (compile-program ir)))
 (defn- sample-entry
   "V4 graph VFX compiles its sole graph as entry `:render` (`:vfx/render`

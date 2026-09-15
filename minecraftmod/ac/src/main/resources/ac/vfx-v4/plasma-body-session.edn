@@ -1,30 +1,24 @@
 {:schema :ac/vfx-v4,
  :id :plasma-body-session,
- :lifecycle {:mode :session},
- :inputs {:center {:type :vec3}},
- :graphs
+ :activation :instant,
+ :parameters {:center {:type :vec3}},
+ :entry-triggers {:render :vfx/render},
+ :phases
  {:render
-  {:nodes
-   #:n{:start {:type :start, :nid :n/start},
-       :center {:type :context-ref, :key :center, :nid :n/center},
-       :age {:type :context-ref, :key :age, :nid :n/age},
-       :fade-ratio {:type :context-ref, :key :fade-ratio, :nid :n/fade-ratio},
-       :seed {:type :context-ref, :key :seed, :nid :n/seed},
-       :fade-in-div {:type :component, :component :math/div, :nid :n/fade-in-div, :inputs {:arg1 66.6666667}},
-       :fade-in {:type :component, :component :math/clamp, :nid :n/fade-in, :inputs {:arg1 0.0, :arg2 1.0}},
-       :alpha {:type :component, :component :math/mul, :nid :n/alpha},
-       :alpha-squared {:type :component, :component :math/pow, :nid :n/alpha-squared, :inputs {:arg1 2.0}},
-       :plasma {:type :component, :component :plasma-body, :nid :n/plasma},
-       :end {:type :end, :result {}, :nid :n/end, :inputs {:outcome :performed}}},
-   :links
-   [{:id :e/age-div, :kind :data, :from [:n/age :value], :to [:n/fade-in-div :arg0]}
-    {:id :e/age-clamp, :kind :data, :from [:n/fade-in-div :value], :to [:n/fade-in :arg0]}
-    {:id :e/fade-in, :kind :data, :from [:n/fade-in :value], :to [:n/alpha :arg0]}
-    {:id :e/fade-ratio, :kind :data, :from [:n/fade-ratio :value], :to [:n/alpha :arg1]}
-    {:id :e/alpha-square, :kind :data, :from [:n/alpha :value], :to [:n/alpha-squared :arg0]}
-    {:id :e/center, :kind :data, :from [:n/center :value], :to [:n/plasma :center]}
-    {:id :e/alpha, :kind :data, :from [:n/alpha-squared :value], :to [:n/plasma :alpha]}
-    {:id :e/age, :kind :data, :from [:n/age :value], :to [:n/plasma :age]}
-    {:id :e/seed, :kind :data, :from [:n/seed :value], :to [:n/plasma :seed]}
-    {:id :e/start, :kind :exec, :from [:n/start :out], :to [:n/plasma :in]}
-    {:id :e/end, :kind :exec, :from [:n/plasma :out], :to [:n/end :in]}]}}}
+  [^{:nid "n/fade-in-div"}
+   (let __v4_fade-in-div (math/div ?age 66.6666667))
+   ^{:nid "n/fade-in"}
+   (let __v4_fade-in (math/clamp __v4_fade-in-div 0.0 1.0))
+   ^{:nid "n/alpha"}
+   (let __v4_alpha (math/mul __v4_fade-in ?fade-ratio))
+   ^{:nid "n/alpha-squared"}
+   (let __v4_alpha-squared (math/pow __v4_alpha 2.0))
+   ^{:nid "n/plasma"}
+   (plasma-body
+    {:center ?center,
+     :alpha __v4_alpha-squared,
+     :age ?age,
+     :seed ?seed})
+   ^{:nid "n/end"}
+   (finish {:outcome :performed})]},
+ :lifecycle {:mode :session}}

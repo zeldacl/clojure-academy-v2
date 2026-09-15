@@ -82,7 +82,6 @@
 (defn skill-known-action-capabilities [] (host-parity/known-action-capabilities))
 (defn skill-vocab-host-gaps [] (host-parity/vocab-host-gaps))
 (defn skill-ir-capability-gaps [ir] (host-parity/ir-capability-gaps ir))
-(defn skill-unresolvable-components [form] (host-parity/unresolvable-components form))
 (defn skill-query-action-overlap [] (host-parity/query-action-overlap))
 (defn compile-skill-doc!
   ([text] (run/compile-doc! text skill-lib-fns))

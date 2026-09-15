@@ -114,9 +114,9 @@
 (deftest every-field-read-names-a-key-its-producer-emits
   (let [sites (atom [])
         orig @compile-field-access-var
-        compile-doc-orig node-api/compile-v4-skill-document!]
+        compile-doc-orig node-api/compile-surface-document!]
     (with-redefs-fn
-      {#'node-api/compile-v4-skill-document!
+      {#'node-api/compile-surface-document!
        (fn [value opts mode]
          (binding [*skill* (:id value)]
            (compile-doc-orig value opts mode)))

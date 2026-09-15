@@ -181,43 +181,6 @@
   (is (= {:dx 6.0 :dy -4.0}
          (#'editor/screen->canvas-delta {:zoom 1.0} 6.0 -4.0))))
 
-(deftest fixed-palette-insertion-creates-editable-v4-node
-  (let [{:keys [graph nid]} (#'editor/insert-v4-palette-node
-                             (graph [:n/start :start])
-                             {:id :node/repeat :fixed-type :repeat :params {}}
-                             "palette-test")]
-    (is (= :repeat (get-in graph [:nodes nid :type])))
-    (is (= 1 (get-in graph [:nodes nid :count])))
-    (is (= nid (get-in graph [:nodes nid :nid])))))
-
-(deftest component-palette-insertion-preserves-default-input-slots
-  (let [{:keys [graph nid]} (#'editor/insert-v4-palette-node
-                             (graph [:n/start :start])
-                             {:id :math/add
-                              :params {:arg0 {:type :double :default 1.5}
-                                       :arg1 {:type :long :default 2}}}
-                             "palette-test")]
-    (is (= :component (get-in graph [:nodes nid :type])))
-    (is (= :math/add (get-in graph [:nodes nid :component])))
-    (is (= {:arg0 1.5 :arg1 2} (get-in graph [:nodes nid :inputs])))))
-
-(deftest v4-wire-kind-and-target-port-are-derived-from-pins
-  (let [g (assoc (graph [:n/lit :literal :value 1]
-                        [:n/action :component :component :math/add]
-                        [:n/end :end])
-                 :links [{:id :e/exec :kind :exec
-                          :from [:n/action :out] :to [:n/end :in]}])
-        ;; Empty palette: a :literal source has no statically known type, so
-        ;; the wire type check abstains regardless -- this test is about pin
-        ;; derivation, not typing.
-        wired (#'editor/connect-v4-wire
-               g [] {:from-nid :n/lit :from-pin :out :from-key :value
-                     :to-nid :n/action :to-pin :in :to-key :arg0})
-        link (last (:links wired))]
-    (is (= :data (:kind link)))
-    (is (= [[:n/lit :value] [:n/action :arg0]]
-           [(:from link) (:to link)]))))
-
 (deftest editor-effect-inputs-come-from-the-catalogs-builder
   ;; The editor used to build its own :effect-inputs map. It omitted
   ;; :auto-provided? on the universal capabilities, which is what
@@ -228,10 +191,11 @@
   ;;
   ;; Asserted on the OUTPUT rather than by reading the call site, so
   ;; reintroducing a copy that happens to look right still fails.
-  (let [by-id {:demo {:document {:inputs {:radius {:type :double}
-                                          :tint {:type :any :default nil}}
-                                 :graphs {:render {:nodes {:n/a {:type :context-ref
-                                                                 :key :radius}}}}}}}
+  ;; A surface document: a context read is the symbol ?radius, where the
+  ;; graph form spelled it {:type :context-ref :key :radius}.
+  (let [by-id {:demo {:document {:parameters {:radius {:type :double}
+                                              :tint {:type :any :default nil}}
+                                 :phases {:render ['(ring {:radius ?radius})]}}}}
         specs (skills-catalog-v4/effect-input-specs by-id)
         demo (:demo specs)]
     (testing "universal capabilities are present and flagged auto-provided"
@@ -240,44 +204,6 @@
     (testing ":required? is derived from real use, and a :default opts out"
       (is (true? (:required? (:radius demo))) ":radius is read by the render graph")
       (is (nil? (:required? (:tint demo))) "a declared :default means the payload may omit it"))))
-
-(deftest v4-wire-refuses-a-type-incompatible-connection
-  ;; Early feedback only -- the compiler rejects this too, and would still
-  ;; reject it in a graph produced without the editor. The assertion that
-  ;; the two can never disagree lives in cn.li.ability.editor.check-test's
-  ;; editor-wire-rejections-are-a-subset-of-compiler-rejections-test; this
-  ;; one only proves the controller actually consults it.
-  (let [palette [{:id :target/raycast :returns :hit-result :params {}}
-                 {:id :vec3/length :returns :double :params {:arg0 {:type :vec3}}}]
-        g (assoc (graph [:n/hit :component :component :target/raycast]
-                        [:n/len :component :component :vec3/length]
-                        [:n/end :end])
-                 :links [])
-        wire (fn [] (#'editor/connect-v4-wire
-                     g palette {:from-nid :n/hit :from-pin :out :from-key :value
-                                :to-nid :n/len :to-pin :in :to-key :arg0}))]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"hit-result"
-                          (wire))
-        "a :hit-result must not land on a :vec3 input")
-    (testing "and the same wire is accepted once the types line up"
-      (let [ok-palette [{:id :target/raycast :returns :vec3 :params {}}
-                        {:id :vec3/length :returns :double :params {:arg0 {:type :vec3}}}]]
-        (is (some? (#'editor/connect-v4-wire
-                    g ok-palette {:from-nid :n/hit :from-pin :out :from-key :value
-                                  :to-nid :n/len :to-pin :in :to-key :arg0}))
-            "the check must not reject everything")))))
-
-(deftest remove-v4-node-removes-incident-links-but-protects-sentinels
-  (let [g (assoc (graph [:n/start :start]
-                        [:n/action :component :component :math/add]
-                        [:n/end :end])
-                 :links [{:id :e/a :kind :exec :from [:n/start :out] :to [:n/action :in]}
-                         {:id :e/b :kind :exec :from [:n/action :out] :to [:n/end :in]}])
-        removed (#'editor/remove-v4-node g :n/action)]
-    (is (nil? (get-in removed [:nodes :n/action])))
-    (is (empty? (:links removed)))
-    (is (thrown? clojure.lang.ExceptionInfo (#'editor/remove-v4-node g :n/start)))
-    (is (thrown? clojure.lang.ExceptionInfo (#'editor/remove-v4-node g :n/end)))))
 
 (deftest selected-node-info-annotates-from-compile-diagnostics
   ;; Replaces selected-node-info-reads-the-cached-catalog-not-a-fresh-assemble.

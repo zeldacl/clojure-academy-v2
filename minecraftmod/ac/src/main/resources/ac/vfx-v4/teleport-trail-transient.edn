@@ -1,7 +1,7 @@
 {:schema :ac/vfx-v4,
  :id :teleport-trail-transient,
- :lifecycle {:mode :transient},
- :inputs
+ :activation :instant,
+ :parameters
  {:start {:type :vec3},
   :end {:type :vec3},
   :sound-id {:type :string},
@@ -9,33 +9,23 @@
   :sound-pitch {:type :float},
   :arc-life-ticks {:type :int},
   :duration-ticks {:type :int}},
- :graphs
+ :entry-triggers {:render :vfx/render},
+ :phases
  {:render
-  {:nodes
-   #:n{:start {:type :start, :nid :n/start},
-       :n--entry--trail-arc
-       {:type :component, :component :arc, :nid :n/n--entry--trail-arc,
-        :inputs {:pattern :weak, :bolt-count 1}},
-       :n001 {:type :context-ref, :key :start, :nid :n/n001},
-       :n002 {:type :context-ref, :key :end, :nid :n/n002},
-       :n003 {:type :context-ref, :key :sound-id, :nid :n/n003},
-       :n004 {:type :context-ref, :key :sound-volume, :nid :n/n004},
-       :n005 {:type :context-ref, :key :sound-pitch, :nid :n/n005},
-       :n006 {:type :context-ref, :key :arc-life-ticks, :nid :n/n006},
-       :n007 {:type :context-ref, :key :duration-ticks, :nid :n/n007},
-       :n--entry--default-0
-       {:type :component, :component :audio-one-shot, :nid :n/n--entry--default-0},
-       :n--entry--default-1
-       {:type :end, :result {}, :nid :n/n--entry--default-1, :inputs {:outcome :performed}}},
-   :links
-   [{:id :e/teleport-trail-arc-start, :kind :data, :from [:n/n001 :value], :to [:n/n--entry--trail-arc :start]}
-    {:id :e/teleport-trail-arc-end, :kind :data, :from [:n/n002 :value], :to [:n/n--entry--trail-arc :end]}
-    {:id :e/teleport-trail-arc-life, :kind :data, :from [:n/n006 :value], :to [:n/n--entry--trail-arc :arc-life-ticks]}
-    {:id :e/teleport-trail-arc-duration, :kind :data, :from [:n/n007 :value], :to [:n/n--entry--trail-arc :duration-ticks]}
-    {:id :e/teleport-trail-arc-start-exec, :kind :exec, :from [:n/start :out], :to [:n/n--entry--trail-arc :in]}
-    {:id :e/teleport-trail-arc-audio-exec, :kind :exec, :from [:n/n--entry--trail-arc :out], :to [:n/n--entry--default-0 :in]}
-    {:id :e/teleport-trail-sound-id, :kind :data, :from [:n/n003 :value], :to [:n/n--entry--default-0 :sound-id]}
-    {:id :e/teleport-trail-volume, :kind :data, :from [:n/n004 :value], :to [:n/n--entry--default-0 :volume]}
-    {:id :e/teleport-trail-pitch, :kind :data, :from [:n/n005 :value], :to [:n/n--entry--default-0 :pitch]}
-    {:id :e/teleport-trail-sound-position, :kind :data, :from [:n/n002 :value], :to [:n/n--entry--default-0 :position]}
-    {:id :e/teleport-trail-sound-end, :kind :exec, :from [:n/n--entry--default-0 :out], :to [:n/n--entry--default-1 :in]}]}}}
+  [^{:nid "n/n--entry--trail-arc"}
+   (arc
+    {:pattern :weak,
+     :bolt-count 1,
+     :start ?start,
+     :end ?end,
+     :arc-life-ticks ?arc-life-ticks,
+     :duration-ticks ?duration-ticks})
+   ^{:nid "n/n--entry--default-0"}
+   (audio-one-shot
+    {:sound-id ?sound-id,
+     :volume ?sound-volume,
+     :pitch ?sound-pitch,
+     :position ?end})
+   ^{:nid "n/n--entry--default-1"}
+   (finish {:outcome :performed})]},
+ :lifecycle {:mode :transient}}

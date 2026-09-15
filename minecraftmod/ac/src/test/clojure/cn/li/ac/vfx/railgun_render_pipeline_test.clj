@@ -123,4 +123,4 @@
         "first-person charge resolution needs the caster id")
     (is (= :any
            (get-in (load-v4 "ac/vfx-v4/railgun-charge-session.edn")
-                   [:inputs :source-player-id :type])))))
+                   [:parameters :source-player-id :type])))))

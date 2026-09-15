@@ -1,63 +1,46 @@
-{:schema :ac/vfx-v4
- :id :arc-channel-session
- :lifecycle {:mode :session}
- :inputs
- {:block-bounds {:type :any}
-  :block-pos {:type :any}
-  :charge-ticks {:type :int}
-  :mode {:type :resource-id}
-  :style {:type :any}
-  :good? {:type :bool}
-  :target {:type :any}
-  :caster {:type :vec3}
-  :visual-max-ticks {:type :int}}
- :graphs
+{:schema :ac/vfx-v4,
+ :id :arc-channel-session,
+ :activation :instant,
+ :parameters
+ {:block-bounds {:type :any},
+  :charge-ticks {:type :int},
+  :mode {:type :resource-id},
+  :style {:type :any},
+  :good? {:type :bool},
+  :target {:type :any},
+  :caster {:type :vec3},
+  :block-pos {:type :any},
+  :visual-max-ticks {:type :int}},
+ :entry-triggers {:render :vfx/render},
+ :phases
  {:render
-  {:nodes
-   #:n{:start {:type :start, :nid :n/start}
-       :n--entry--default-0 {:type :branch, :nid :n/n--entry--default-0}
-       :n001 {:type :context-ref, :key :mode, :nid :n/n001}
-       :n002 {:type :component, :component :value/eq, :nid :n/n002,
-              :inputs {:arg1 :block}}
-       :n003 {:type :component, :component :arc, :nid :n/n003
-              :inputs {:pattern :charging, :hand-origin? true, :bolt-count 1
-                       :arc-life-ticks 100000, :duration-ticks 100000}}
-       :n004 {:type :context-ref, :key :caster, :nid :n/n004}
-       :n005 {:type :context-ref, :key :target, :nid :n/n005}
-       :n006 {:type :context-ref, :key :age, :nid :n/n006}
-       :n007 {:type :context-ref, :key :seed, :nid :n/n007}
-       :n008 {:type :context-ref, :key :source-player-id, :nid :n/n008}
-       :n009 {:type :component, :component :surround-arc, :nid :n/n009}
-       :n010 {:type :context-ref, :key :caster, :nid :n/n010}
-       :n011 {:type :context-ref, :key :mode, :nid :n/n011}
-       :n012 {:type :context-ref, :key :good?, :nid :n/n012}
-       :n013 {:type :context-ref, :key :block-pos, :nid :n/n013}
-       :n014 {:type :context-ref, :key :block-bounds, :nid :n/n014}
-       :n015 {:type :context-ref, :key :age, :nid :n/n015}
-       :n016 {:type :context-ref, :key :seed, :nid :n/n016}
-       :n017 {:type :context-ref, :key :source-player-id, :nid :n/n017}
-       :n018 {:type :end, :result {}, :nid :n/n018
-             :inputs {:outcome :performed}}
-       :n019 {:type :merge, :nid :n/n019}}
-   :links
-   [{:id :e/ac-1, :kind :data, :from [:n/n001 :value], :to [:n/n002 :arg0]}
-    {:id :e/ac-2, :kind :data, :from [:n/n002 :value], :to [:n/n--entry--default-0 :condition]}
-    {:id :e/ac-3, :kind :data, :from [:n/n004 :value], :to [:n/n003 :start]}
-    {:id :e/ac-4, :kind :data, :from [:n/n005 :value], :to [:n/n003 :end]}
-    {:id :e/ac-5, :kind :data, :from [:n/n006 :value], :to [:n/n003 :age]}
-    {:id :e/ac-6, :kind :data, :from [:n/n007 :value], :to [:n/n003 :seed]}
-    {:id :e/ac-7, :kind :data, :from [:n/n008 :value], :to [:n/n003 :source-player-id]}
-    {:id :e/ac-8, :kind :exec, :from [:n/start :out], :to [:n/n--entry--default-0 :in]}
-    {:id :e/ac-9, :kind :exec, :from [:n/n--entry--default-0 :true], :to [:n/n003 :in]}
-    {:id :e/ac-10, :kind :exec, :from [:n/n003 :out], :to [:n/n019 :in]}
-    {:id :e/ac-11, :kind :exec, :from [:n/n--entry--default-0 :false], :to [:n/n019 :in]}
-    {:id :e/ac-12, :kind :data, :from [:n/n010 :value], :to [:n/n009 :origin]}
-    {:id :e/ac-13, :kind :data, :from [:n/n011 :value], :to [:n/n009 :mode]}
-    {:id :e/ac-14, :kind :data, :from [:n/n012 :value], :to [:n/n009 :good?]}
-    {:id :e/ac-15, :kind :data, :from [:n/n013 :value], :to [:n/n009 :block-pos]}
-    {:id :e/ac-16, :kind :data, :from [:n/n014 :value], :to [:n/n009 :block-bounds]}
-    {:id :e/ac-17, :kind :data, :from [:n/n015 :value], :to [:n/n009 :age]}
-    {:id :e/ac-18, :kind :data, :from [:n/n016 :value], :to [:n/n009 :seed]}
-    {:id :e/ac-19, :kind :data, :from [:n/n017 :value], :to [:n/n009 :source-player-id]}
-    {:id :e/ac-20, :kind :exec, :from [:n/n009 :out], :to [:n/n018 :in]}
-    {:id :e/ac-21, :kind :exec, :from [:n/n019 :out], :to [:n/n009 :in]}]}}}
+  [^{:nid "n/n002"}
+   (let __v4_n002 (value/eq ?mode :block))
+   (if
+    __v4_n002
+    [^{:nid "n/n003"}
+     (arc
+      {:hand-origin? true,
+       :age ?age,
+       :duration-ticks 100000,
+       :start ?caster,
+       :seed ?seed,
+       :source-player-id ?source-player-id,
+       :arc-life-ticks 100000,
+       :bolt-count 1,
+       :end ?target,
+       :pattern :charging})]
+    [])
+   ^{:nid "n/n009"}
+   (surround-arc
+    {:origin ?caster,
+     :mode ?mode,
+     :good? ?good?,
+     :block-pos ?block-pos,
+     :block-bounds ?block-bounds,
+     :age ?age,
+     :seed ?seed,
+     :source-player-id ?source-player-id})
+   ^{:nid "n/n018"}
+   (finish {:outcome :performed})]},
+ :lifecycle {:mode :session}}

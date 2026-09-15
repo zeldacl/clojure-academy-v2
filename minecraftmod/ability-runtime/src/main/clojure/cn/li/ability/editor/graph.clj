@@ -461,6 +461,55 @@
         call {:nid call-nid :kind :exec :stmt :call :op op :arg-shape :map :args args}]
     {:graph (add-node with-data call) :nid call-nid}))
 
+(def statement-palette
+  "The statement kinds the canvas can insert, as palette entries.
+
+   Separate from cn.li.ability.editor.palette/build, which offers CALLS --
+   vocab nodes, pure ops, library fns -- all of which share one shape and
+   come from schema-export. Control flow is not a call and has no schema to
+   export: `if` is a statement of this grammar, not a node anyone declared.
+
+   Editing a graph document, these came from a fixed palette of graph
+   structure nodes (:branch, :merge, :foreach, :local-set). Those spellings
+   went away with the graph form; the capability they provided must not,
+   which is what this is."
+  [{:id 'let :source :stmt :stmt :let :category :control :label "let"}
+   {:id 'if :source :stmt :stmt :if :category :control :label "if"}
+   {:id 'each :source :stmt :stmt :each :category :control :label "each"}
+   {:id 'finish :source :stmt :stmt :finish :category :control :label "finish"}
+   {:id 'state! :source :stmt :stmt :state! :category :control :label "state!"}
+   {:id 'set! :source :stmt :stmt :set! :category :control :label "set!"}])
+
+(defn statement-entry? [entry] (= :stmt (:source entry)))
+
+(defn insert-statement
+  "Append a statement-palette entry. Returns {:graph graph :nid nid}.
+
+   Every inserted statement is immediately round-trippable -- graph->form
+   has to be able to print it the moment it exists, or the next save throws
+   on a node the author has not finished. So each carries a placeholder
+   where an expression is required (a literal, its own data node) and an
+   empty body where statements are optional, rather than a missing key."
+  [{:keys [nodes] :as graph} {:keys [stmt] :as entry} nid-prefix]
+  (when-not (statement-entry? entry)
+    (throw (ex-info "not a statement palette entry" {:code :invalid-palette-entry :entry entry})))
+  (let [nid (str nid-prefix "-stmt")
+        expr-nid (str nid-prefix "-expr")
+        expr {:nid expr-nid :kind :data :expr :literal :value nil}
+        with-expr #(assoc-in % [:nodes expr-nid] expr)
+        node (case stmt
+               :let {:nid nid :kind :exec :stmt :let :bind 'value :rhs expr-nid}
+               :if {:nid nid :kind :exec :stmt :if :cond expr-nid :then-order [] :else-order []}
+               :each {:nid nid :kind :exec :stmt :each :binding 'item :coll expr-nid :body-order []}
+               :finish {:nid nid :kind :exec :stmt :finish :fields {:outcome :performed}}
+               :state! {:nid nid :kind :exec :stmt :state! :key :value :value expr-nid}
+               :set! {:nid nid :kind :exec :stmt :set! :sym 'value :value expr-nid}
+               (throw (ex-info "unsupported statement kind" {:code :invalid-palette-entry :stmt stmt})))
+        graph (if (= :finish stmt) graph (with-expr graph))]
+    (when (contains? nodes nid)
+      (throw (ex-info "node id already exists" {:code :duplicate-node :nid nid})))
+    {:graph (add-node graph node) :nid nid}))
+
 (defn- remove-id [xs nid]
   (vec (remove #(= nid %) xs)))
 

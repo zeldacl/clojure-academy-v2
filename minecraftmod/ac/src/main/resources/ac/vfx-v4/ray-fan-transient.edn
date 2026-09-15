@@ -1,7 +1,7 @@
 {:schema :ac/vfx-v4,
  :id :ray-fan-transient,
- :lifecycle {:mode :transient},
- :inputs
+ :activation :instant,
+ :parameters
  {:life-ticks {:type :int},
   :yaw-range-degrees {:type :any},
   :pitch-range-degrees {:type :any},
@@ -12,4 +12,23 @@
   :grow-ticks {:type :int},
   :origin {:type :vec3},
   :bounds-radius {:type :float},
-  :direction {:type :vec3}}, :graphs {:render {:nodes #:n{:start {:type :start,:nid :n/start},:n--entry--default-0 {:type :component,:component :ray-fan,:nid :n/n--entry--default-0},:n001 {:type :context-ref,:key :origin,:nid :n/n001},:n002 {:type :context-ref,:key :direction,:nid :n/n002},:n003 {:type :context-ref,:key :style,:nid :n/n003},:n004 {:type :context-ref,:key :grow-ticks,:nid :n/n004},:n005 {:type :context-ref,:key :age,:nid :n/n005},:n006 {:type :context-ref,:key :life-ticks,:nid :n/n006},:n007 {:type :context-ref,:key :count,:nid :n/n007},:n008 {:type :context-ref,:key :length,:nid :n/n008},:n009 {:type :context-ref,:key :yaw-range-degrees,:nid :n/n009},:n010 {:type :context-ref,:key :pitch-range-degrees,:nid :n/n010},:n011 {:type :context-ref,:key :seed,:nid :n/n011},:n--entry--default-1 {:type :end,:result {},:nid :n/n--entry--default-1,:inputs {:outcome :performed}}},:links [{:id :e/rayfan-1,:kind :data,:from [:n/n001 :value],:to [:n/n--entry--default-0 :origin]} {:id :e/rayfan-2,:kind :data,:from [:n/n002 :value],:to [:n/n--entry--default-0 :direction]} {:id :e/rayfan-3,:kind :data,:from [:n/n003 :value],:to [:n/n--entry--default-0 :style]} {:id :e/rayfan-4,:kind :data,:from [:n/n004 :value],:to [:n/n--entry--default-0 :grow-ticks]} {:id :e/rayfan-7,:kind :data,:from [:n/n005 :value],:to [:n/n--entry--default-0 :age]} {:id :e/rayfan-8,:kind :data,:from [:n/n006 :value],:to [:n/n--entry--default-0 :life-ticks]} {:id :e/rayfan-9,:kind :data,:from [:n/n007 :value],:to [:n/n--entry--default-0 :count]} {:id :e/rayfan-10,:kind :data,:from [:n/n008 :value],:to [:n/n--entry--default-0 :length]} {:id :e/rayfan-11,:kind :data,:from [:n/n009 :value],:to [:n/n--entry--default-0 :yaw-range-degrees]} {:id :e/rayfan-12,:kind :data,:from [:n/n010 :value],:to [:n/n--entry--default-0 :pitch-range-degrees]} {:id :e/rayfan-13,:kind :data,:from [:n/n011 :value],:to [:n/n--entry--default-0 :seed]} {:id :e/rayfan-5,:kind :exec,:from [:n/start :out],:to [:n/n--entry--default-0 :in]} {:id :e/rayfan-6,:kind :exec,:from [:n/n--entry--default-0 :out],:to [:n/n--entry--default-1 :in]}]}}}
+  :direction {:type :vec3}},
+ :entry-triggers {:render :vfx/render},
+ :phases
+ {:render
+  [^{:nid "n/n--entry--default-0"}
+   (ray-fan
+    {:life-ticks ?life-ticks,
+     :age ?age,
+     :yaw-range-degrees ?yaw-range-degrees,
+     :pitch-range-degrees ?pitch-range-degrees,
+     :seed ?seed,
+     :style ?style,
+     :count ?count,
+     :length ?length,
+     :grow-ticks ?grow-ticks,
+     :origin ?origin,
+     :direction ?direction})
+   ^{:nid "n/n--entry--default-1"}
+   (finish {:outcome :performed})]},
+ :lifecycle {:mode :transient}}

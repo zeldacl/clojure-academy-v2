@@ -33,9 +33,9 @@
         sites (atom [])
         fa-orig @compile-field-access-var
         co-orig @coerce!-var
-        doc-orig node-api/compile-v4-skill-document!]
+        doc-orig node-api/compile-surface-document!]
     (with-redefs-fn
-      {#'node-api/compile-v4-skill-document!
+      {#'node-api/compile-surface-document!
        (fn [value opts mode]
          (binding [*skill* (:id value)] (doc-orig value opts mode)))
 

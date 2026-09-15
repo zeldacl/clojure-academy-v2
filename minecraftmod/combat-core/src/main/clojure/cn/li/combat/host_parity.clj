@@ -15,7 +15,6 @@
             [cn.li.combat.dsl-vocabulary :as vocab]
             [cn.li.combat.lib :as lib]
             [cn.li.combat.platform :as platform]
-            [cn.li.node.graph-compile :as graph-compile]
             [cn.li.node.ops :as ops]))
 
 ;; Owned by cn.li.ac.ability.service.combat-runtime/install-ac-host-capabilities!,
@@ -31,16 +30,6 @@
     :projectile/schedule-beam})
 
 (def ^:private damage-policy-effect :damage-context-write)
-
-(def graph-special-components
-  "Lowered by cn.li.node.graph-compile/component-call without a vocab/
-   :defn/:ops entry.
-
-   Aliased, not re-listed: this used to be a hand-copied duplicate of the
-   set in graph-compile, so adding a special form there silently made this
-   gate report it unresolvable, and removing one silently made the gate
-   over-accept."
-  graph-compile/special-components)
 
 (defn- capability-of
   [node-id spec]
@@ -131,31 +120,6 @@
        :capability cap
        :nid (:nid instr)
        :node (:node instr)}))))
-
-(defn resolvable-component?
-  "True when a V4 graph :component keyword can lower + compile."
-  [component]
-  (or (contains? graph-special-components component)
-      (ops/known-op? component)
-      (contains? vocab/nodes component)
-      (contains? lib/fns component)))
-
-(defn unresolvable-components
-  "Collect {:component :path} for every :component keyword in a skill/VFX
-   document that cannot resolve."
-  ([form] (unresolvable-components form []))
-  ([form path]
-   (cond
-     (map? form)
-     (let [here (when-let [c (:component form)]
-                  (when (and (keyword? c) (not (resolvable-component? c)))
-                    [{:component c :path (conj path :component)}]))]
-       (concat here
-               (mapcat (fn [[k v]] (unresolvable-components v (conj path k))) form)))
-     (sequential? form)
-     (mapcat (fn [i v] (unresolvable-components v (conj path i)))
-             (range) form)
-     :else nil)))
 
 (defn- invoke-arity?
   "Return whether a handler exposes an exact IFn invoke arity.

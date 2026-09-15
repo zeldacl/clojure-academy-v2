@@ -252,45 +252,12 @@
     :else (throw (ex-info "document has neither :do nor :phases" {:form form}))))
 
 (defn- recompute
-  "Refresh graph state from either a V4 persisted graph or legacy surface form."
+  "Refresh graph state from the document's surface form."
   [{:keys [document opts] :as state}]
-  (if (:v4? document)
-    (let [form (:form document)
-          graphs (:graphs form)
-          phase (or (:phase state) (first (keys graphs)))
-          result (try
-                   (let [{:keys [ir diagnostics]} (if (= :ac/vfx-v4 (:schema form))
-                                                     (node-api/compile-v4-vfx-document! form opts :collect)
-                                                     (node-api/compile-v4-skill-document! form opts :collect))]
-                     {:diagnostics (vec diagnostics)
-                      :cost-summary (when (empty? diagnostics)
-                                      (node-api/cost-summary ir (:vocab opts)))})
-                   (catch Throwable error
-                     {:diagnostics [{:code :v4-graph-invalid
-                                     :message (.getMessage error)
-                                     :nid nil}]
-                      :cost-summary nil}))]
-      (assoc state :phase phase :phases (vec (keys graphs)) :graph (get graphs phase)
-             :diagnostics (:diagnostics result) :cost-summary (:cost-summary result)))
-    (let [entries (entries-of (:form document)) phase (or (:phase state) (ffirst entries)) stmts (get entries phase)]
-      (assoc state :phase phase :phases (vec (keys entries)) :graph (graph/form->graph stmts)
-             :diagnostics (check/diagnostics (:form document) opts) :cost-summary (check/cost-summary (:form document) opts)))))
-(def ^:private v4-fixed-palette
-  (mapv (fn [type]
-          {:id (keyword "node" (name type)) :fixed-type type :params {}
-           :category :control :label (name type) :source :fixed})
-        [:start :branch :merge :foreach :repeat :loop-end :end
-         :literal :context-ref :parameter-ref :state-ref :local-get :local-set]))
-(def ^:private v4-fixed-param-specs
-  {:foreach {:limit {:type :int :default 256 :min 1 :max 256}}
-   :repeat {:count {:type :int :default 1 :min 1 :max 256}}
-   :literal {:value {:type :any :default nil}}
-   :context-ref {:key {:type :keyword :default :value}}
-   :parameter-ref {:key {:type :keyword :default :value}}
-   :state-ref {:key {:type :keyword :default :value}}
-   :local-get {:key {:type :keyword :default :value}}
-   :local-set {:key {:type :keyword :default :value}
-               :operation {:type :keyword :default :assign :choices [:define :assign]}}})
+  (let [entries (entries-of (:form document)) phase (or (:phase state) (ffirst entries)) stmts (get entries phase)]
+    (assoc state :phase phase :phases (vec (keys entries)) :graph (graph/form->graph stmts)
+           :diagnostics (check/diagnostics (:form document) opts) :cost-summary (check/cost-summary (:form document) opts))))
+
 (defn open-document
   "path (absolute file path), mode (:skill or :scene) -> a fresh editor
    state. `path` is always the identity used for the layout/workspace
@@ -339,7 +306,7 @@
     (-> {:path path
          :mode mode
          :opts opts
-         :palette (vec (concat v4-fixed-palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
+         :palette (vec (concat graph/statement-palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
                                   :category-for (:category-for opts)})))
          ;; :vfx-catalog-by-id used to be cached into state here so
          ;; selected-node-info would not re-run fx-catalog/assemble (which
@@ -459,7 +426,7 @@
 (defn- axis-draft-key [draft-key axis]
   (keyword (str (name draft-key) "-" (name axis))))
 
-(defn- legacy-selected-param-fields
+(defn- surface-selected-param-fields
   "state -> display/edit fields for expression inputs of the selected node.
    Literal, vector-literal and map-literal expressions are locally editable;
    references/calls remain read-only so wiring stays the explicit operation.
@@ -523,64 +490,16 @@
             refs))
     []))
 (defn- selected-param-fields
-  "Return editable fields for either legacy surface nodes or V4 component inputs."
+  "Editable parameter fields for the selected node, or [] when nothing is
+   selected.
+
+   Used to fan out to three branches -- a graph :component's :inputs, a
+   fixed graph-structure node's param specs, and surface nodes -- because
+   the editor served two document shapes. It serves one now."
   [{:keys [graph selected-nid palette param-drafts]}]
-  (if-let [node (get-in graph [:nodes selected-nid])]
-    (if (= :component (:type node))
-      (let [entry (some #(when (= (:component node) (:id %)) %) palette)
-            specs (:params entry)
-            links (:links graph)
-            port-keys (vec (distinct
-                            (concat (keys (or (:inputs node) {}))
-                                    (keep (fn [l]
-                                            (when (and (= :data (:kind l))
-                                                       (= selected-nid (first (:to l))))
-                                              (second (:to l))))
-                                          links))))
-            wired? (fn [key]
-                     (boolean (some (fn [l]
-                                      (and (= :data (:kind l))
-                                           (= selected-nid (first (:to l)))
-                                           (= key (second (:to l)))))
-                                    links)))]
-        (mapv (fn [key]
-                (let [value (get-in node [:inputs key])
-                      wired (wired? key)
-                      descriptor (or (get specs key)
-                                     {:type (cond (number? value) :double
-                                                  (boolean? value) :boolean
-                                                  (string? value) :string
-                                                  :else :any)})
-                      type (:type descriptor)
-                      choices (vec (filter keyword? (:choices descriptor)))
-                      draft-key (keyword (str "node-editor-param-" (name selected-nid) "-" (name key)))]
-                  {:nid selected-nid :param-key key :data-nid nil :draft-key draft-key
-                   :type type :label (str (name key) (when type (str " [" (name type) "]")))
-                   :value (if wired "wired" (or (get param-drafts [selected-nid key]) (pr-str value)))
-                   :editable? (not wired) :toggle? (and (not wired) (contains? #{:bool :boolean} type) (empty? choices))
-                   :choice? (seq choices) :choices choices :choice-next-label "Next"
-                   :text-editor? (and (not wired) (not (or (contains? #{:bool :boolean} type) (seq choices))))
-                   :vec3-editor? false :vec3-components []
-                   :stepper? (and (not wired) (contains? #{:int :long :float :double} type) (number? value))
-                   :control-label (if (= true value) "On" "Off")
-                   :decrement-label "−" :increment-label "+"}))
-              port-keys))
-      (if-let [fixed-specs (get v4-fixed-param-specs (:type node))]
-        (mapv (fn [[key descriptor]]
-                (let [value (get node key)
-                      type (:type descriptor)
-                      choices (vec (filter keyword? (:choices descriptor)))
-                      draft-key (keyword (str "node-editor-param-" (name selected-nid) "-" (name key)))]
-                  {:nid selected-nid :param-key key :data-nid nil :draft-key draft-key
-                   :type type :label (str (name key) (when type (str " [" (name type) "]")))
-                   :value (or (get param-drafts [selected-nid key]) (pr-str value))
-                   :editable? true :toggle? false
-                   :choice? (seq choices) :choices choices :choice-next-label "Next"
-                   :text-editor? (not (seq choices)) :vec3-editor? false :vec3-components []
-                   :stepper? (and (contains? #{:int :long :float :double} type) (number? value))
-                   :control-label "" :decrement-label "−" :increment-label "+"}))
-              fixed-specs)
-        (legacy-selected-param-fields {:graph graph :selected-nid selected-nid :palette palette :param-drafts param-drafts})))
+  (if (get-in graph [:nodes selected-nid])
+    (surface-selected-param-fields
+     {:graph graph :selected-nid selected-nid :palette palette :param-drafts param-drafts})
     []))
 (defn- parse-editor-value [descriptor raw]
   (let [type (:type descriptor)
@@ -869,11 +788,9 @@
                   flat (graph/exec-flatten current-graph)
                   data-ids (->> (:nodes current-graph)
                                 (keep (fn [[id node]] (when (= :data (:kind node)) id))))
-                  base (if (:v4? (:document @state*))
-                         (render/resolve-layout layout (keys (:nodes current-graph)))
-                         (merge (render/exec-default-layout flat)
-                                (render/expr-default-layout data-ids)
-                                layout))
+                  base (merge (render/exec-default-layout flat)
+                              (render/expr-default-layout data-ids)
+                              layout)
                   cur (get base nid {:x 0.0 :y 0.0})]
                (assoc layout nid {:x (+ (:x cur) (double dx)) :y (+ (:y cur) (double dy))})))))
 
@@ -884,10 +801,10 @@
     (swap! state*
            (fn [s]
              (let [doc (:document s) form (:form doc)
-                   new-form (if (:v4? doc)
-                              (assoc-in form [:graphs (:phase s)] edited-graph)
-                              (let [stmts (graph/graph->form edited-graph)]
-                                (if (contains? form :phases) (assoc-in form [:phases (:phase s)] stmts) (assoc form :do stmts))))]
+                   new-form (let [stmts (graph/graph->form edited-graph)]
+                              (if (contains? form :phases)
+                                (assoc-in form [:phases (:phase s)] stmts)
+                                (assoc form :do stmts)))]
                (recompute (assoc s :document (document/edit doc new-form) :status "Graph updated.")))))
     (catch Throwable error (swap! state* assoc :status (str "Cannot apply graph edit: " (.getMessage error))))))
 (declare install-graph!)
@@ -954,8 +871,7 @@
                   (install-graph! state* (assoc-in (:graph @state*) [:nodes nid :inputs key] parsed))
                   (swap! state* (fn [s] (-> s (update :param-drafts dissoc [nid key])
                                                 (assoc :status (str "Updated " (name key) "."))))))))
-       (if-let [descriptor (and (:v4? (:document @state*))
-                                (get-in v4-fixed-param-specs [(:type node) key]))]
+       (if-let [descriptor nil]
          (let [parsed (parse-editor-value descriptor raw)]
            (cond
              (nil? key) (swap! state* assoc :status "Unknown node parameter.")
@@ -975,8 +891,7 @@
         nid (or (:nid item) (:selected-nid @state*))
         key (:param-key item)
         node (get-in @state* [:graph :nodes nid])
-        fixed-descriptor (and (:v4? (:document @state*))
-                              (get-in v4-fixed-param-specs [(:type node) key]))
+        fixed-descriptor nil
         data-nid (or (:data-nid item) (get-in @state* [:graph :nodes nid :args key]))
         data (get-in @state* [:graph :nodes data-nid])
         entry (some #(when (= (node-op-id node) (:id %)) %) (:palette @state*))
@@ -1009,8 +924,7 @@
         nid (or (:nid item) (:selected-nid @state*))
         key (:param-key item)
         node (get-in @state* [:graph :nodes nid])
-        fixed-descriptor (and (:v4? (:document @state*))
-                              (get-in v4-fixed-param-specs [(:type node) key]))
+        fixed-descriptor nil
         ref (get (node-input-refs node) key)
         data (get-in @state* [:graph :nodes ref])
         entry (some #(when (= (node-op-id node) (:id %)) %) (:palette @state*))
@@ -1134,32 +1048,6 @@
      {:kind :text :role :ghost-label :x (+ x 4.0) :y (+ y 3.0)
       :text (str "[drop] " (or label id)) :rgba 0xFFFFFFFF}]))
 
-(defn- insert-v4-palette-node [graph entry prefix]
-  (let [nid (keyword "n" (str prefix "-call"))
-        fixed (:fixed-type entry)
-        ;; A V4 document has exactly one start sentinel. Rejecting a second
-        ;; one at insertion time keeps the editor from creating a graph that
-        ;; can only ever report a validation error on save/compile.
-        _ (when (and (= :start fixed)
-                     (some #(= :start (:type %)) (vals (:nodes graph))))
-            (throw (ex-info "V4 graph already has a start node" {})))
-        defaults (into {} (map (fn [[k d]] [k (or (:default d)
-                                                   (case (:type d) (:float :double) 0.0
-                                                         (:int :long) 0
-                                                         (:bool :boolean) false
-                                                         :vec3 [0.0 0.0 0.0]
-                                                         nil))]) (:params entry)))
-        node (if fixed
-               (merge {:nid nid :type fixed}
-                      (case fixed
-                        :foreach {:limit 256 :as :item}
-                        :repeat {:count 1}
-                        :literal {:value nil}
-                        (:context-ref :parameter-ref :state-ref :local-get) {:key :value}
-                        :local-set {:key :value :operation :assign}
-                        {}))
-               {:nid nid :type :component :component (:id entry) :inputs defaults})]
-    {:graph (assoc-in graph [:nodes nid] node) :nid nid}))
 (defn- palette-drop! [state* payload]
   (let [item (:drag-item payload)
         id (:id item)
@@ -1174,7 +1062,9 @@
       (try
         (let [entry (palette/find-by-id (:palette @state*) id)
               prefix (str "palette-" (System/nanoTime))
-              {:keys [graph nid]} (if (:v4? (:document @state*)) (insert-v4-palette-node (:graph @state*) entry prefix) (graph/insert-palette-node (:graph @state*) entry prefix))
+              {:keys [graph nid]} (if (graph/statement-entry? entry)
+                (graph/insert-statement (:graph @state*) entry prefix)
+                (graph/insert-palette-node (:graph @state*) entry prefix))
               point (screen->canvas-point @state* (:x payload) (:y payload))
               x (:x point)
               y (:y point)]
@@ -1234,22 +1124,6 @@
       (recompute (assoc state :phase phase :selected-nid nil))
       (assoc state :status "Select a valid phase."))))
 
-(defn- remove-v4-node [graph nid]
-  (let [node (get-in graph [:nodes nid])]
-    (when-not node
-      (throw (ex-info "V4 node no longer exists" {:nid nid})))
-    (when (= :start (:type node))
-      (throw (ex-info "The start node cannot be deleted" {:nid nid})))
-    (when (= :end (:type node))
-      (throw (ex-info "The end node cannot be deleted" {:nid nid})))
-    (-> graph
-        (update :nodes dissoc nid)
-        (update :links (fn [links]
-                         (vec (remove (fn [l]
-                                        (or (= nid (first (:from l)))
-                                            (= nid (first (:to l)))))
-                                      links)))))))
-
 (defn- v4-output-type
   "A V4 data-source node -> its static output type, or nil when the editor
    cannot know it without dataflow analysis. nil means ALLOW: check/
@@ -1271,43 +1145,6 @@
   (when (= :component (:type node))
     (get-in (palette/find-by-id palette (:component node)) [:params port :type])))
 
-(defn- connect-v4-wire [graph palette {:keys [from-nid from-pin from-key to-nid to-pin to-key]}]
-  (let [nodes (:nodes graph)
-        from (get nodes from-nid)
-        to (get nodes to-nid)
-        data-types #{:literal :context-ref :parameter-ref :state-ref :local-get}
-        output? (= :out from-pin)
-        input? (= :in to-pin)
-        kind (if (or (contains? data-types (:type from)) (= :value from-key)) :data :exec)
-        from-port (or from-key :exec)
-        to-port (or to-key :in)
-        valid-data-target? (case (:type to)
-                             :component true
-                             :branch (= :condition to-port)
-                             :foreach (= :collection to-port)
-                             :repeat (= :count to-port)
-                             :local-set (= :value to-port)
-                             false)
-        link-id (keyword "e" (str "editor-" (System/nanoTime)))]
-    (when-not (and from to output? input?)
-      (throw (ex-info "V4 wire endpoints must be output to input" {:from from-nid :to to-nid})))
-    (when (and (= :data kind) (not valid-data-target?))
-      (throw (ex-info "V4 data output must target a declared data input" {:to to-nid :port to-port})))
-    ;; Type check LAST, after the structural rules, so a wire that is
-    ;; structurally impossible still reports that rather than a confusing
-    ;; type message. Judgement delegated to check/wire-type-error, which
-    ;; delegates to the very cn.li.node.types predicates cn.li.node.compile
-    ;; uses -- the editor gets no rules of its own, only earlier ones.
-    (when (= :data kind)
-      (let [condition? (and (= :branch (:type to)) (= :condition to-port))]
-        (when-let [{:keys [message] :as err}
-                   (check/wire-type-error (v4-output-type from palette)
-                                          (when-not condition? (v4-input-type to to-port palette))
-                                          (if condition? :condition :value))]
-          (throw (ex-info message (assoc err :from from-nid :to to-nid :port to-port))))))
-    (let [links (vec (remove #(and (= kind (:kind %)) (= [to-nid to-port] (:to %))) (:links graph)))]
-      (assoc graph :links (conj links {:id link-id :kind kind
-                                       :from [from-nid from-port] :to [to-nid to-port]})))))
 (defn- finish-pointer-drag! [state* payload]
   "Finish a node/pin/empty-canvas drag routed through a canvas :drop.
    Canvas wrappers also carry the palette drop action, so the controller
@@ -1320,9 +1157,7 @@
                                           (double (or (:y payload) 0.0)))]
     (when (= :connect-wire (:kind action))
       (try
-        (install-graph! state* (if (:v4? (:document @state*))
-                                 (connect-v4-wire (:graph @state*) (:palette @state*) action)
-                                 (graph/connect-wire (:graph @state*) action)))
+        (install-graph! state* (graph/connect-wire (:graph @state*) action))
         (catch Throwable error
           (swap! state* assoc :status (str "Cannot connect: " (.getMessage error))))))
     (swap! state* assoc :drag state)))
@@ -1467,13 +1302,13 @@
         (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled.")
 
         (contains? #{259 261} key-code)
-        (if (and (:v4? (:document @state*)) (:selected-nid @state*))
+        (if (:selected-nid @state*)
           (try
-            (install-graph! state* (remove-v4-node (:graph @state*) (:selected-nid @state*)))
+            (install-graph! state* (graph/remove-node (:graph @state*) (:selected-nid @state*)))
             (swap! state* assoc :selected-nid nil :status "Node deleted.")
             (catch Throwable error
               (swap! state* assoc :status (str "Cannot delete node: " (.getMessage error)))))
-          (swap! state* assoc :status "Select a V4 node to delete."))
+          (swap! state* assoc :status "Select a node to delete."))
 
         :else nil))
     :editor/toggle-preview
@@ -1497,7 +1332,9 @@
       (if-not entry
         (swap! state* assoc :status "Palette entry is no longer available.")
         (try
-          (let [{:keys [graph nid]} (if (:v4? (:document @state*)) (insert-v4-palette-node (:graph @state*) entry prefix) (graph/insert-palette-node (:graph @state*) entry prefix))]
+          (let [{:keys [graph nid]} (if (graph/statement-entry? entry)
+                (graph/insert-statement (:graph @state*) entry prefix)
+                (graph/insert-palette-node (:graph @state*) entry prefix))]
             (install-graph! state* graph)
             (remember-palette! state* (:id entry))
             (swap! state* assoc :selected-nid nid :palette-drag nil :ghost nil :status (str "Added " (:id entry) ".")))
@@ -1529,11 +1366,8 @@
           value (or (:value payload) (:value item) (:text payload))
           node (get-in @state* [:graph :nodes nid])
           refs (node-input-refs node)
-          v4-editable? (and (:v4? (:document @state*))
-                            (or (= :component (:type node))
-                                (contains? v4-fixed-param-specs (:type node))))]
-      (when (and node key (some? value)
-                 (or (contains? refs key) v4-editable?))
+]
+      (when (and node key (some? value) (contains? refs key))
         (swap! state* assoc-in [:param-drafts [nid key]] (str value))))
 
     :editor/param-submit

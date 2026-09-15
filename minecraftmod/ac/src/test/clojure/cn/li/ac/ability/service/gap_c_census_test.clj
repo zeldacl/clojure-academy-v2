@@ -21,7 +21,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.skills-catalog-v4 :as skills-catalog]
             [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog-v4]
-            [cn.li.node.graph-compile :as graph-compile]
+            [cn.li.node.api :as node-api]
             [cn.li.node.types :as types]
             [cn.li.vfx.dsl-vocabulary :as vfx-vocab]
             [cn.li.vfx.scene :as vfx-scene]))
@@ -82,9 +82,8 @@
    test does: the real compiler, not an approximation of it."
   []
   (doseq [{:keys [document]} (:effects (fx-catalog-v4/assemble))]
-    (let [input-types (into {} (map (fn [[k spec]] [k (:type spec)]))
-                            (or (:inputs document) (:parameters document)))]
-      (graph-compile/compile-vfx!
+    (let [input-types (into {} (map (fn [[k spec]] [k (:type spec)])) (:parameters document))]
+      (node-api/compile-surface-document!
        document {:vocab vfx-vocab/nodes
                  :capabilities (vfx-scene/capabilities-for input-types)
                  :fns {}}

@@ -56,20 +56,11 @@
   (let [doc {:schema :ac/vfx-v4
              :id :tiny-beam
              :lifecycle {:mode :transient}
-             :inputs {:start {:type :vec3} :end {:type :vec3}}
+             :parameters {:start {:type :vec3} :end {:type :vec3}}
              :state {}
-             :graphs
-             {:render
-              {:nodes {:n/start {:nid :n/start :type :start}
-                       :n/n-start {:nid :n/n-start :type :context-ref :key :start}
-                       :n/n-end {:nid :n/n-end :type :context-ref :key :end}
-                       :n/beam {:nid :n/beam :type :component :component :beam
-                                :inputs {:grow-ticks 0}}
-                       :n/end {:nid :n/end :type :end :inputs {:outcome :performed}}}
-               :links [{:id :e/start :kind :exec :from [:n/start :out] :to [:n/beam :in]}
-                       {:id :e/n-s :kind :data :from [:n/n-start :value] :to [:n/beam :start]}
-                       {:id :e/n-e :kind :data :from [:n/n-end :value] :to [:n/beam :end]}
-                       {:id :e/done :kind :exec :from [:n/beam :out] :to [:n/end :in]}]}}}
+             :entry-triggers {:render :vfx/render}
+             :phases {:render ['(beam {:start ?start :end ?end :grow-ticks 0})
+                               '(finish {:outcome :performed})]}}
         program (scene/compile-v4-document! doc)
         ops (scene/sample! program
                            {:capabilities {:start {:x 0.0 :y 1.0 :z 0.0}
@@ -85,40 +76,17 @@
   (let [doc {:schema :ac/vfx-v4
              :id :ring-range
              :lifecycle {:mode :transient}
-             ;; :map-keys mirrors real beam-arc-fade.edn and is REQUIRED, not
-             ;; decoration: graph-compile/assert-vfx-field-map-keys! rejects a
-             ;; :value/field read off a context input that does not declare the
-             ;; field. Checked by node-core's
-             ;; effect-vfx-payload-map-keys-checked-at-skill-compile.
-             :inputs {:ring-radius {:type :any :map-keys {:from :double :to :double}}
-                      :fade-p {:type :double}
-                      :center {:type :vec3}}
+             ;; :map-keys mirrors real beam-arc-fade.edn. It is what lets a
+             ;; (:from ?ring-radius) read be type-checked against the input's
+             ;; declared shape instead of coming back :any.
+             :parameters {:ring-radius {:type :any :map-keys {:from :double :to :double}}
+                          :fade-p {:type :double}
+                          :center {:type :vec3}}
              :state {}
-             :graphs
-             {:render
-              {:nodes
-               {:n/start {:nid :n/start :type :start}
-                :n/n-rr {:nid :n/n-rr :type :context-ref :key :ring-radius}
-                :n/n-fp {:nid :n/n-fp :type :context-ref :key :fade-p}
-                :n/n-ctr {:nid :n/n-ctr :type :context-ref :key :center}
-                :n/n-from {:nid :n/n-from :type :component :component :value/field
-                           :inputs {:field :from}}
-                :n/n-to {:nid :n/n-to :type :component :component :value/field
-                         :inputs {:field :to}}
-                :n/n-lerp {:nid :n/n-lerp :type :component :component :math/lerp}
-                :n/n-ring {:nid :n/n-ring :type :component :component :ring
-                           :inputs {:segments 8 :alpha 1.0}}
-                :n/n-end {:nid :n/n-end :type :end :inputs {:outcome :performed}}}
-               :links
-               [{:id :e/link000 :kind :data :from [:n/n-rr :value] :to [:n/n-from :value]}
-                {:id :e/link001 :kind :data :from [:n/n-rr :value] :to [:n/n-to :value]}
-                {:id :e/link002 :kind :data :from [:n/n-from :value] :to [:n/n-lerp :arg0]}
-                {:id :e/link003 :kind :data :from [:n/n-to :value] :to [:n/n-lerp :arg1]}
-                {:id :e/link004 :kind :data :from [:n/n-fp :value] :to [:n/n-lerp :arg2]}
-                {:id :e/link005 :kind :data :from [:n/n-lerp :value] :to [:n/n-ring :radius]}
-                {:id :e/link006 :kind :data :from [:n/n-ctr :value] :to [:n/n-ring :center]}
-                {:id :e/link007 :kind :exec :from [:n/start :out] :to [:n/n-ring :in]}
-                {:id :e/link008 :kind :exec :from [:n/n-ring :out] :to [:n/n-end :in]}]}}}
+             :entry-triggers {:render :vfx/render}
+             :phases {:render ['(let r (math/lerp (:from ?ring-radius) (:to ?ring-radius) ?fade-p))
+                               '(ring {:center ?center :radius r :segments 8 :alpha 1.0})
+                               '(finish {:outcome :performed})]}}
         program (scene/compile-v4-document! doc)
         ops (scene/sample! program
                            {:capabilities {:ring-radius {:from 0.12 :to 0.28}

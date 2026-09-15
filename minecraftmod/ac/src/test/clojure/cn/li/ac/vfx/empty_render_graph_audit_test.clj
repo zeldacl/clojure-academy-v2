@@ -29,7 +29,7 @@
             [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.test :refer [deftest is testing]]
-            [cn.li.node.graph-compile :as graph-compile]
+            [cn.li.node.api :as node-api]
             [cn.li.vfx.dsl-vocabulary :as vocab]
             [cn.li.vfx.scene :as scene]))
 
@@ -64,9 +64,8 @@
    future graph shape this test's author didn't anticipate still gets
    counted correctly."
   [doc]
-  (let [input-types (into {} (map (fn [[k spec]] [k (:type spec)]))
-                          (or (:inputs doc) (:parameters doc)))
-        {:keys [ir diagnostics]} (graph-compile/compile-vfx!
+  (let [input-types (into {} (map (fn [[k spec]] [k (:type spec)])) (:parameters doc))
+        {:keys [ir diagnostics]} (node-api/compile-surface-document!
                                   doc {:vocab vocab/nodes
                                        :capabilities (scene/capabilities-for input-types)
                                        :fns {}}

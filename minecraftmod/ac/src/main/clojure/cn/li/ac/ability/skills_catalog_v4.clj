@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.skills-catalog-v4
   "Directory-backed V4 skill catalog."
   (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.util.classpath-edn :as classpath-edn]
             [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog]
@@ -34,13 +35,17 @@
      (into {}
            (map (fn [[id e]]
                  (let [document (:document e)
+                       ;; A context read is the symbol ?key in surface DSL,
+                       ;; where the graph form spelled it {:type :context-ref
+                       ;; :key k}. Same question either way: which declared
+                       ;; inputs does this effect actually read?
                        used (into #{}
                                   (keep (fn [form]
-                                          (when (and (map? form)
-                                                     (= :context-ref (:type form)))
-                                            (:key form))))
-                                  (tree-seq coll? seq (:graphs document)))
-                       declared (or (:inputs document) (:parameters document) {})]
+                                          (when (and (symbol? form)
+                                                     (str/starts-with? (str form) "?"))
+                                            (keyword (subs (str form) 1)))))
+                                  (tree-seq coll? seq (:phases document)))
+                       declared (:parameters document {})]
                    [id (merge universal
                               (into {}
                                     (map (fn [[k spec]]
