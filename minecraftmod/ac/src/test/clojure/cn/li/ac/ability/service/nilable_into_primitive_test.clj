@@ -45,8 +45,16 @@
                instrs (some-> (get @(:block-registry env) (:block-id result)) deref)
                g (last (filter #(= :get (:op %)) instrs))]
            (when g
-             (swap! origin assoc (:dst g)
-                    [*skill* (types/canonical-type (get @(:reg-types env) (:src g))) k]))
+             ;; Keyed by [skill register], not by register alone. A bare
+             ;; register key is wrong across a catalog: alloc-reg! numbers
+             ;; slots per PROGRAM, so [:reg :objects 5] names a different
+             ;; value in each of the 50 skills while this atom lives for
+             ;; the whole assemble. That collision is what made the
+             ;; per-field breakdown claim reads that the schemas prove
+             ;; cannot exist -- :owner-snapshot's :velocity is declared
+             ;; :vec3, so a :velocity read can never coerce FROM :any.
+             (swap! origin assoc [*skill* (:dst g)]
+                    [(types/canonical-type (get @(:reg-types env) (:src g))) k]))
            result))
 
        coerce!-var
@@ -54,9 +62,9 @@
          (let [to* (types/canonical-type to)]
            (when (and (= :any (types/canonical-type from))
                       (contains? #{:doubles :longs} (types/bank to*))
-                      (contains? @origin reg))
-             (let [[skill src field] (get @origin reg)]
-               (swap! sites conj {:skill skill :source src :field field :target to*}))))
+                      (contains? @origin [*skill* reg]))
+             (let [[src field] (get @origin [*skill* reg])]
+               (swap! sites conj {:skill *skill* :source src :field field :target to*}))))
          (co-orig env block-id reg from to))}
       #(skills-catalog/assemble {:mode :collect}))
 
@@ -83,30 +91,32 @@
       ;; capability was 33 of the 83 on its own, which is the shape of this
       ;; whole problem: the sites are not scattered, they cluster behind a
       ;; handful of untyped SOURCES, and typing a source retires a whole
-      ;; group at once. The remaining clusters are a field read off another
-      ;; :any (:hardness, 9) and fields nobody has declared yet.
+      ;; group at once. The largest cluster left is :hardness (9), still
+      ;; read off an :any for the same reason the pool's amounts were.
       ;;
-      ;; Worth triaging by eye, because several rows are not nilability at
-      ;; all but a type confusion that throws on EVERY execution rather than
-      ;; on an unlucky world state -- effect-emit's :convert rejects a
-      ;; non-number as hard as it rejects nil:
+      ;; 50 -> 28 with no production change at all: the attribution below
+      ;; was keyed by bare register, and slots are numbered per PROGRAM
+      ;; while the atom lives for the whole 50-skill assemble, so every
+      ;; skill's [:reg :objects 5] collided with every other's.
       ;;
-      ;;   :owner-snapshot :velocity -> :double  a {:x :y :z} map
-      ;;   :*/:position -> :double               likewise, 7 across 4 types
-      ;;   :energy-target :block-pos -> :double  likewise
-      ;;   :hit-result :entity-id / :entity-ref :id -> :double   ids
-      ;;   :any :damage-type -> :double          a keyword
-      ;;   :hit-result :available? -> :double    a boolean
+      ;; That bug invented rows, and invented exactly the alarming kind.
+      ;; It had claimed :owner-snapshot's :velocity -- a {:x :y :z} map --
+      ;; reached a :double parameter six times, which would throw on every
+      ;; execution rather than on an unlucky world state. It cannot: that
+      ;; field is declared :vec3, so the coercion it was attributed to
+      ;; could never have been FROM :any. The same goes for the seven
+      ;; :position reads, :entity-id, :damage-type and :available?. All 22
+      ;; were collisions. Reading the schemas is what settled it, which is
+      ;; the argument for declaring them: a typed field makes a false claim
+      ;; about itself checkable.
       ;;
-      ;; The register-origin attribution has one known limit, and it has now
-      ;; been demonstrated rather than merely suspected: cn.li.node.ir
-      ;; registers are reused across `set!` (a :reassign? copy into the
-      ;; existing slot), so a slot recorded as a field read can later hold
-      ;; something else. Typing :hit-result's :entity-type :string -- which
-      ;; this list had accused of feeding a :double -- changed the count by
-      ;; zero, so that row was contamination. Treat an individual row as a
-      ;; lead; only the total is trustworthy.
-      (is (= 50 (count @sites))
+      ;; What is left is coherent -- every row is a genuinely numeric field
+      ;; whose producer has simply not been checked yet, so each is an
+      ;; honest nil-safety question rather than noise. Typing one is the
+      ;; same explicit decision :resource-pool already went through: say
+      ;; whether the producing expression can return nil, then either
+      ;; declare it and whitelist it with the reason, or fix the producer.
+      (is (= 28 (count @sites))
           (str "field reads reaching a numeric parameter changed. Each is a"
                " potential :convert throw; justify a new one or remove it: "
                (pr-str (sort-by (juxt :skill :field) @sites)))))))
