@@ -476,6 +476,32 @@
    :break-result {:status :keyword
                   :position :vec3
                   :block-id :any}  ; a resource-location string or nil
+
+   ;; platform/owner-snapshot!. :position carries :eye-y and :world-id
+   ;; alongside :x/:y/:z, but it is read and passed as a position, so :vec3
+   ;; is what it means here. :position and :eye-position are nil when the
+   ;; raycast relay is unavailable -- fine, both are :objects.
+   :owner-snapshot {:position :vec3
+                    :eye-position :vec3
+                    :look :vec3        ; defaulted, never nil
+                    :velocity :vec3    ; defaulted, never nil
+                    :on-ground? :boolean
+                    ;; NOT :boolean: this one is an `and` over an
+                    ;; availability check, so it can be nil, and :boolean
+                    ;; would bank it primitive where nil becomes false.
+                    ;; Semantically harmless but a behaviour change, which
+                    ;; this pass deliberately does not make.
+                    :can-fly? :any}
+
+   ;; platform/item-held!. :item-id is a registry id string
+   ;; (mcbase interop-core's item-registry-id); :block-id is the same value
+   ;; under a second name.
+   :item-snapshot {:present? :boolean    ; (boolean snapshot), never nil
+                   :placeable? :boolean  ; (boolean ...), never nil
+                   :item-id :string
+                   :block-id :string
+                   :source :keyword
+                   :count :any}          ; :long -- see note 2
    ;; platform/raycast!'s normalizing assoc. Only the keys it sets itself
    ;; are listed; a raw hit from the bridge carries more (:eye-height, :face)
    ;; and those stay :any, which open schemas allow.
@@ -484,9 +510,22 @@
                 :hit-type :keyword
                 :attacked? :boolean
                 :water? :boolean
-                :entity-id :any       ; uuid string or nil
+                :block-id :string     ; (some-> ... str), so a string or nil
+                ;; :vec3, even though it is literally [x y z] longs rather
+                ;; than an {:x :y :z} map. In this lattice :vec3 denotes the
+                ;; ROLE "a position cn.li.combat.platform/point can read",
+                ;; and point accepts three encodings: {:vec3 [..]}, an
+                ;; {:x :y :z} map, and a 3-element vector. Declaring the
+                ;; encoding instead ([:list-of :long]) immediately rejected
+                ;; a legal call -- content passes this straight to
+                ;; :block/break's :vec3 :position, and that works.
+                :block-position :vec3
+                ;; Left :any deliberately: the id comes through the platform
+                ;; bridge as (or :target-id :entity-id :entity-uuid :uuid)
+                ;; and nothing here proves it is always a string rather than
+                ;; a UUID object. Declaring :string would be a guess.
+                :entity-id :any
                 :target-id :any
                 :entity-type :any
-                :block-position :any  ; [x y z] longs, not a vec3 map
                 :target-width :any    ; :double -- see note 2
                 :target-height :any}})

@@ -107,7 +107,14 @@
   ;; lose a real type for no safety gained; listing them records that
   ;; someone checked the producer.
   (let [allowed-primitive #{[:destination :hit?] [:destination :valid?]
-                            [:hit-result :attacked?] [:hit-result :water?]}
+                            [:hit-result :attacked?] [:hit-result :water?]
+                            ;; (boolean on-ground?) in owner-snapshot!
+                            [:owner-snapshot :on-ground?]
+                            ;; (boolean snapshot) / (boolean (and ...)) in
+                            ;; item-held! -- both wrap, so neither is nil.
+                            ;; :can-fly? is NOT here: it is a bare `and` and
+                            ;; can be nil, so it stays :any.
+                            [:item-snapshot :present?] [:item-snapshot :placeable?]}
         declared (for [[type-tag fields] combat-vocab/field-types
                        [field-key field-type] fields]
                    {:type type-tag :field field-key :field-type field-type})
