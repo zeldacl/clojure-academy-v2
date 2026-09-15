@@ -234,7 +234,7 @@
         :key :can-perform?,
         :nid :n/n--entry--pulse-8},
        :n015 {:type :component, :component :bool/or, :nid :n/n015},
-       :n016 {:type :component, :component :math/gte, :nid :n/n016},
+       :n016 {:type :component, :component :math/gt, :nid :n/n016},
        :n017 {:type :local-get, :key :mastery, :nid :n/n017},
        :n018
        {:type :parameter-ref,

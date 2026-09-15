@@ -136,7 +136,9 @@
          :filter
          {:excluded-entity-ids
           [{:nid :n/n--entry--start-9-th-740fe757,
-            :ref [:local :silbarn-id]}]},
+            :ref [:local :silbarn-id]}
+           {:nid :n/n--entry--start-9-th-caster-id,
+            :ref [:local :caster-id]}]},
          :limit 256}},
        :n001 {:type :context-ref, :key :caster/id, :nid :n/n001},
        :n026 {:type :component, :component :bool/not, :nid :n/n026},
@@ -204,14 +206,22 @@
           {:nid :n/n--entry--start-9-th-a5880b74, :ref [:local :seed]},
           :style
           {:fade-in-ticks 4,
-           :inner-radius 0.03,
-           :glow-width 0.3,
-           :outer-radius 0.045,
-           :inner-color [216 248 216 230],
-           :outer-color [106 242 106 50],
-           :glow-alpha 127,
            :fade-out-ticks 8,
-           :texture "academy:textures/effects/mdray_small"},
+           :layers
+           [{:shape :glow,
+             :width 0.3,
+             :textures {:blend-in "academy:textures/effects/mdray_small/blend_in.png",
+                        :tile "academy:textures/effects/mdray_small/tile.png",
+                        :blend-out "academy:textures/effects/mdray_small/blend_out.png"},
+             :color [255 255 255 127]}
+            {:shape :tube,
+             :radius 0.045,
+             :texture "academy:textures/effects/mdray_small/tile.png",
+             :color [106 242 106 50]}
+            {:shape :tube,
+             :radius 0.03,
+             :texture "academy:textures/effects/solid.png",
+             :color [216 248 216 230]}]},
           :count
           {:nid :n/n--entry--start-9-th-668f81a3,
            :ref [:local :fan-count]},
@@ -307,14 +317,22 @@
           :bounds-radius 0.8,
           :style
           {:fade-in-ticks 4,
-           :inner-radius 0.045,
-           :glow-width 0.4,
-           :outer-radius 0.052,
-           :inner-color [216 248 216 230],
-           :outer-color [106 242 106 50],
-           :glow-alpha 127,
            :fade-out-ticks 8,
-           :texture "academy:textures/effects/mdray_small"}}}},
+           :layers
+           [{:shape :glow,
+             :width 0.4,
+             :textures {:blend-in "academy:textures/effects/mdray_small/blend_in.png",
+                        :tile "academy:textures/effects/mdray_small/tile.png",
+                        :blend-out "academy:textures/effects/mdray_small/blend_out.png"},
+             :color [255 255 255 127]}
+            {:shape :tube,
+             :radius 0.052,
+             :texture "academy:textures/effects/mdray_small/tile.png",
+             :color [106 242 106 50]}
+            {:shape :tube,
+             :radius 0.045,
+             :texture "academy:textures/effects/solid.png",
+             :color [216 248 216 230]}]}}}},
        :n--entry--start-9-then-3
        {:type :local-set,
         :operation :define,
@@ -382,14 +400,22 @@
           :bounds-radius 0.8,
           :style
           {:fade-in-ticks 4,
-           :inner-radius 0.045,
-           :glow-width 0.4,
-           :outer-radius 0.052,
-           :inner-color [216 248 216 230],
-           :outer-color [106 242 106 50],
-           :glow-alpha 127,
            :fade-out-ticks 8,
-           :texture "academy:textures/effects/mdray_small"}}}},
+           :layers
+           [{:shape :glow,
+             :width 0.4,
+             :textures {:blend-in "academy:textures/effects/mdray_small/blend_in.png",
+                        :tile "academy:textures/effects/mdray_small/tile.png",
+                        :blend-out "academy:textures/effects/mdray_small/blend_out.png"},
+             :color [255 255 255 127]}
+            {:shape :tube,
+             :radius 0.052,
+             :texture "academy:textures/effects/mdray_small/tile.png",
+             :color [106 242 106 50]}
+            {:shape :tube,
+             :radius 0.045,
+             :texture "academy:textures/effects/solid.png",
+             :color [216 248 216 230]}]}}}},
        :n011 {:type :local-get, :key :sufficient?, :nid :n/n011},
        :n--entry--start-9-then-6-then-9
        {:type :component,

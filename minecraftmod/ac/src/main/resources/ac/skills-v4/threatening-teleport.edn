@@ -853,7 +853,9 @@
             [0.5 0.5 0.5]]},
           :sound-id "academy:tp.tp",
           :sound-volume 0.5,
-          :sound-pitch 1.0},
+          :sound-pitch 1.0,
+          :arc-life-ticks 20,
+          :duration-ticks 20},
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--release-8--6464319
        {:type :component,

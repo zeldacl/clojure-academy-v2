@@ -7,6 +7,7 @@
   :sound-pitch {:type :float},
   :sound-volume {:type :float},
   :start {:type :vec3},
+  :seed {:type :int},
   :sound-id {:type :string},
   :arc-life-ticks {:type :int},
   :duration-ticks {:type :int},

@@ -41,12 +41,11 @@
        :n007 {:type :context-ref, :key :ring-color, :nid :n/n007},
        :n--entry--default-1
        {:type :component,
-        :component :audio-one-shot,
-        :nid :n/n--entry--default-1},
-       :n008 {:type :context-ref, :key :sound-id, :nid :n/n008},
-       :n009 {:type :context-ref, :key :sound-volume, :nid :n/n009},
-       :n010 {:type :context-ref, :key :sound-pitch, :nid :n/n010},
-       :n011 {:type :context-ref, :key :sound-position, :nid :n/n011},
+        :component :surround-arc,
+        :nid :n/n--entry--default-1,
+        :inputs {:mode :item, :good? true, :seed 0, :count 5}},
+       :n035 {:type :context-ref, :key :start, :nid :n/n035},
+       :n036 {:type :context-ref, :key :age, :nid :n/n036},
        :n--entry--default-2
        {:type :branch, :nid :n/n--entry--default-2},
        :n012 {:type :component, :component :math/gte, :nid :n/n012},
@@ -132,26 +131,18 @@
      :kind :data,
      :from [:n/n007 :value],
      :to [:n/n--entry--default-0 :color]}
-    {:id :e/link008,
-     :kind :data,
-     :from [:n/n008 :value],
-     :to [:n/n--entry--default-1 :sound-id]}
-    {:id :e/link009,
-     :kind :data,
-     :from [:n/n009 :value],
-     :to [:n/n--entry--default-1 :volume]}
-    {:id :e/link010,
-     :kind :data,
-     :from [:n/n010 :value],
-     :to [:n/n--entry--default-1 :pitch]}
-    {:id :e/link011,
-     :kind :data,
-     :from [:n/n011 :value],
-     :to [:n/n--entry--default-1 :position]}
     {:id :e/link012,
      :kind :exec,
      :from [:n/n--entry--default-0 :out],
      :to [:n/n--entry--default-1 :in]}
+    {:id :e/arc-ring-start,
+     :kind :data,
+     :from [:n/n035 :value],
+     :to [:n/n--entry--default-1 :origin]}
+    {:id :e/arc-ring-age,
+     :kind :data,
+     :from [:n/n036 :value],
+     :to [:n/n--entry--default-1 :age]}
     {:id :e/link013,
      :kind :data,
      :from [:n/n013 :value],

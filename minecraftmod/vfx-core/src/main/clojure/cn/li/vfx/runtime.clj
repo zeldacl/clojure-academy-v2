@@ -31,6 +31,8 @@
             [cn.li.vfx.frame :as frame]
             [cn.li.mcmod.runtime.effect-emit :as emit]))
 
+(declare fade-ratio-of)
+
 (defn create-store
   "registry: {effect-id effect-decl}, effect-decl:
      {:scene dsl-text-or-nil :user-types {cap-key type}
@@ -227,7 +229,8 @@
                                       :age (double age)
                                       :progress (progress-of instance)
                                       :seed (long (or (:seed instance) 0))
-                                      :source-player-id (:owner instance))}))]
+                                      :source-player-id (:owner instance)
+                                      :fade-ratio (fade-ratio-of instance))}))]
                  [k {:scene (if (zero? age)
                               scene
                               (vec (remove #(= :audio-one-shot (:kind %)) (or scene []))))
@@ -305,6 +308,15 @@
             :state-seq (max (long (or (:state-seq previous) -1)) (long state-seq))}))
   nil)
 
+(defn- fade-ratio-of
+  "Return the remaining alpha for a session destroyed with :fade-ticks."
+  [instance]
+  (if (:destroying? instance)
+    (let [fade (double (max 1 (long (or (get-in instance [:user :fade-ticks]) 1))))
+          start (double (or (:fade-start-age instance) (age-of instance)))
+          elapsed (- (double (age-of instance)) start)]
+      (max 0.0 (min 1.0 (- 1.0 (/ elapsed fade)))))
+    1.0))
 (defn dispatch-signal!
   "Apply a network signal with explicit lifecycle and sequence semantics.
    Destroy records a tombstone even when the instance is not currently live;
@@ -325,10 +337,18 @@
               (remember-tombstone! rt instance-key event-seq state-seq)
               (when existing
                 (let [instance-event (long (or (:event-seq existing) -1))
-                      instance-state (long (or (:state-seq existing) -1))]
+                      instance-state (long (or (:state-seq existing) -1))
+                      fade-ticks (long (or (:fade-ticks params) 0))]
                   (when (or (> event-seq instance-event)
                             (> state-seq instance-state))
-                    (destroy! rt instance-key))))))
+                    (if (pos? fade-ticks)
+                      (swap! (:instances rt) update instance-key
+                             (fn [cur] (assoc cur :destroying? true
+                                                 :fade-start-age (age-of cur)
+                                                 :event-seq event-seq
+                                                 :state-seq state-seq
+                                                 :user (merge (:user cur) (or params {})))))
+                      (destroy! rt instance-key)))))))
           (let [create? (and (contains? #{:spawn :snapshot} op)
                              (nil? existing)
                              (> event-seq (long (:event-seq tomb))))
@@ -369,9 +389,14 @@
 
 (defn- expired-transient?
   [rt [_ inst]]
-  (let [decl (get (:registry rt) (:effect-id inst))]
-    (and (= :transient (:lifecycle decl)) (>= (age-of inst) (transient-duration inst)))))
-
+  (let [decl (get (:registry rt) (:effect-id inst))
+        fading-expired? (and (:destroying? inst)
+                             (>= (age-of inst)
+                                 (+ (long (or (:fade-start-age inst) (age-of inst)))
+                                    (long (or (get-in inst [:user :fade-ticks]) 1)))))]
+    (or fading-expired?
+        (and (= :transient (:lifecycle decl))
+             (>= (age-of inst) (transient-duration inst))))))
 (defn client-tick!
   "tick! above (particle buffers + per-instance :age), then destroy any
    :transient instance whose :age has reached its effective lifetime:

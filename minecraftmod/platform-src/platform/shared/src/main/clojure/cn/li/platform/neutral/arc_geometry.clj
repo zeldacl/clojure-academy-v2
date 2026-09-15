@@ -329,7 +329,7 @@
   (let [mode (keyword (or (:mode geometry) :block))
         good? (if (= mode :block) (boolean (:good? geometry)) true)
         body (surround-body geometry)
-        count* (if (= mode :item) 4 6)
+        count* (long (or (:count geometry) (if (= mode :item) 4 6)))
         pattern-key (if (= mode :item) :current-spark-item :current-spark)
         age (long (or (:age geometry) 0))
         seed (long (or (:seed geometry) 0))]

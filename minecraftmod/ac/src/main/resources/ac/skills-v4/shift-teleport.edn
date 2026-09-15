@@ -1214,6 +1214,7 @@
           :count-limit 128,
           :sound-pitch 1.0,
           :life-ticks 20,
+         :duration-ticks 40,
           :sound-volume 0.5,
           :fade-out 20,
           :start
@@ -1361,7 +1362,7 @@
     {:id :e/link129,
      :kind :exec,
      :from [:n/n--entry--release-3-then-1 :out],
-     :to [:n/n--entry--release-3-then-2 :in]}
+     :to [:n/n--entry--release-3--1e5dc060 :in]}
     {:id :e/link130,
      :kind :data,
      :from [:n/n083 :value],
@@ -1497,7 +1498,7 @@
     {:id :e/link163,
      :kind :exec,
      :from [:n/n--entry--release-3--b950223b :out],
-     :to [:n/n--entry--release-3--1e5dc060 :in]}
+     :to [:n/n--entry--release-3--db8646d0 :in]}
     {:id :e/link164,
      :kind :data,
      :from [:n/n104 :value],
@@ -1517,7 +1518,7 @@
     {:id :e/link168,
      :kind :exec,
      :from [:n/n--entry--release-3--1e5dc060 :out],
-     :to [:n/n--entry--release-3--db8646d0 :in]}
+     :to [:n/n--entry--release-3-then-2 :in]}
     {:id :e/link169,
      :kind :exec,
      :from [:n/n--entry--release-3--db8646d0 :completed],

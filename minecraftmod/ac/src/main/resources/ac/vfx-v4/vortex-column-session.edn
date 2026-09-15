@@ -2,13 +2,42 @@
  :id :vortex-column-session,
  :lifecycle {:mode :session},
  :inputs
- {:count-limit {:type :int},
+ {:base {:type :vec3},
   :orientation {:type :any, :default nil},
-  :life-ticks {:type :int},
   :radius {:type :any},
   :seed {:type :int},
-  :alpha {:type :float},
-  :base {:type :vec3},
-  :axis {:type :vec3},
-  :height {:type :float},
-  :spacing {:type :any}}, :graphs {:render {:nodes #:n{:start {:type :start,:nid :n/start},:n--entry--default-0 {:type :component,:component :emitter,:nid :n/n--entry--default-0,:inputs {:rate-per-tick 1.0,:limit {:nid :n/n/limit,:ref [:context :count-limit]},:particle {:life-ticks {:nid :n/n/life,:ref [:context :life-ticks]},:size {:nid :n/n/size,:ref [:context :radius]},:alpha {:nid :n/n/alpha,:ref [:context :alpha]}}}},:n001 {:type :context-ref,:key :base,:nid :n/n001},:n--entry--default-1 {:type :end,:result {},:nid :n/n--entry--default-1,:inputs {:outcome :performed}}},:links [{:id :e/vortex-1,:kind :data,:from [:n/n001 :value],:to [:n/n--entry--default-0 :anchor]} {:id :e/vortex-2,:kind :exec,:from [:n/start :out],:to [:n/n--entry--default-0 :in]} {:id :e/vortex-3,:kind :exec,:from [:n/n--entry--default-0 :out],:to [:n/n--entry--default-1 :in]}]}}}
+  :alpha {:type :double},
+  :height {:type :double},
+  :spacing {:type :any}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :vortex
+       {:type :component,
+        :component :vortex-column,
+        :nid :n/vortex},
+       :base {:type :context-ref, :key :base, :nid :n/base},
+       :orientation {:type :context-ref, :key :orientation, :nid :n/orientation},
+       :radius {:type :context-ref, :key :radius, :nid :n/radius},
+       :seed {:type :context-ref, :key :seed, :nid :n/seed},
+       :alpha {:type :context-ref, :key :alpha, :nid :n/alpha},
+       :height {:type :context-ref, :key :height, :nid :n/height},
+       :spacing {:type :context-ref, :key :spacing, :nid :n/spacing},
+       :age {:type :context-ref, :key :age, :nid :n/age},
+       :fade-ratio {:type :context-ref, :key :fade-ratio, :nid :n/fade-ratio},
+       :source-player-id {:type :context-ref, :key :source-player-id, :nid :n/source-player-id},
+       :end {:type :end, :nid :n/end, :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/base, :kind :data, :from [:n/base :value], :to [:n/vortex :base]}
+    {:id :e/orientation, :kind :data, :from [:n/orientation :value], :to [:n/vortex :orientation]}
+    {:id :e/radius, :kind :data, :from [:n/radius :value], :to [:n/vortex :radius]}
+    {:id :e/seed, :kind :data, :from [:n/seed :value], :to [:n/vortex :seed]}
+    {:id :e/alpha, :kind :data, :from [:n/alpha :value], :to [:n/vortex :alpha]}
+    {:id :e/height, :kind :data, :from [:n/height :value], :to [:n/vortex :height]}
+    {:id :e/spacing, :kind :data, :from [:n/spacing :value], :to [:n/vortex :spacing]}
+    {:id :e/age, :kind :data, :from [:n/age :value], :to [:n/vortex :age]}
+    {:id :e/fade-ratio, :kind :data, :from [:n/fade-ratio :value], :to [:n/vortex :fade-ratio]}
+    {:id :e/source-player-id, :kind :data, :from [:n/source-player-id :value], :to [:n/vortex :source-player-id]}
+    {:id :e/start, :kind :exec, :from [:n/start :out], :to [:n/vortex :in]}
+    {:id :e/end, :kind :exec, :from [:n/vortex :out], :to [:n/end :in]}]}}}

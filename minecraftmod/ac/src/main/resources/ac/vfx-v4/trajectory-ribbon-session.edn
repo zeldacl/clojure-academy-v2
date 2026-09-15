@@ -14,4 +14,39 @@
   :style {:type :any},
   :init-vel {:type :vec3},
   :origin {:type :vec3},
-  :drag {:type :float}}, :graphs {:render {:nodes #:n{:start {:type :start,:nid :n/start},:n--entry--default-0 {:type :component,:component :beam,:nid :n/n--entry--default-0},:n001 {:type :context-ref,:key :origin,:nid :n/n001},:n002 {:type :context-ref,:key :look-dir,:nid :n/n002},:n003 {:type :context-ref,:key :style,:nid :n/n003},:n004 {:type :context-ref,:key :segments,:nid :n/n004},:n--entry--default-1 {:type :end,:result {},:nid :n/n--entry--default-1,:inputs {:outcome :performed}}},:links [{:id :e/traj-1,:kind :data,:from [:n/n001 :value],:to [:n/n--entry--default-0 :start]} {:id :e/traj-2,:kind :data,:from [:n/n002 :value],:to [:n/n--entry--default-0 :end]} {:id :e/traj-3,:kind :data,:from [:n/n003 :value],:to [:n/n--entry--default-0 :layers]} {:id :e/traj-4,:kind :data,:from [:n/n004 :value],:to [:n/n--entry--default-0 :grow-ticks]} {:id :e/traj-5,:kind :exec,:from [:n/start :out],:to [:n/n--entry--default-0 :in]} {:id :e/traj-6,:kind :exec,:from [:n/n--entry--default-0 :out],:to [:n/n--entry--default-1 :in]}]}}}
+ :drag {:type :float}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :trajectory {:type :component, :component :trajectory, :nid :n/trajectory},
+       :origin {:type :context-ref, :key :origin, :nid :n/origin},
+       :look-dir {:type :context-ref, :key :look-dir, :nid :n/look-dir},
+       :init-vel {:type :context-ref, :key :init-vel, :nid :n/init-vel},
+       :n-dt {:type :context-ref, :key :dt, :nid :n/n-dt},
+       :drag {:type :context-ref, :key :drag, :nid :n/drag},
+       :gravity {:type :context-ref, :key :gravity, :nid :n/gravity},
+       :lateral-offset {:type :context-ref, :key :lateral-offset, :nid :n/lateral-offset},
+       :vertical-offset {:type :context-ref, :key :vertical-offset, :nid :n/vertical-offset},
+       :forward-offset {:type :context-ref, :key :forward-offset, :nid :n/forward-offset},
+       :width {:type :context-ref, :key :width, :nid :n/width},
+       :segments {:type :context-ref, :key :segments, :nid :n/segments},
+       :can-perform {:type :context-ref, :key :can-perform?, :nid :n/can-perform},
+       :style {:type :context-ref, :key :style, :nid :n/style},
+       :end {:type :end, :result {}, :nid :n/end, :inputs {:outcome :performed}}}
+   :links
+   [{:id :e/trajectory-exec-1, :kind :exec, :from [:n/start :out], :to [:n/trajectory :in]}
+    {:id :e/trajectory-exec-2, :kind :exec, :from [:n/trajectory :out], :to [:n/end :in]}
+    {:id :e/trajectory-origin, :kind :data, :from [:n/origin :value], :to [:n/trajectory :origin]}
+    {:id :e/trajectory-look-dir, :kind :data, :from [:n/look-dir :value], :to [:n/trajectory :look-dir]}
+    {:id :e/trajectory-init-vel, :kind :data, :from [:n/init-vel :value], :to [:n/trajectory :init-vel]}
+    {:id :e/trajectory-dt, :kind :data, :from [:n/n-dt :value], :to [:n/trajectory :dt]}
+    {:id :e/trajectory-drag, :kind :data, :from [:n/drag :value], :to [:n/trajectory :drag]}
+    {:id :e/trajectory-gravity, :kind :data, :from [:n/gravity :value], :to [:n/trajectory :gravity]}
+    {:id :e/trajectory-lateral, :kind :data, :from [:n/lateral-offset :value], :to [:n/trajectory :lateral-offset]}
+    {:id :e/trajectory-vertical, :kind :data, :from [:n/vertical-offset :value], :to [:n/trajectory :vertical-offset]}
+    {:id :e/trajectory-forward, :kind :data, :from [:n/forward-offset :value], :to [:n/trajectory :forward-offset]}
+    {:id :e/trajectory-width, :kind :data, :from [:n/width :value], :to [:n/trajectory :width]}
+    {:id :e/trajectory-segments, :kind :data, :from [:n/segments :value], :to [:n/trajectory :segments]}
+    {:id :e/trajectory-can-perform, :kind :data, :from [:n/can-perform :value], :to [:n/trajectory :can-perform?]}
+    {:id :e/trajectory-style, :kind :data, :from [:n/style :value], :to [:n/trajectory :style]}]}}})

@@ -5,7 +5,8 @@
  {:position {:type :vec3},
   :sound-id {:type :string},
   :volume {:type :float},
-  :pitch {:type :float}},
+  :pitch {:type :float},
+  :looping? {:type :boolean, :default true}},
  :graphs
  {:render
   {:nodes
@@ -21,6 +22,7 @@
        :n002 {:type :context-ref, :key :sound-id, :nid :n/n002},
        :n003 {:type :context-ref, :key :volume, :nid :n/n003},
        :n004 {:type :context-ref, :key :pitch, :nid :n/n004},
+       :n005 {:type :context-ref, :key :looping?, :nid :n/n005},
        :n--entry--default-1
        {:type :end,
         :result {},
@@ -44,10 +46,14 @@
      :from [:n/n004 :value],
      :to [:n/n--entry--default-0 :pitch]}
     {:id :e/link005,
+     :kind :data,
+     :from [:n/n005 :value],
+     :to [:n/n--entry--default-0 :looping?]}
+    {:id :e/link006,
      :kind :exec,
      :from [:n/n--entry--default-0 :out],
      :to [:n/n--entry--default-1 :in]}
-    {:id :e/link006,
+    {:id :e/link007,
      :kind :exec,
      :from [:n/start :out],
      :to [:n/n--entry--default-0 :in]}]}}}

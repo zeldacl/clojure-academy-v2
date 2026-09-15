@@ -169,6 +169,7 @@
           :audience {:type :nearby, :radius 64.0},
           :payload
           {:hand-origin? false,
+          :seed 0,
            :sound-position
            {:nid :n/n--entry--default-12-604921b9, :ref [:local :eye]},
            :sound-pitch 1.0,

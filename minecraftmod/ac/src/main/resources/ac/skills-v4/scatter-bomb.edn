@@ -31,7 +31,7 @@
   {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
  :mark-policies nil,
  :requires
- [:caster/eye :caster/aim :caster/id :world/id :charge/ticks],
+ [:caster/eye :caster/body :caster/aim :caster/id :world/id :charge/ticks],
  :tunables
  {:max-balls {:curve :const, :type :int},
   :max-hold-ticks {:curve :const, :type :int},
@@ -120,7 +120,7 @@
         :nid :n/n--entry--start-2-then-6,
         :inputs
         {:effect-id :particle-session,
-         :operation :spawn,
+         :operation :destroy,
          :instance-key [:activation :scatter-bomb],
          :audience {:type :nearby, :radius 32.0},
          :payload
@@ -303,12 +303,12 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-2-el-d415cbcc,
         :inputs
-        {:effect-id :particle-session,
-         :operation :update,
-         :instance-key [:activation :scatter-bomb],
+        {:effect-id :particle-burst,
+         :operation :spawn,
+         :instance-key [:activation :scatter-bomb :ball],
          :payload
          {:position
-          {:nid :n/n--entry--pulse-2-el-b07b4379, :ref [:local :eye]}}}},
+          {:nid :n/n--entry--pulse-2-el-b07b4379, :ref [:local :eye]}, :rate-per-tick 4, :limit 4, :particle {:texture "minecraft:textures/particle/electric_spark.png", :size 0.1, :alpha 1.0, :frame-count 1, :frame-duration-ms 50}}}},
        :n033 {:type :local-get, :key :next-spawn-tick, :nid :n/n033},
        :n--entry--pulse-2-el-850be0cf
        {:type :local-set,
@@ -968,7 +968,7 @@
         {:shape
          {:type :sphere,
           :center
-          {:nid :n/n--entry--release-6--c45f0057, :ref [:local :eye]},
+          {:ref [:context :caster/body]},
           :radius
           {:nid :n/n--entry--release-6--848ec840,
            :ref [:parameter :auto-aim-radius]}},
@@ -994,8 +994,15 @@
           :fade-at 4,
           :sound-pitch 1.0,
           :duration-ticks 14,
-          :sound-volume 0.45,
-          :fade-layers [],
+          :sound-volume 0.8,
+          :fade-layers
+          [{:shape :glow,
+            :width 0.3,
+            :textures {:blend-in "academy:textures/effects/mdray_small/blend_in.png",
+                       :tile "academy:textures/effects/mdray_small/tile.png",
+                       :blend-out "academy:textures/effects/mdray_small/blend_out.png"}}
+           {:shape :tube, :radius 0.045, :color [106 242 106 50]}
+           {:shape :tube, :radius 0.03, :color [216 248 216 230]}],
           :beam-at 0,
           :start
           {:nid :n/n--entry--release-9--bd8d317c,
@@ -1005,19 +1012,57 @@
             :value
             {:nid :n/n--entry--release-9--f5cf364d,
              :ref [:local :ball]}}},
-          :sound-id "academy:md.sb_ray_small",
+          :sound-id "academy:md.ray_small",
           :fade-to-tick 14,
           :fade-from-alpha 1.0,
           :layers
-          [{:shape :tube, :radius 0.08, :color [236 170 93 60]}
-           {:shape :tube, :radius 0.05, :color [241 240 222 200]}
-           {:shape :line, :width 0.015, :color [165 230 255 160]}],
+          [{:shape :glow,
+            :width 0.3,
+            :textures {:blend-in "academy:textures/effects/mdray_small/blend_in.png",
+                       :tile "academy:textures/effects/mdray_small/tile.png",
+                       :blend-out "academy:textures/effects/mdray_small/blend_out.png"}}
+           {:shape :tube, :radius 0.045, :color [106 242 106 50]}
+           {:shape :tube, :radius 0.03, :color [216 248 216 230]}],
           :grow-ticks 2,
           :fade-to-alpha 0.0,
           :end
           {:nid :n/n--entry--release-9--22720f77,
            :ref [:local :destination]},
           :fade-from-tick 4}}},
+       :n--entry--release-9-do-6b
+       {:type :component,
+        :component :effect/vfx,
+        :nid :n/n--entry--release-9-do-6b,
+        :inputs
+        {:effect-id :particle-trail-audio-transient,
+         :operation :spawn,
+         :audience {:type :nearby, :radius 64.0},
+         :payload
+         {:sound-position
+          {:nid :n/scatter-trail-sound-position,
+           :component :value/field,
+           :inputs {:field :position,
+                    :value {:ref [:local :ball]}}},
+          :count-limit 1,
+          :sound-pitch 1.0,
+          :life-ticks 14,
+          :duration-ticks 14,
+          :sound-volume 0.0,
+          :fade-out 8,
+          :start
+          {:nid :n/scatter-trail-start,
+           :component :value/field,
+           :inputs {:field :position,
+                    :value {:ref [:local :ball]}}},
+          :radius [0.03 0.06],
+          :size [0.02 0.04],
+          :sound-id "academy:md.ray_small",
+          :alpha [80 180],
+          :end {:ref [:local :destination]},
+          :velocity {:x [-0.01 0.01], :y [-0.01 0.01], :z [-0.01 0.01]},
+          :texture "academy:textures/particle/effects/md_particle.png",
+          :spacing [8.0 12.0],
+          :fade-in 4}}},
        :n--entry--release-9
        {:type :foreach, :as :ball, :index-as :ball-index, :limit 256, :nid :n/n--entry--release-9},
        :n066 {:type :state-ref, :key :ball-ids, :nid :n/n066},
@@ -1025,6 +1070,9 @@
        {:type :component,
         :component :kernel/scatter-end,
         :nid :n/n094},
+       :n115 {:type :component, :component :vec3/scale, :nid :n/n115},
+       :n116 {:type :component, :component :vec3/add, :nid :n/n116},
+       :n117 {:type :parameter-ref, :key :scatter-range, :nid :n/n117},
        :n--entry--release-6
        {:type :local-set,
         :operation :define,
@@ -1307,6 +1355,22 @@
     {:id :e/link155,
      :kind :data,
      :from [:n/n094 :value],
+     :to [:n/n116 :arg0]}
+    {:id :e/scatter-exact-aim,
+     :kind :data,
+     :from [:n/n096 :value],
+     :to [:n/n115 :arg0]}
+    {:id :e/scatter-exact-range,
+     :kind :data,
+     :from [:n/n117 :value],
+     :to [:n/n115 :arg1]}
+    {:id :e/scatter-add-exact,
+     :kind :data,
+     :from [:n/n115 :value],
+     :to [:n/n116 :arg1]}
+    {:id :e/scatter-destination,
+     :kind :data,
+     :from [:n/n116 :value],
      :to [:n/n--entry--release-9-do-4-else-0 :value]}
     {:id :e/link156,
      :kind :exec,
@@ -1367,6 +1431,10 @@
     {:id :e/link170,
      :kind :exec,
      :from [:n/n--entry--release-9-do-6 :out],
+     :to [:n/n--entry--release-9-do-6b :in]}
+    {:id :e/scatter-trail-next,
+     :kind :exec,
+     :from [:n/n--entry--release-9-do-6b :out],
      :to [:n/n--entry--release-9-do-7 :in]}
     {:id :e/link171,
      :kind :data,

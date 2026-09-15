@@ -394,8 +394,8 @@
          :instance-key [:activation :storm-wing-vortex-0],
          :audience {:type :nearby, :radius 64.0},
          :payload
-         {:count-limit 64,
-          :life-ticks 30,
+         {
+
           :orientation
           {:anchor-offset [0.0 1.6 0.0],
            :pitch-scale 0.2,
@@ -418,7 +418,6 @@
           :alpha 0.0,
           :base
           {:nid :n/n--entry--start-9-in-c050cc93, :ref [:local :body]},
-          :axis [0.0 1.0 0.0],
           :height 2.0,
           :spacing {:min 0.18, :max 0.32}}}},
        :n--entry--start-10
@@ -431,8 +430,8 @@
          :instance-key [:activation :storm-wing-vortex-1],
          :audience {:type :nearby, :radius 64.0},
          :payload
-         {:count-limit 64,
-          :life-ticks 30,
+         {
+
           :orientation
           {:anchor-offset [0.0 1.6 0.0],
            :pitch-scale 0.2,
@@ -460,7 +459,6 @@
           :alpha 0.0,
           :base
           {:nid :n/n--entry--start-10-i-4f633ee, :ref [:local :body]},
-          :axis [0.0 1.0 0.0],
           :height 2.0,
           :spacing {:min 0.18, :max 0.32}}}},
        :n--entry--start-11
@@ -473,8 +471,8 @@
          :instance-key [:activation :storm-wing-vortex-2],
          :audience {:type :nearby, :radius 64.0},
          :payload
-         {:count-limit 64,
-          :life-ticks 30,
+         {
+
           :orientation
           {:anchor-offset [0.0 1.6 0.0],
            :pitch-scale 0.2,
@@ -502,7 +500,6 @@
           :alpha 0.0,
           :base
           {:nid :n/n--entry--start-11-i-35dd6e3d, :ref [:local :body]},
-          :axis [0.0 1.0 0.0],
           :height 2.0,
           :spacing {:min 0.18, :max 0.32}}}},
        :n--entry--start-12
@@ -515,8 +512,8 @@
          :instance-key [:activation :storm-wing-vortex-3],
          :audience {:type :nearby, :radius 64.0},
          :payload
-         {:count-limit 64,
-          :life-ticks 30,
+         {
+
           :orientation
           {:anchor-offset [0.0 1.6 0.0],
            :pitch-scale 0.2,
@@ -544,7 +541,6 @@
           :alpha 0.0,
           :base
           {:nid :n/n--entry--start-12-i-5e71c74e, :ref [:local :body]},
-          :axis [0.0 1.0 0.0],
           :height 2.0,
           :spacing {:min 0.18, :max 0.32}}}},
        :n--entry--start-13

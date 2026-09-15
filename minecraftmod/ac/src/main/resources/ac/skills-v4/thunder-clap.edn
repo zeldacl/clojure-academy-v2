@@ -1097,6 +1097,62 @@
         :inputs
         {:type :achievement/trigger,
          :payload {:id "electromaster.thunder_clap"}}},
+       :n--entry--release-5-then-10-impact
+       {:type :component,
+        :component :effect/vfx,
+        :nid :n/n--entry--release-5-then-10-impact,
+        :inputs
+        {:effect-id :arc-strike-transient,
+         :operation :spawn,
+         :instance-key [:activation :thunder-clap-strike],
+         :audience {:type :nearby, :radius 64.0},
+         :payload
+         {:hand-origin? false,
+         :seed 0,
+          :sound-position
+          {:nid :n/n--entry--release-5-impact-sound-pos,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--release-5-impact-sound-target,
+             :ref [:local :aim-hit]}}},
+          :sound-pitch 1.0,
+          :sound-volume 0.7,
+          :start
+          {:nid :n/n--entry--release-5-impact-start,
+           :component :vec3/add,
+           :args
+           [{:nid :n/n--entry--release-5-impact-start-pos,
+             :component :value/field,
+             :inputs
+             {:field :position,
+              :value
+              {:nid :n/n--entry--release-5-impact-start-target,
+               :ref [:local :aim-hit]}}}
+            [0.0 8.0 0.0]]},
+          :sound-id "minecraft:entity.lightning_bolt.thunder",
+          :arc-life-ticks 8,
+          :duration-ticks 8,
+          :aoe-points [],
+          :aoe-origin
+          {:nid :n/n--entry--release-5-impact-origin,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--release-5-impact-origin-target,
+             :ref [:local :aim-hit]}}},
+          :end
+          {:nid :n/n--entry--release-5-impact-end,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--release-5-impact-end-target,
+             :ref [:local :aim-hit]}}},
+          :bounds-radius 0.0,
+          :pattern :strong}}},
        :n--entry--release-5-then-11
        {:type :component,
         :component :effect/vfx,
@@ -1367,6 +1423,10 @@
     {:id :e/link165,
      :kind :exec,
      :from [:n/n--entry--release-5-then-10 :out],
+     :to [:n/n--entry--release-5-then-10-impact :in]}
+    {:id :e/thunder-clap-impact-cleanup,
+     :kind :exec,
+     :from [:n/n--entry--release-5-then-10-impact :out],
      :to [:n/n--entry--release-5-then-11 :in]}
     {:id :e/link166,
      :kind :exec,

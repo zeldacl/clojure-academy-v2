@@ -51,7 +51,7 @@
                       (doseq [plan (if (= "mesh" prim)
                                      (or payload [])
                                      [(vfx-plan/neutral-op->plan
-                                       payload (:hand-center-pos frame-context))])]
+                                       payload frame-context)])]
                         (geometry/render-presentation-geometry!
                           {:player player :pose-stack pose-stack
                            :buffer-source buffer-source :camera-pos cam-pos

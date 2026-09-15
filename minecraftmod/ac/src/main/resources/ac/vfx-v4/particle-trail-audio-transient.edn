@@ -6,6 +6,7 @@
   :count-limit {:type :int},
   :sound-pitch {:type :float},
   :life-ticks {:type :int},
+  :duration-ticks {:type :int},
   :sound-volume {:type :float},
   :fade-out {:type :int},
   :start {:type :vec3},
@@ -26,10 +27,28 @@
        {:type :component,
         :component :audio-one-shot,
         :nid :n/n--entry--default-0},
+       :n--entry--trail
+       {:type :component,
+        :component :particle-trail,
+        :nid :n/n--entry--trail},
        :n001 {:type :context-ref, :key :sound-id, :nid :n/n001},
        :n002 {:type :context-ref, :key :sound-position, :nid :n/n002},
        :n003 {:type :context-ref, :key :sound-volume, :nid :n/n003},
        :n004 {:type :context-ref, :key :sound-pitch, :nid :n/n004},
+       :n005 {:type :context-ref, :key :start, :nid :n/n005},
+       :n006 {:type :context-ref, :key :end, :nid :n/n006},
+       :n007 {:type :context-ref, :key :count-limit, :nid :n/n007},
+       :n008 {:type :context-ref, :key :spacing, :nid :n/n008},
+       :n009 {:type :context-ref, :key :radius, :nid :n/n009},
+       :n010 {:type :context-ref, :key :size, :nid :n/n010},
+       :n011 {:type :context-ref, :key :velocity, :nid :n/n011},
+       :n012 {:type :context-ref, :key :texture, :nid :n/n012},
+       :n013 {:type :context-ref, :key :alpha, :nid :n/n013},
+       :n014 {:type :context-ref, :key :life-ticks, :nid :n/n014},
+       :n015 {:type :context-ref, :key :fade-in, :nid :n/n015},
+       :n016 {:type :context-ref, :key :fade-out, :nid :n/n016},
+       :n017 {:type :context-ref, :key :age, :nid :n/n017},
+       :n018 {:type :context-ref, :key :seed, :nid :n/n018},
        :n--entry--default-1
        {:type :end,
         :result {},
@@ -52,11 +71,25 @@
      :kind :data,
      :from [:n/n004 :value],
      :to [:n/n--entry--default-0 :pitch]}
+    {:id :e/trail-start, :kind :data, :from [:n/n005 :value], :to [:n/n--entry--trail :start]}
+    {:id :e/trail-end, :kind :data, :from [:n/n006 :value], :to [:n/n--entry--trail :end]}
+    {:id :e/trail-count, :kind :data, :from [:n/n007 :value], :to [:n/n--entry--trail :count-limit]}
+    {:id :e/trail-spacing, :kind :data, :from [:n/n008 :value], :to [:n/n--entry--trail :spacing]}
+    {:id :e/trail-radius, :kind :data, :from [:n/n009 :value], :to [:n/n--entry--trail :radius]}
+    {:id :e/trail-size, :kind :data, :from [:n/n010 :value], :to [:n/n--entry--trail :size]}
+    {:id :e/trail-velocity, :kind :data, :from [:n/n011 :value], :to [:n/n--entry--trail :velocity]}
+    {:id :e/trail-texture, :kind :data, :from [:n/n012 :value], :to [:n/n--entry--trail :texture]}
+    {:id :e/trail-alpha, :kind :data, :from [:n/n013 :value], :to [:n/n--entry--trail :alpha]}
+    {:id :e/trail-life, :kind :data, :from [:n/n014 :value], :to [:n/n--entry--trail :life-ticks]}
+    {:id :e/trail-fade-in, :kind :data, :from [:n/n015 :value], :to [:n/n--entry--trail :fade-in]}
+    {:id :e/trail-fade-out, :kind :data, :from [:n/n016 :value], :to [:n/n--entry--trail :fade-out]}
+    {:id :e/trail-age, :kind :data, :from [:n/n017 :value], :to [:n/n--entry--trail :age]}
+    {:id :e/trail-seed, :kind :data, :from [:n/n018 :value], :to [:n/n--entry--trail :seed]}
     {:id :e/link005,
      :kind :exec,
-     :from [:n/n--entry--default-0 :out],
-     :to [:n/n--entry--default-1 :in]}
+     :from [:n/n--entry--trail :out],
+     :to [:n/n--entry--default-0 :in]}
     {:id :e/link006,
      :kind :exec,
      :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+     :to [:n/n--entry--trail :in]}]}}}

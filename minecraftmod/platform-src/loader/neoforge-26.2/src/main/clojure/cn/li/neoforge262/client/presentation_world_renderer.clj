@@ -72,7 +72,7 @@
                     (doseq [plan (if (= "mesh" prim)
                                    (or payload [])
                                    [(vfx-plan/neutral-op->plan
-                                     payload (:hand-center-pos presentation-context))])]
+                                     payload presentation-context)])]
                       (geometry/render-presentation-geometry!
                         {:player player :camera-pos camera-pos :tick tick :plan plan
                          :pose-stack (.getPoseStack evt)
