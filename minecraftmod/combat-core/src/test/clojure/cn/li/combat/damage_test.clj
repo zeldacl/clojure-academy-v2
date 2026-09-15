@@ -29,7 +29,7 @@
   (let [index (damage/build-index
                [{:ability-id :shield :reaction-id :absorb :priority 10
                  :on :combat/damage
-                 :when {:expr :math/gt :args [{:ref [:request :base]} 0.0]}
+                 :when '(math/gt ?request/base 0.0)
                  :program {:component :damage/absorb :cap 3.0}}])
         result (damage/resolve-event index {:world-id "w" :source :a :target :b :base 10 :type :skill :seed 4})]
     (is (= 7.0 (:amount result)))

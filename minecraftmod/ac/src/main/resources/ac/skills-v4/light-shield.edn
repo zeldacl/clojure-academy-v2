@@ -76,23 +76,18 @@
  [{:on :combat/damage,
    :priority 80,
    :when
-   {:expr :bool/and,
-    :args
-    [{:expr :value/eq,
-      :args [{:ref [:input :context :ability-id]} :light-shield]}
-     {:ref [:input :context :enabled?]}
-     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
+   (bool/and
+    (value/eq ?context/ability-id :light-shield)
+    (bool/and ?context/enabled? (math/gt ?request/base 0.0))),
    :program
    {:component :damage/absorb,
-    :cap {:ref [:input :tunables :absorb-damage]},
-    :interval-ticks {:ref [:input :tunables :absorb-interval-ticks]},
+    :cap $absorb-damage,
+    :interval-ticks $absorb-interval-ticks,
     :last-tick-path [:last-absorb-tick],
-    :front? {:ref [:input :context :front?]},
-    :cost
-    {:cp {:ref [:input :tunables :absorb-overload]},
-     :overload {:ref [:input :tunables :absorb-cp]}},
+    :front? ?context/front?,
+    :cost {:cp $absorb-overload, :overload $absorb-cp},
     :progression-tag :attacked,
-    :progression-scale {:ref [:input :tunables :exp-attacked]}}}],
+    :progression-scale $exp-attacked}}],
  :phases
  {:start
   [(let activate-budget ?budget/activate)

@@ -29,7 +29,9 @@
    lookup, k = policies actually relevant to this event's mark-type (plus
    the always-checked no-mark-type bucket), still running the SAME
    policy-matches? check per candidate afterward."
-  (:require [cn.li.mcmod.runtime.damage-boundary :as boundary]))
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.runtime.damage-boundary :as boundary]
+            [cn.li.node.expr :as expr]))
 
 (def ^:const max-reflection-depth 8)
 
@@ -53,48 +55,77 @@
               (sequential? current) (nth (vec current) (long key) nil)
               :else nil)) value path))
 
+(defn- scope-of
+  "A policy sigil -> the event-relative map its key is looked up in.
+
+   These are the same sigils the surface DSL uses everywhere else -- $x for
+   a tunable, ?scope/x for a capability, %x for session state -- resolved
+   here against a damage event instead of an ExecutionFrame, because a
+   policy is evaluated inside the damage pipeline rather than as a compiled
+   program."
+  [sym ev]
+  (let [s (str sym)
+        md (:metadata ev)]
+    (cond
+      (str/starts-with? s "$") [(get-in md [:input :tunables] {}) (keyword (subs s 1))]
+      (str/starts-with? s "%") [(get-in md [:input :session] {}) (keyword (subs s 1))]
+      (str/starts-with? s "?")
+      (let [k (subs s 1)
+            [scope key] (if-let [i (str/index-of k "/")]
+                          [(subs k 0 i) (subs k (inc i))]
+                          [nil k])]
+        (case scope
+          ;; the event itself, which is what the damage pipeline calls the
+          ;; request. Content used to spell this {:ref [:input :request :x]},
+          ;; and NOTHING populates [:input :request] -- so every policy
+          ;; guarded by (math/gt ?request/base 0.0) resolved nil, compared
+          ;; 0.0 > 0.0, and never matched. light-shield's absorb, whose
+          ;; entire purpose is absorbing damage, was dead that way.
+          "request" [ev (keyword key)]
+          "context" [(get-in md [:input :context] {}) (keyword key)]
+          "param" [(get-in md [:input :params] {}) (keyword key)]
+          "session" [(get-in md [:input :session] {}) (keyword key)]
+          "slot" [(get-in md [:input :slot] {}) (keyword key)]
+          "mark" [(get-in md [:input :mark] {}) (keyword key)]
+          ;; ?ns/name with no scope match is a capability, named in full
+          [(get-in md [:input :capabilities] {}) (keyword k)]))
+      :else nil)))
+
 (declare eval-value)
-(defn- eval-value [value ev]
+
+(defn- eval-value
+  "A policy expression -> its value for `ev`.
+
+   Policies are written in the surface DSL, the same as everything else a
+   skill declares: (math/gt ?request/base 0.0) rather than a {:expr :args}
+   tree. What is NOT the same is that they are interpreted here rather than
+   compiled -- a policy is one predicate plus a record of field values,
+   evaluated inside a damage aggregation, not a program with an outcome.
+
+   The operator semantics come from cn.li.node.expr, so :math/gt means one
+   thing in this repo. This namespace used to carry its own case over the
+   same opcode names, which had drifted: :bool/and was variadic here and
+   binary there, so the third condition of a three-clause policy was
+   evaluated by one and would have been dropped by the other."
+  [value ev]
   (cond
-    (and (map? value) (:ref value))
-    (let [[scope & path] (:ref value)]
-      (lookup-path
-       (case scope
-         :request ev
-         :context (or (:context (:metadata ev)) {})
-         :param (or (:params (:metadata ev)) {})
-         :session (or (:session (:metadata ev)) {})
-         :slot (or (:slot (:metadata ev)) {})
-         :mark (or (:mark (:metadata ev)) {})
-         :input (or (:input (:metadata ev)) {})
-         nil)
-       path))
+    (symbol? value)
+    (if-let [[m k] (scope-of value ev)] (get m k) value)
 
-    (and (map? value) (:tunable value))
-    (lookup-path (or (:tunables (:metadata ev)) {})
-                 (into [(:tunable value)] (or (:path value) [])))
+    ;; (:key x) -- a field read, the same spelling the surface DSL uses.
+    ;; A ref path deeper than one level arrives this way: what used to be
+    ;; a {:ref [...]} vector naming three segments is now a field read off
+    ;; the sigil naming the first two.
+    (and (seq? value) (keyword? (first value)))
+    (get (eval-value (second value) ev) (first value))
 
-    (and (map? value) (:expr value))
-    (let [op (:expr value) args (map #(eval-value % ev) (:args value))]
-      (case op
-        :bool/and (every? true? args)
-        :bool/or (boolean (some true? args))
-        :bool/not (not (boolean (first args)))
-        :value/eq (= (first args) (second args))
-        :math/gt (> (double (or (first args) 0.0)) (double (or (second args) 0.0)))
-        :math/gte (>= (double (or (first args) 0.0)) (double (or (second args) 0.0)))
-        :math/lt (< (double (or (first args) 0.0)) (double (or (second args) 0.0)))
-        :math/lte (<= (double (or (first args) 0.0)) (double (or (second args) 0.0)))
-        :math/add (reduce + 0.0 (map #(double (or % 0.0)) args))
-        :math/sub (reduce - (double (or (first args) 0.0)) (map #(double (or % 0.0)) (rest args)))
-        :math/mul (reduce * 1.0 (map #(double (or % 0.0)) args))
-        :math/div (if (zero? (double (or (second args) 0.0))) 0.0
-                      (/ (double (or (first args) 0.0)) (double (second args))))
-        :math/min (apply min (map #(double (or % 0.0)) args))
-        :math/max (apply max (map #(double (or % 0.0)) args))
-        :math/clamp (max (double (or (second args) 0.0))
-                         (min (double (or (nth args 2) 0.0)) (double (or (first args) 0.0))))
-        value))
+    (seq? value)
+    (let [op (keyword (namespace (first value)) (name (first value)))
+          args (mapv #(eval-value % ev) (rest value))]
+      (expr/evaluate op args))
+
+    (vector? value) (mapv #(eval-value % ev) value)
+    (map? value) (into {} (map (fn [[k v]] [k (eval-value v ev)])) value)
     :else value))
 
 (defn- policy-matches? [policy ev]

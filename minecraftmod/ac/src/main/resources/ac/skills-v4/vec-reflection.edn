@@ -54,30 +54,21 @@
  :damage-policies
  [{:on :combat/damage,
    :priority 60,
-   :when
-   {:expr :bool/and,
-    :args
-    [{:ref [:input :context :enabled?]}
-     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
+   :when (bool/and ?context/enabled? (math/gt ?request/base 0.0)),
    :program
    {:component :damage/reflect,
     :multiplier
-    {:expr :math/lerp,
-     :args
-     [{:ref [:input :tunables :damage-multiplier 0]}
-      {:ref [:input :tunables :damage-multiplier 1]}
-      {:ref [:input :context :skill-exp]}]},
+    (math/lerp
+     $damage-multiplier
+     $damage-multiplier
+     ?context/skill-exp),
     :cost-per-damage
-    {:expr :math/lerp,
-     :args
-     [{:ref [:input :tunables :damage-cp 0]}
-      {:ref [:input :tunables :damage-cp 1]}
-      {:ref [:input :context :skill-exp]}]},
-    :minimum {:ref [:input :tunables :min-reflected-damage]},
-    :max-depth {:ref [:input :tunables :max-reflections]},
+    (math/lerp $damage-cp $damage-cp ?context/skill-exp),
+    :minimum $min-reflected-damage,
+    :max-depth $max-reflections,
     :cost-resource :cp,
     :progression-tag :damaged,
-    :progression-scale {:ref [:input :tunables :exp-damage-scale]}}}],
+    :progression-scale $exp-damage-scale}}],
  :phases
  {:start
   [(let eye ?caster/eye)

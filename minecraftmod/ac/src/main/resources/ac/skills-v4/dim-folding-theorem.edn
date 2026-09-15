@@ -26,20 +26,19 @@
  [{:on :combat/damage,
    :priority 200,
    :when
-   {:expr :bool/and,
-    :args
-    [{:ref [:input :context :source-learned?]}
-     {:expr :bool/not, :args [{:ref [:input :context :reflected?]}]}
-     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
+   (bool/and
+    ?context/source-learned?
+    (bool/and
+     (bool/not ?context/reflected?)
+     (math/gt ?request/base 0.0))),
    :program
    {:component :damage/critical,
     :levels
     [{:level 0,
-      :probability {:ref [:input :tunables :level0-probability]},
-      :multiplier {:ref [:input :tunables :damage-multipliers 0]}}],
+      :probability $level0-probability,
+      :multiplier $damage-multipliers}],
     :damage-types [:magic :skill],
-    :progression-per-level
-    {:ref [:input :tunables :exp-per-crit-level]},
+    :progression-per-level $exp-per-crit-level,
     :vfx
     {:effect-id :particle-burst-trail-transient,
      :instance-key [:combat :critical],
@@ -48,18 +47,18 @@
      {:count-limit 8,
       :life-ticks 15,
       :fade-out 20,
-      :start {:ref [:input :context :target-position]},
+      :start ?context/target-position,
       :radius {:min 0.3, :max 0.42},
       :size {:min 1.0, :max 1.7},
       :alpha {:min 152, :max 255},
-      :end {:ref [:input :context :target-position]},
+      :end ?context/target-position,
       :velocity {:min -0.03, :max 0.03},
       :texture "academy:textures/effects/formula/0.png",
       :spacing {:min 0.0, :max 0.0},
       :fade-in 2}},
     :feedback
     {:message-key "ability.teleporter.critical_hit",
-     :args [{:ref [:input :context :critical-multiplier]}],
+     :args [?context/critical-multiplier],
      :translate? true},
     :events
     [{:type :achievement/trigger,

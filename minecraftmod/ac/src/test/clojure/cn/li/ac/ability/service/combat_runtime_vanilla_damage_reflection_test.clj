@@ -45,8 +45,7 @@
 (def ^:private reflect-source
   {:damage-policies [{:on :combat/damage
                        :priority 1
-                       :when {:expr :math/gt
-                              :args [{:ref [:input :context :resources :cp]} 0.0]}
+                       :when '(math/gt (:cp ?context/resources) 0.0)
                        :program {:component :damage/reflect
                                  :multiplier 0.5
                                  :cost-per-damage 0.1

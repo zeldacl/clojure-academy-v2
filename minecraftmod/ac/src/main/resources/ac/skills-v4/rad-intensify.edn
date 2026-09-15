@@ -26,16 +26,16 @@
  :mark-policies
  [{:mark-type :radiation,
    :requires-ability :rad-intensify,
-   :duration-ticks {:ref [:input :tunables :mark-duration-ticks]},
+   :duration-ticks $mark-duration-ticks,
    :vfx
    {:effect-id :target-mark-session,
     :operation :spawn,
     :audience {:type :nearby, :radius 32.0},
     :offset {:vec3 [0.0 0.8 0.0]},
     :payload
-    {:position {:ref [:mark :target-position]},
-     :ttl-ticks {:ref [:input :tunables :mark-duration-ticks]},
-     :seed {:ref [:input :context :activation-seed]},
+    {:position ?mark/target-position,
+     :ttl-ticks $mark-duration-ticks,
+     :seed ?context/activation-seed,
      :count 3,
      :radius 0.35,
      :color [236 170 93 180]}}}],
@@ -43,14 +43,8 @@
  [{:on :combat/damage,
    :priority 100,
    :mark-type :radiation,
-   :when
-   {:expr :bool/and,
-    :args
-    [{:ref [:input :context :mark?]}
-     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
-   :program
-   {:component :damage/multiply,
-    :multiplier {:ref [:input :context :mark :rate]}}}],
+   :when (bool/and ?context/mark? (math/gt ?request/base 0.0)),
+   :program {:component :damage/multiply, :multiplier ?context/mark}}],
  :phases
  {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
   :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
