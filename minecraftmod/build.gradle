@@ -1671,7 +1671,15 @@ tasks.register("verifyContentModuleCoreIsolation") {
         ] as Set
         def offenders = []
         fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
-            def text = f.text.replaceAll(/;.*$/, "")
+            // (?m) is load-bearing. Without it Java's $ anchors to the end of
+            // the whole INPUT, not each line, and since . does not cross a
+            // newline the pattern only ever matched a comment on the file's
+            // final line -- so this stripped nothing and the scan read every
+            // comment as if it were code. A namespace NAMED IN PROSE (for
+            // instance, a comment explaining that the editor delegates to
+            // cn.li.ability.editor.check precisely so it does not reach a
+            // core itself) was reported as a direct reach.
+            def text = f.text.replaceAll(/(?m);.*$/, "")
             (text =~ /cn\.li\.(?:combat|vfx|node|presentation)\.[a-zA-Z0-9](?:[a-zA-Z0-9.\-]*[a-zA-Z0-9])?/).each { m ->
                 if (!allowed.contains(m)) offenders << "${f.path}: ${m}"
             }

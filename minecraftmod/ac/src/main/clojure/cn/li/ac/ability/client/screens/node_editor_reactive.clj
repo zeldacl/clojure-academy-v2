@@ -1250,7 +1250,28 @@
                                             (= nid (first (:to l)))))
                                       links)))))))
 
-(defn- connect-v4-wire [graph {:keys [from-nid from-pin from-key to-nid to-pin to-key]}]
+(defn- v4-output-type
+  "A V4 data-source node -> its static output type, or nil when the editor
+   cannot know it without dataflow analysis. nil means ALLOW: check/
+   wire-type-error must never reject a wire the compiler would accept, and
+   the editor is early feedback, not a defence (V4 graphs can be produced
+   without it -- scripts/batch*_promote.py already does).
+
+   Only :component is resolved today. A :local-get would have to be traced
+   back to its :local-set, and :context-ref/:parameter-ref/:state-ref need
+   the document's own declarations rather than the palette."
+  [node palette]
+  (when (= :component (:type node))
+    (:returns (palette/find-by-id palette (:component node)))))
+
+(defn- v4-input-type
+  "A V4 node + the port a wire lands on -> that input's declared type, or
+   nil (allow). Same palette source schema-export builds pin colours from."
+  [node port palette]
+  (when (= :component (:type node))
+    (get-in (palette/find-by-id palette (:component node)) [:params port :type])))
+
+(defn- connect-v4-wire [graph palette {:keys [from-nid from-pin from-key to-nid to-pin to-key]}]
   (let [nodes (:nodes graph)
         from (get nodes from-nid)
         to (get nodes to-nid)
@@ -1272,6 +1293,18 @@
       (throw (ex-info "V4 wire endpoints must be output to input" {:from from-nid :to to-nid})))
     (when (and (= :data kind) (not valid-data-target?))
       (throw (ex-info "V4 data output must target a declared data input" {:to to-nid :port to-port})))
+    ;; Type check LAST, after the structural rules, so a wire that is
+    ;; structurally impossible still reports that rather than a confusing
+    ;; type message. Judgement delegated to check/wire-type-error, which
+    ;; delegates to the very cn.li.node.types predicates cn.li.node.compile
+    ;; uses -- the editor gets no rules of its own, only earlier ones.
+    (when (= :data kind)
+      (let [condition? (and (= :branch (:type to)) (= :condition to-port))]
+        (when-let [{:keys [message] :as err}
+                   (check/wire-type-error (v4-output-type from palette)
+                                          (when-not condition? (v4-input-type to to-port palette))
+                                          (if condition? :condition :value))]
+          (throw (ex-info message (assoc err :from from-nid :to to-nid :port to-port))))))
     (let [links (vec (remove #(and (= kind (:kind %)) (= [to-nid to-port] (:to %))) (:links graph)))]
       (assoc graph :links (conj links {:id link-id :kind kind
                                        :from [from-nid from-port] :to [to-nid to-port]})))))
@@ -1287,7 +1320,9 @@
                                           (double (or (:y payload) 0.0)))]
     (when (= :connect-wire (:kind action))
       (try
-        (install-graph! state* (if (:v4? (:document @state*)) (connect-v4-wire (:graph @state*) action) (graph/connect-wire (:graph @state*) action)))
+        (install-graph! state* (if (:v4? (:document @state*))
+                                 (connect-v4-wire (:graph @state*) (:palette @state*) action)
+                                 (graph/connect-wire (:graph @state*) action)))
         (catch Throwable error
           (swap! state* assoc :status (str "Cannot connect: " (.getMessage error))))))
     (swap! state* assoc :drag state)))

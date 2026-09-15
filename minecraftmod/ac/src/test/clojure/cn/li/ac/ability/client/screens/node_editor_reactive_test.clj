@@ -206,13 +206,42 @@
                         [:n/end :end])
                  :links [{:id :e/exec :kind :exec
                           :from [:n/action :out] :to [:n/end :in]}])
+        ;; Empty palette: a :literal source has no statically known type, so
+        ;; the wire type check abstains regardless -- this test is about pin
+        ;; derivation, not typing.
         wired (#'editor/connect-v4-wire
-               g {:from-nid :n/lit :from-pin :out :from-key :value
-                  :to-nid :n/action :to-pin :in :to-key :arg0})
+               g [] {:from-nid :n/lit :from-pin :out :from-key :value
+                     :to-nid :n/action :to-pin :in :to-key :arg0})
         link (last (:links wired))]
     (is (= :data (:kind link)))
     (is (= [[:n/lit :value] [:n/action :arg0]]
            [(:from link) (:to link)]))))
+
+(deftest v4-wire-refuses-a-type-incompatible-connection
+  ;; Early feedback only -- the compiler rejects this too, and would still
+  ;; reject it in a graph produced without the editor. The assertion that
+  ;; the two can never disagree lives in cn.li.ability.editor.check-test's
+  ;; editor-wire-rejections-are-a-subset-of-compiler-rejections-test; this
+  ;; one only proves the controller actually consults it.
+  (let [palette [{:id :target/raycast :returns :hit-result :params {}}
+                 {:id :vec3/length :returns :double :params {:arg0 {:type :vec3}}}]
+        g (assoc (graph [:n/hit :component :component :target/raycast]
+                        [:n/len :component :component :vec3/length]
+                        [:n/end :end])
+                 :links [])
+        wire (fn [] (#'editor/connect-v4-wire
+                     g palette {:from-nid :n/hit :from-pin :out :from-key :value
+                                :to-nid :n/len :to-pin :in :to-key :arg0}))]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"hit-result"
+                          (wire))
+        "a :hit-result must not land on a :vec3 input")
+    (testing "and the same wire is accepted once the types line up"
+      (let [ok-palette [{:id :target/raycast :returns :vec3 :params {}}
+                        {:id :vec3/length :returns :double :params {:arg0 {:type :vec3}}}]]
+        (is (some? (#'editor/connect-v4-wire
+                    g ok-palette {:from-nid :n/hit :from-pin :out :from-key :value
+                                  :to-nid :n/len :to-pin :in :to-key :arg0}))
+            "the check must not reject everything")))))
 
 (deftest remove-v4-node-removes-incident-links-but-protects-sentinels
   (let [g (assoc (graph [:n/start :start]
