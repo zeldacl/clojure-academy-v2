@@ -28,16 +28,22 @@
 (def ^:private missing-field?
   "[source-type field] pairs verified absent from the producing function.
 
-   [:entity-snapshot :position] used to be here and is FIXED: entity-snapshot!
-   now builds :position {:x :y :z} like project-entity does, and keeps it
-   through a projection alongside :x/:y/:z and :eye-position. That removed
-   seven of the eight sites.
+   EMPTY, and that is the point of keeping the test: both entries it was
+   opened with are fixed, and the set is where a newly discovered one goes.
 
-   The one left has no host-side answer. project-entity exposes no
-   invulnerability value at all, so there is nothing to add there -- the
-   repair has to come from whatever light-shield meant to read, which is its
-   author's call, not a typing decision."
-  #{[:entity-ref :invulnerable-time]})
+     [:entity-snapshot :position]       entity-snapshot! now builds
+       :position {:x :y :z} the way project-entity spells it, and keeps it
+       through a projection. Removed seven sites.
+     [:entity-ref :invulnerable-time]   project-entity now forwards the
+       :invulnerable-time every mc-* world-effects-core already supplies.
+       Removed the eighth.
+
+   The second one was nearly written off here as \"no host-side answer\".
+   That was wrong, and checking the upstream implementation is what showed
+   it: main's light_shield.clj gates on `(<= (long (or (:invulnerable-time
+   entity) 0)) 0)`, so the value exists and is meant to be read -- only the
+   projection layer was dropping it."
+  #{})
 
 (deftest nil-field-read-sites
   (let [sites (atom [])
@@ -76,5 +82,5 @@
     ;; which) or a new one was authored (fix it). Either way it should not
     ;; pass silently -- a nil-valued read is exactly the class of defect the
     ;; whole type-contract effort exists to stop being invisible.
-    (is (= 1 (count @sites))
+    (is (= 0 (count @sites))
         (str "known nil-valued field reads changed: " (pr-str @sites)))))

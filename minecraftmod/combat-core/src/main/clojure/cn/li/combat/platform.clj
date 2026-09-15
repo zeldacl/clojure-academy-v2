@@ -75,6 +75,21 @@
                 ;; already triggered, without knowing its concrete class.
                 :behavior-hit? (boolean (:behavior-hit? entity))
                 :living? (boolean (:living? entity))
+                ;; Forwarded, not invented: every mc-* world-effects-core
+                ;; already puts :invulnerable-time on the entity map it hands
+                ;; up (0 for a non-LivingEntity). project-entity was the only
+                ;; layer dropping it, so light-shield.edn -- which asks for it
+                ;; by name in its :projection and feeds it to :math/lte --
+                ;; received nil. nil into a :double parameter is not a
+                ;; mis-gate: coerce! emits a :convert and effect-emit throws
+                ;; on it, so that touch-damage path raised every time an
+                ;; entity entered the cone.
+                ;;
+                ;; (or ... 0) matches the upstream implementation's own
+                ;; reading, `(<= (long (or (:invulnerable-time entity) 0)) 0)`
+                ;; in main's light_shield.clj, and guarantees the key is never
+                ;; nil here regardless of what a platform bridge omits.
+                :invulnerable-time (long (or (:invulnerable-time entity) 0))
                 :mob? (boolean (:mob? entity))
                 :multipart? (boolean (:multipart? entity))
                 :tags (set (or (:tags entity) []))}]
