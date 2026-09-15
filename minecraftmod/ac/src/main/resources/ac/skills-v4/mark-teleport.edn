@@ -1,39 +1,19 @@
 {:schema :ac/skill-v4,
- :id :mark-teleport,
  :skill {:category :migrated, :level 1},
- :parameters
- {:minimum-distance {:type :double},
-  :maximum-range {:type :double},
-  :range-per-hold-tick {:type :double},
-  :cp-per-block {:type :double},
-  :release-overload {:type :double},
-  :entity-eye-height {:type :double}},
- :state {:destination {:type :destination, :default nil}},
- :description-key "ability.skill.teleporter.mark_teleport.desc",
- :name-key "ability.skill.teleporter.mark_teleport",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :costs nil,
- :mark-policies nil,
- :requires
- [:caster/eye :caster/aim :caster/id :world/id :charge/ticks],
- :tunables
- {:minimum-distance {:curve :const},
-  :maximum-range {:curve :mastery-lerp},
-  :range-per-hold-tick {:curve :const},
-  :cp-per-block {:curve :mastery-lerp},
-  :release-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :exp-per-distance {:curve :const},
-  :entity-eye-height {:curve :const}},
- :invariants nil,
- :progression
- {:teleport {:per-mark {:ref [:input :tunables :exp-per-distance]}}},
- :activation :session,
  :entry-triggers
  {:start :phase/start,
   :pulse :phase/pulse,
   :release :phase/release,
   :abort :phase/abort},
+ :description-key "ability.skill.teleporter.mark_teleport.desc",
+ :name-key "ability.skill.teleporter.mark_teleport",
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :state {:destination {:type :destination, :default nil}},
+ :costs nil,
+ :mark-policies nil,
+ :activation :session,
+ :requires
+ [:caster/eye :caster/aim :caster/id :world/id :charge/ticks],
  :phases
  {:start
   [(let owner-id ?caster/id)
@@ -236,4 +216,24 @@
      :instance-key [:activation :mark-teleport],
      :payload {}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :mark-teleport,
+ :tunables
+ {:minimum-distance {:curve :const},
+  :maximum-range {:curve :mastery-lerp},
+  :range-per-hold-tick {:curve :const},
+  :cp-per-block {:curve :mastery-lerp},
+  :release-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :exp-per-distance {:curve :const},
+  :entity-eye-height {:curve :const}},
+ :invariants nil,
+ :parameters
+ {:minimum-distance {:type :double},
+  :maximum-range {:type :double},
+  :range-per-hold-tick {:type :double},
+  :cp-per-block {:type :double},
+  :release-overload {:type :double},
+  :entity-eye-height {:type :double}},
+ :progression
+ {:teleport {:per-mark {:ref [:input :tunables :exp-per-distance]}}}}

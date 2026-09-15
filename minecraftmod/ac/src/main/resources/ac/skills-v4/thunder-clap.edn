@@ -1,14 +1,10 @@
 {:schema :ac/skill-v4,
- :id :thunder-clap,
  :skill {:category :migrated, :level 1},
- :parameters
- {:targeting-range {:type :double},
-  :charge-min {:type :long},
-  :charge-max {:type :long},
-  :damage {:type :double},
-  :overcharge-multiplier {:type :any},
-  :aoe-radius {:type :double}},
- :state {},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.electromaster.thunder_clap.desc",
  :name-key "ability.skill.electromaster.thunder_clap",
  :cooldown
@@ -18,6 +14,7 @@
     :args
     [{:ref [:input :capabilities :charge/ticks]}
      {:ref [:input :tunables :cooldown-per-hold]}]}}},
+ :state {},
  :costs
  {:activate
   {:resources
@@ -25,26 +22,8 @@
   :charging
   {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
  :mark-policies nil,
- :requires [:caster/eye :caster/aim :world/id :charge/ticks],
- :tunables
- {:targeting-range {:curve :const},
-  :charge-min {:curve :const, :type :int},
-  :charge-max {:curve :const, :type :int},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :damage {:curve :mastery-lerp},
-  :overcharge-multiplier {:curve :pair},
-  :aoe-radius {:curve :mastery-lerp},
-  :cooldown-per-hold {:curve :mastery-lerp},
-  :exp-use {:curve :const}},
- :invariants nil,
- :progression {:cast {:per-mark {:ref [:input :tunables :exp-use]}}},
  :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
+ :requires [:caster/eye :caster/aim :world/id :charge/ticks],
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -405,4 +384,25 @@
      :instance-key [:activation :thunder-clap],
      :payload {:local-walk-speed nil}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :thunder-clap,
+ :tunables
+ {:overcharge-multiplier {:curve :pair},
+  :targeting-range {:curve :const},
+  :cooldown-per-hold {:curve :mastery-lerp},
+  :charge-max {:curve :const, :type :int},
+  :damage {:curve :mastery-lerp},
+  :charge-min {:curve :const, :type :int},
+  :exp-use {:curve :const},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :aoe-radius {:curve :mastery-lerp},
+  :cost-down-overload {:curve :mastery-lerp}},
+ :invariants nil,
+ :parameters
+ {:targeting-range {:type :double},
+  :charge-min {:type :long},
+  :charge-max {:type :long},
+  :damage {:type :double},
+  :overcharge-multiplier {:type :any},
+  :aoe-radius {:type :double}},
+ :progression {:cast {:per-mark {:ref [:input :tunables :exp-use]}}}}

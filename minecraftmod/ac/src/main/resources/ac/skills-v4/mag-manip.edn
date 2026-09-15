@@ -1,30 +1,27 @@
 {:schema :ac/skill-v4,
- :id :mag-manip,
  :skill {:category :migrated, :level 1},
- :parameters
- {:targeting-grab-range {:type :double},
-  :targeting-throw-range {:type :double},
-  :targeting-max-hold-distance {:type :double},
-  :movement-hold-distance {:type :double},
-  :movement-hold-head-y-offset {:type :double},
-  :movement-throw-speed {:type :double},
-  :progression-exp-throw {:type :double},
-  :throw-damage {:type :double}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort,
+  :block-body-hit :phase/block-body-hit},
+ :description-key "ability.skill.electromaster.mag_manip.desc",
+ :name-key "ability.skill.electromaster.mag_manip",
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :state
  {:holding? {:type :boolean, :default false},
   :held-block-id {:type :any, :default nil},
   :held-source-position {:type :any, :default nil},
   :hold-ticks {:type :long, :default 0},
   :body-id {:type :any, :default nil}},
- :description-key "ability.skill.electromaster.mag_manip.desc",
- :name-key "ability.skill.electromaster.mag_manip",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :costs
  {:release
   {:resources
    {:cp {:ref [:input :tunables :cost-up-cp]},
     :overload {:ref [:input :tunables :cost-up-overload]}}}},
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/id
   :caster/eye
@@ -34,27 +31,6 @@
   :world/id
   :progression/mastery
   :rng/seed],
- :tunables
- {:targeting-grab-range {:curve :const},
-  :targeting-throw-range {:curve :const},
-  :targeting-max-hold-distance {:curve :const},
-  :movement-hold-distance {:curve :const},
-  :movement-hold-head-y-offset {:curve :const},
-  :movement-throw-speed {:curve :mastery-lerp},
-  :cost-up-cp {:curve :mastery-lerp},
-  :cost-up-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :progression-exp-throw {:curve :const},
-  :throw-damage {:curve :const}},
- :invariants nil,
- :progression nil,
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort,
-  :block-body-hit :phase/block-body-hit},
  :phases
  {:start
   [(let owner-id ?caster/id)
@@ -710,4 +686,28 @@
    (combat/damage
     {:damage-type :skill, :target target-id, :amount throw-damage})
    ^{:nid "n/n--entry--block-body-hit-3"}
-   (finish {:outcome :hit})]}}
+   (finish {:outcome :hit})]},
+ :id :mag-manip,
+ :tunables
+ {:targeting-grab-range {:curve :const},
+  :movement-hold-distance {:curve :const},
+  :throw-damage {:curve :const},
+  :cost-up-cp {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :movement-hold-head-y-offset {:curve :const},
+  :targeting-throw-range {:curve :const},
+  :cost-up-overload {:curve :mastery-lerp},
+  :targeting-max-hold-distance {:curve :const},
+  :movement-throw-speed {:curve :mastery-lerp},
+  :progression-exp-throw {:curve :const}},
+ :invariants nil,
+ :parameters
+ {:targeting-grab-range {:type :double},
+  :targeting-throw-range {:type :double},
+  :targeting-max-hold-distance {:type :double},
+  :movement-hold-distance {:type :double},
+  :movement-hold-head-y-offset {:type :double},
+  :movement-throw-speed {:type :double},
+  :progression-exp-throw {:type :double},
+  :throw-damage {:type :double}},
+ :progression nil}

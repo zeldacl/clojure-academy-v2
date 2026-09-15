@@ -1,23 +1,21 @@
 {:schema :ac/skill-v4,
- :id :flesh-ripping,
  :skill {:category :migrated, :level 1},
- :parameters
- {:targeting-range {:type :double},
-  :release-cp {:type :double},
-  :damage {:type :double},
-  :nausea-chance {:type :double},
-  :nausea-duration-ticks {:type :long},
-  :nausea-amplifier {:type :long}},
- :state {:trace {:type :any, :default nil}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.teleporter.flesh_ripping.desc",
  :name-key "ability.skill.teleporter.flesh_ripping",
  :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :state {:trace {:type :any, :default nil}},
  :costs
  {:release
   {:resources
    {:cp {:ref [:input :tunables :release-cp]},
     :overload {:ref [:input :tunables :release-overload]}}}},
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/id
   :caster/eye
@@ -25,24 +23,6 @@
   :caster/creative?
   :world/id
   :rng/seed],
- :tunables
- {:targeting-range {:curve :mastery-lerp},
-  :damage {:curve :mastery-lerp},
-  :nausea-chance {:curve :const},
-  :nausea-duration-ticks {:curve :const, :type :int},
-  :nausea-amplifier {:curve :const, :type :int},
-  :release-cp {:curve :mastery-lerp},
-  :release-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-hit {:curve :const}},
- :invariants nil,
- :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}},
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -304,4 +284,24 @@
      :instance-key [:activation :flesh-ripping-marker],
      :payload {}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :flesh-ripping,
+ :tunables
+ {:nausea-amplifier {:curve :const, :type :int},
+  :nausea-chance {:curve :const},
+  :targeting-range {:curve :mastery-lerp},
+  :release-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-hit {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :nausea-duration-ticks {:curve :const, :type :int},
+  :release-cp {:curve :mastery-lerp}},
+ :invariants nil,
+ :parameters
+ {:targeting-range {:type :double},
+  :release-cp {:type :double},
+  :damage {:type :double},
+  :nausea-chance {:type :double},
+  :nausea-duration-ticks {:type :long},
+  :nausea-amplifier {:type :long}},
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}}}

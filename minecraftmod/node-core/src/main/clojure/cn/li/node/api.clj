@@ -1,6 +1,8 @@
 (ns cn.li.node.api
   "Public node-core API for V4 skill/vfx documents and neutral compilation."
-  (:require [cn.li.node.digest :as digest]
+  (:require [clojure.pprint :as pp]
+            [clojure.walk :as walk]
+            [cn.li.node.digest :as digest]
             [cn.li.node.compile :as compile]
             [cn.li.node.surface :as surface]
             [cn.li.node.graph-document :as graph-document]
@@ -29,6 +31,67 @@
    literals rejected, so content is data and never code."
   [text]
   (surface/read-doc text))
+
+(def ^:private document-key-order
+  "The order a document's top-level sections are written in.
+
+   Not alphabetical, and not the order a map happens to iterate: a reader
+   wants identity first, then the inputs, then the declarations that
+   consume them, then the body -- which is the bulk and belongs last. Keys
+   not listed follow, sorted, so an unrecognised one is still written
+   deterministically rather than dropped or floated."
+  [:schema :id :skill :activation
+   :parameters :state :tunables
+   :costs :cooldown :progression :invariants
+   :requires :entry-triggers
+   :name-key :description-key :metadata :presentation :mark-policies
+   :phases :do])
+
+(defn- canonical
+  "doc -> the same doc with its top-level keys in a fixed order.
+
+   Without this an editor save is not byte-stable: a map of more than
+   eight keys iterates in hash order, which is deterministic for identical
+   content but has no relation to how the file was written, so a no-op
+   save rewrote every line and every real edit would have arrived as a
+   whole-file diff."
+  [doc]
+  (let [known (filter #(contains? doc %) document-key-order)
+        rest* (sort (remove (set document-key-order) (keys doc)))]
+    (apply array-map (mapcat (fn [k] [k (get doc k)]) (concat known rest*)))))
+
+(defn- stamps-only
+  "doc -> the same doc with every form's metadata reduced to its :nid.
+
+   The reader attaches :line/:column to any form that carries explicit
+   metadata, which for this content means every ^{:nid} stamp gets a
+   position for free -- useful in a diagnostic, wrong in a file. A position
+   is derived from the text, so persisting it is both redundant and
+   self-invalidating: it is stale the moment anything above it moves, and
+   writing it back made a no-op save rewrite every stamp downstream of the
+   first change. :nid is the only metadata that is actually authored."
+  [doc]
+  (walk/postwalk
+   (fn [f]
+     (if-let [m (meta f)]
+       (if-let [nid (:nid m)] (with-meta f {:nid nid}) (with-meta f nil))
+       f))
+   doc))
+
+(defn write-surface-document
+  "A surface document -> the text to put on disk. The inverse of
+   read-surface-document, and the two must stay that way: an editor save
+   that is not read-back-identical silently rewrites content.
+
+   Two bindings carry the weight. *print-meta* is what keeps the ^{:nid}
+   stamps, which anchor every diagnostic and the editor's jump-to-node --
+   pr-str drops them by default, so a save without it would strip node
+   identity from the file while looking like it worked. And pretty-printing
+   rather than one line, because a diff a reviewer can read is half the
+   reason content is in this form at all."
+  [doc]
+  (binding [*print-meta* true *print-length* nil *print-level* nil]
+    (with-out-str (pp/pprint (stamps-only (canonical doc))))))
 
 (defn compile-surface-document!
   "A surface document (already read) -> {:ir ir :diagnostics [...]}.

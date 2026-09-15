@@ -1,27 +1,18 @@
 {:schema :ac/skill-v4,
- :id :scatter-bomb,
  :skill {:category :migrated, :level 1},
- :parameters
- {:max-balls {:type :long},
-  :spawn-start-tick {:type :long},
-  :anti-afk-tick {:type :long},
-  :auto-aim-radius {:type :double},
-  :auto-aim-exp-threshold {:type :double},
-  :damage {:type :double},
-  :max-hold-ticks {:type :long},
-  :scatter-range {:type :double},
-  :spawn-interval-ticks {:type :long},
-  :anti-afk-damage {:type :double},
-  :scatter-angle-degrees {:type :double},
-  :cost-down-overload {:type :double}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :description-key "ability.skill.meltdowner.scatter_bomb.desc",
+ :name-key "ability.skill.meltdowner.scatter_bomb",
+ :cooldown nil,
  :state
  {:balls {:type :long, :default 0},
   :next-spawn-tick {:type :long, :default 0},
   :overload-floor {:type :double, :default 0.0},
   :ball-ids {:type :any, :default []}},
- :description-key "ability.skill.meltdowner.scatter_bomb.desc",
- :name-key "ability.skill.meltdowner.scatter_bomb",
- :cooldown nil,
  :costs
  {:activate
   {:resources
@@ -29,6 +20,7 @@
   :charging
   {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/eye
   :caster/body
@@ -36,30 +28,6 @@
   :caster/id
   :world/id
   :charge/ticks],
- :tunables
- {:max-balls {:curve :const, :type :int},
-  :max-hold-ticks {:curve :const, :type :int},
-  :spawn-interval-ticks {:curve :const, :type :int},
-  :spawn-start-tick {:curve :const, :type :int},
-  :scatter-range {:curve :const},
-  :scatter-angle-degrees {:curve :const},
-  :damage {:curve :mastery-lerp},
-  :auto-aim-exp-threshold {:curve :const},
-  :auto-aim-radius {:curve :const},
-  :anti-afk-tick {:curve :const, :type :int},
-  :anti-afk-damage {:curve :const},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :exp-per-ball {:curve :const}},
- :invariants nil,
- :progression
- {:ball-fired {:per-mark {:ref [:input :tunables :exp-per-ball]}}},
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let activate-budget ?budget/activate)
@@ -429,4 +397,36 @@
      :instance-key [:activation :scatter-bomb],
      :payload {}})
    ^{:nid "n/n--entry--abort-7"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :scatter-bomb,
+ :tunables
+ {:max-balls {:curve :const, :type :int},
+  :spawn-start-tick {:curve :const, :type :int},
+  :anti-afk-tick {:curve :const, :type :int},
+  :auto-aim-radius {:curve :const},
+  :auto-aim-exp-threshold {:curve :const},
+  :exp-per-ball {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :max-hold-ticks {:curve :const, :type :int},
+  :scatter-range {:curve :const},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :spawn-interval-ticks {:curve :const, :type :int},
+  :anti-afk-damage {:curve :const},
+  :scatter-angle-degrees {:curve :const},
+  :cost-down-overload {:curve :mastery-lerp}},
+ :invariants nil,
+ :parameters
+ {:max-balls {:type :long},
+  :spawn-start-tick {:type :long},
+  :anti-afk-tick {:type :long},
+  :auto-aim-radius {:type :double},
+  :auto-aim-exp-threshold {:type :double},
+  :damage {:type :double},
+  :max-hold-ticks {:type :long},
+  :scatter-range {:type :double},
+  :spawn-interval-ticks {:type :long},
+  :anti-afk-damage {:type :double},
+  :scatter-angle-degrees {:type :double},
+  :cost-down-overload {:type :double}},
+ :progression
+ {:ball-fired {:per-mark {:ref [:input :tunables :exp-per-ball]}}}}

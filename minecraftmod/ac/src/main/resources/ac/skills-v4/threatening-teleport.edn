@@ -1,24 +1,23 @@
 {:schema :ac/skill-v4,
- :id :threatening-teleport,
  :skill {:category :migrated, :level 1},
- :parameters
- {:maximum-range {:type :double},
-  :damage {:type :double},
-  :needle-damage-multiplier {:type :double},
-  :drop-prob-hit {:type :double},
-  :drop-prob-miss {:type :double}},
- :state
- {:hand-item {:type :any, :default nil},
-  :trace {:type :any, :default nil}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.teleporter.threatening_teleport.desc",
  :name-key "ability.skill.teleporter.threatening_teleport",
  :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :state
+ {:hand-item {:type :any, :default nil},
+  :trace {:type :any, :default nil}},
  :costs
  {:release
   {:resources
    {:cp {:ref [:input :tunables :release-cp]},
     :overload {:ref [:input :tunables :release-overload]}}}},
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/eye
   :caster/body
@@ -28,38 +27,6 @@
   :caster/creative?
   :charge/ticks
   :rng/seed],
- :tunables
- {:maximum-range {:curve :mastery-lerp},
-  :damage {:curve :mastery-lerp},
-  :needle-damage-multiplier {:curve :const},
-  :release-cp {:curve :mastery-lerp},
-  :release-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-base {:curve :const},
-  :exp-hit-factor {:curve :const},
-  :exp-miss-factor {:curve :const},
-  :drop-prob-hit {:curve :const},
-  :drop-prob-miss {:curve :const}},
- :invariants nil,
- :progression
- {:hit
-  {:per-mark
-   {:expr :math/mul,
-    :args
-    [{:ref [:input :tunables :exp-base]}
-     {:ref [:input :tunables :exp-hit-factor]}]}},
-  :miss
-  {:per-mark
-   {:expr :math/mul,
-    :args
-    [{:ref [:input :tunables :exp-base]}
-     {:ref [:input :tunables :exp-miss-factor]}]}}},
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -334,4 +301,37 @@
      :instance-key [:activation :threatening-teleport-marker],
      :payload {}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :threatening-teleport,
+ :tunables
+ {:exp-base {:curve :const},
+  :exp-miss-factor {:curve :const},
+  :drop-prob-miss {:curve :const},
+  :exp-hit-factor {:curve :const},
+  :release-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :damage {:curve :mastery-lerp},
+  :drop-prob-hit {:curve :const},
+  :maximum-range {:curve :mastery-lerp},
+  :needle-damage-multiplier {:curve :const},
+  :release-cp {:curve :mastery-lerp}},
+ :invariants nil,
+ :parameters
+ {:maximum-range {:type :double},
+  :damage {:type :double},
+  :needle-damage-multiplier {:type :double},
+  :drop-prob-hit {:type :double},
+  :drop-prob-miss {:type :double}},
+ :progression
+ {:hit
+  {:per-mark
+   {:expr :math/mul,
+    :args
+    [{:ref [:input :tunables :exp-base]}
+     {:ref [:input :tunables :exp-hit-factor]}]}},
+  :miss
+  {:per-mark
+   {:expr :math/mul,
+    :args
+    [{:ref [:input :tunables :exp-base]}
+     {:ref [:input :tunables :exp-miss-factor]}]}}}}

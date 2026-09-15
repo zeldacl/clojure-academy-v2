@@ -1,26 +1,10 @@
 {:schema :ac/skill-v4,
- :id :meltdowner,
  :skill {:category :migrated, :level 1},
- :parameters
- {:beam-radius {:type :double},
-  :beam-visual-distance {:type :double},
-  :reflection-shot-distance {:type :double},
-  :charge-min-ticks {:type :long},
-  :beam-query-radius {:type :double},
-  :reflection-base-damage {:type :double},
-  :charge-time-rate {:type :any},
-  :beam-damage {:type :double},
-  :charge-max-ticks {:type :long},
-  :charge-max-tolerant-ticks {:type :long},
-  :beam-block-energy {:type :double},
-  :beam-max-distance {:type :double},
-  :reflection-damage-multiplier {:type :double},
-  :beam-step {:type :double},
-  :cost-down-overload {:type :double}},
- :state
- {:hold-ticks {:type :long, :default 0},
-  :time-rate {:type :double, :default 0.8},
-  :overload-floor {:type :double, :default 0.0}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.meltdowner.meltdowner.desc",
  :name-key "ability.skill.meltdowner.meltdowner",
  :cooldown
@@ -31,12 +15,17 @@
     [{:ref [:state :time-rate]}
      {:ref [:input :tunables :cooldown-base-multiplier]}
      {:ref [:input :tunables :cooldown-ticks]}]}}},
+ :state
+ {:hold-ticks {:type :long, :default 0},
+  :time-rate {:type :double, :default 0.8},
+  :overload-floor {:type :double, :default 0.0}},
  :costs
  {:activate
   {:resources
    {:overload {:ref [:input :tunables :cost-down-overload]}}},
   :tick {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/body
   :caster/eye
@@ -46,37 +35,6 @@
   :world/id
   :progression/mastery
   :rng/seed],
- :tunables
- {:charge-min-ticks {:curve :const, :type :int},
-  :charge-max-ticks {:curve :const, :type :int},
-  :charge-max-tolerant-ticks {:curve :const, :type :int},
-  :charge-time-rate {:curve :pair},
-  :beam-radius {:curve :mastery-lerp},
-  :beam-query-radius {:curve :const},
-  :beam-step {:curve :const},
-  :beam-max-distance {:curve :const},
-  :beam-visual-distance {:curve :const},
-  :beam-damage {:curve :mastery-lerp},
-  :beam-block-energy {:curve :mastery-lerp},
-  :reflection-shot-distance {:curve :const},
-  :reflection-damage-multiplier {:curve :const},
-  :reflection-base-damage {:curve :mastery-lerp},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :cooldown-base-multiplier {:curve :const},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :exp-use {:curve :const}},
- :invariants nil,
- :progression
- {:use
-  {:per-mark {:ref [:input :tunables :exp-use]},
-   :weight {:ref [:state :time-rate]}}},
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let activate-budget ?budget/activate)
@@ -443,4 +401,46 @@
      :instance-key [:activation :meltdowner-camera],
      :payload {:local-walk-speed nil}})
    ^{:nid "n/n--entry--abort-3"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :meltdowner,
+ :tunables
+ {:beam-radius {:curve :mastery-lerp},
+  :beam-visual-distance {:curve :const},
+  :reflection-shot-distance {:curve :const},
+  :charge-min-ticks {:curve :const, :type :int},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :beam-query-radius {:curve :const},
+  :reflection-base-damage {:curve :mastery-lerp},
+  :charge-time-rate {:curve :pair},
+  :beam-damage {:curve :mastery-lerp},
+  :charge-max-ticks {:curve :const, :type :int},
+  :exp-use {:curve :const},
+  :charge-max-tolerant-ticks {:curve :const, :type :int},
+  :beam-block-energy {:curve :mastery-lerp},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :beam-max-distance {:curve :const},
+  :cooldown-base-multiplier {:curve :const},
+  :reflection-damage-multiplier {:curve :const},
+  :beam-step {:curve :const},
+  :cost-down-overload {:curve :mastery-lerp}},
+ :invariants nil,
+ :parameters
+ {:beam-radius {:type :double},
+  :beam-visual-distance {:type :double},
+  :reflection-shot-distance {:type :double},
+  :charge-min-ticks {:type :long},
+  :beam-query-radius {:type :double},
+  :reflection-base-damage {:type :double},
+  :charge-time-rate {:type :any},
+  :beam-damage {:type :double},
+  :charge-max-ticks {:type :long},
+  :charge-max-tolerant-ticks {:type :long},
+  :beam-block-energy {:type :double},
+  :beam-max-distance {:type :double},
+  :reflection-damage-multiplier {:type :double},
+  :beam-step {:type :double},
+  :cost-down-overload {:type :double}},
+ :progression
+ {:use
+  {:per-mark {:ref [:input :tunables :exp-use]},
+   :weight {:ref [:state :time-rate]}}}}

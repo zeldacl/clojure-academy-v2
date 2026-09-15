@@ -349,9 +349,10 @@
          ;; the graph already produced -- so the state key is gone. The
          ;; single assemble above is still needed: :effect-inputs feeds it
          ;; to the compiler, which is what produces those diagnostics.
-         :document (cond
-                     (document/v4-document? wrapper-doc) (document/open-v4 raw)
-                     :else (throw (ex-info "node editor requires a V4 graph document" {:path path :schema (:schema wrapper-doc)})))
+         ;; One entry point for both kinds; document/open dispatches on the
+         ;; schema, because a skill is surface DSL and a VFX effect is still
+         ;; a graph.
+         :document (document/open raw)
          :selected-nid nil
          :param-drafts {}
          :palette-query ""

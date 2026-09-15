@@ -1,21 +1,16 @@
 {:schema :ac/skill-v4,
- :id :vec-deviation,
  :skill {:category :migrated, :level 1},
- :parameters
- {:activation-overload {:type :double},
-  :target-radius {:type :double},
-  :affected-entity-difficulty {:type :any},
-  :excluded-entity-ids {:type :any},
-  :excluded-tags {:type :any},
-  :large-fireball-ids {:type :any},
-  :small-fireball-ids {:type :any},
-  :fireball-explosion-radius {:type :double}},
- :state
- {:overload-floor {:type :double, :default 0.0},
-  :visited-projectiles {:type :any, :default nil}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.vecmanip.vec_deviation.desc",
  :name-key "ability.skill.vecmanip.vec_deviation",
  :cooldown nil,
+ :state
+ {:overload-floor {:type :double, :default 0.0},
+  :visited-projectiles {:type :any, :default nil}},
  :costs
  {:activate
   {:resources
@@ -27,57 +22,8 @@
     :overload {:ref [:input :tunables :normal-tick-overload]}}},
   :deflect {:resources {:cp {:ref [:input :tunables :deflect-cp]}}}},
  :mark-policies nil,
- :requires [:caster/body :world/id],
- :tunables
- {:tick-cp {:curve :mastery-lerp},
-  :normal-tick-cp {:curve :mastery-lerp},
-  :normal-tick-overload {:curve :mastery-lerp},
-  :target-radius {:curve :const},
-  :affected-entity-difficulty {:curve :const, :type :string-list},
-  :excluded-entity-ids {:curve :const, :type :string-list},
-  :excluded-tags {:curve :const, :type :string-list},
-  :large-fireball-ids {:curve :const, :type :string-list},
-  :small-fireball-ids {:curve :const, :type :string-list},
-  :deflect-cp {:curve :mastery-lerp},
-  :activation-overload {:curve :mastery-lerp},
-  :fireball-explosion-radius {:curve :const},
-  :damage-ignore-threshold {:curve :const},
-  :damage-reduction {:curve :mastery-lerp},
-  :damage-cp {:curve :mastery-lerp},
-  :exp-deflect-scale {:curve :const},
-  :exp-damage-scale {:curve :const}},
- :invariants {:overload-floor {:ref [:state :overload-floor]}},
- :damage-policies
- [{:on :combat/damage,
-   :priority 70,
-   :when
-   {:expr :bool/and,
-    :args
-    [{:ref [:input :context :enabled?]}
-     {:expr :math/gte, :args [{:ref [:input :request :base]} 0.0]}]},
-   :program
-   {:component :damage/reduce,
-    :rate {:ref [:input :tunables :damage-reduction]},
-    :max-cost {:ref [:input :tunables :damage-cp]},
-    :ignore-threshold
-    {:ref [:input :tunables :damage-ignore-threshold]},
-    :cost-resource :cp,
-    :progression-tag :damaged,
-    :progression-scale {:ref [:input :tunables :exp-damage-scale]},
-    :vfx
-    {:effect-id :audio-one-shot,
-     :sound-id "academy:vecmanip.vec_deviation",
-     :volume 0.5,
-     :pitch 1.0}}}],
- :progression
- {:deflect {:per-mark {:ref [:input :tunables :exp-deflect-scale]}},
-  :damaged {:per-mark {:ref [:input :tunables :exp-damage-scale]}}},
  :activation :toggle,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
+ :requires [:caster/body :world/id],
  :phases
  {:start
   [(let activate-budget ?budget/activate)
@@ -300,4 +246,58 @@
    (finish {:outcome :released, :end-ability? true})],
   :abort
   [^{:nid "n/n--entry--abort-0"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :vec-deviation,
+ :tunables
+ {:excluded-tags {:curve :const, :type :string-list},
+  :tick-cp {:curve :mastery-lerp},
+  :fireball-explosion-radius {:curve :const},
+  :normal-tick-overload {:curve :mastery-lerp},
+  :large-fireball-ids {:curve :const, :type :string-list},
+  :normal-tick-cp {:curve :mastery-lerp},
+  :damage-cp {:curve :mastery-lerp},
+  :deflect-cp {:curve :mastery-lerp},
+  :damage-ignore-threshold {:curve :const},
+  :activation-overload {:curve :mastery-lerp},
+  :exp-deflect-scale {:curve :const},
+  :target-radius {:curve :const},
+  :excluded-entity-ids {:curve :const, :type :string-list},
+  :small-fireball-ids {:curve :const, :type :string-list},
+  :damage-reduction {:curve :mastery-lerp},
+  :affected-entity-difficulty {:curve :const, :type :string-list},
+  :exp-damage-scale {:curve :const}},
+ :invariants {:overload-floor {:ref [:state :overload-floor]}},
+ :parameters
+ {:activation-overload {:type :double},
+  :target-radius {:type :double},
+  :affected-entity-difficulty {:type :any},
+  :excluded-entity-ids {:type :any},
+  :excluded-tags {:type :any},
+  :large-fireball-ids {:type :any},
+  :small-fireball-ids {:type :any},
+  :fireball-explosion-radius {:type :double}},
+ :damage-policies
+ [{:on :combat/damage,
+   :priority 70,
+   :when
+   {:expr :bool/and,
+    :args
+    [{:ref [:input :context :enabled?]}
+     {:expr :math/gte, :args [{:ref [:input :request :base]} 0.0]}]},
+   :program
+   {:component :damage/reduce,
+    :rate {:ref [:input :tunables :damage-reduction]},
+    :max-cost {:ref [:input :tunables :damage-cp]},
+    :ignore-threshold
+    {:ref [:input :tunables :damage-ignore-threshold]},
+    :cost-resource :cp,
+    :progression-tag :damaged,
+    :progression-scale {:ref [:input :tunables :exp-damage-scale]},
+    :vfx
+    {:effect-id :audio-one-shot,
+     :sound-id "academy:vecmanip.vec_deviation",
+     :volume 0.5,
+     :pitch 1.0}}}],
+ :progression
+ {:deflect {:per-mark {:ref [:input :tunables :exp-deflect-scale]}},
+  :damaged {:per-mark {:ref [:input :tunables :exp-damage-scale]}}}}

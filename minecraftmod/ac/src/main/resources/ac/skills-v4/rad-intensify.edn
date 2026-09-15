@@ -1,14 +1,14 @@
 {:schema :ac/skill-v4,
- :id :rad-intensify,
  :skill {:category :migrated, :level 1},
- :parameters
- {:damage-rate {:type :double},
-  :mark-duration-ticks {:type :long},
-  :mastery-denominator {:type :double}},
- :state {},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.meltdowner.rad_intensify.desc",
  :name-key "ability.skill.meltdowner.rad_intensify",
  :cooldown nil,
+ :state {},
  :costs nil,
  :mark-policies
  [{:mark-type :radiation,
@@ -26,12 +26,24 @@
      :count 3,
      :radius 0.35,
      :color [236 170 93 180]}}}],
+ :activation :passive,
  :requires [:world/id],
+ :phases
+ {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
+  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
+  :release
+  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
+  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]},
+ :id :rad-intensify,
  :tunables
  {:damage-rate {:curve :pair},
   :mark-duration-ticks {:curve :const, :type :int},
   :mastery-denominator {:curve :const}},
  :invariants nil,
+ :parameters
+ {:damage-rate {:type :double},
+  :mark-duration-ticks {:type :long},
+  :mastery-denominator {:type :double}},
  :damage-policies
  [{:on :combat/damage,
    :priority 100,
@@ -44,16 +56,4 @@
    :program
    {:component :damage/multiply,
     :multiplier {:ref [:input :context :mark :rate]}}}],
- :progression nil,
- :activation :passive,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :phases
- {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
-  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
-  :release
-  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
-  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]}}
+ :progression nil}

@@ -1,20 +1,13 @@
 {:schema :ac/skill-v4,
- :id :plasma-cannon,
  :skill {:category :migrated, :level 1},
- :parameters
- {:damage-radius {:type :double},
-  :sync-interval-ticks {:type :long},
-  :eye-height {:type :double},
-  :targeting-distance {:type :double},
-  :overload-keep {:type :double},
-  :max-flight-ticks {:type :long},
-  :destination-epsilon {:type :double},
-  :damage {:type :double},
-  :spawn-y-offset {:type :double},
-  :block-hit-extra-distance {:type :double},
-  :ground-search-distance {:type :double},
-  :charge-time {:type :long},
-  :explosion-radius {:type :double}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :description-key "ability.skill.vecmanip.plasma_cannon.desc",
+ :name-key "ability.skill.vecmanip.plasma_cannon",
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :state
  {:mode {:type :long, :default 0},
   :position {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}},
@@ -24,13 +17,11 @@
   :sync-ticks {:type :long, :default 0},
   :charged-cue-shown? {:type :boolean, :default false},
   :overload-floor {:type :double, :default 0.0}},
- :description-key "ability.skill.vecmanip.plasma_cannon.desc",
- :name-key "ability.skill.vecmanip.plasma_cannon",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :costs
  {:charging
   {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/eye
   :caster/body
@@ -39,31 +30,6 @@
   :caster/creative?
   :world/id
   :charge/ticks],
- :tunables
- {:charge-time {:curve :mastery-lerp, :type :int},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :overload-keep {:curve :mastery-lerp},
-  :targeting-distance {:curve :const},
-  :block-hit-extra-distance {:curve :const},
-  :max-flight-ticks {:curve :const, :type :int},
-  :damage {:curve :mastery-lerp},
-  :damage-radius {:curve :const},
-  :explosion-radius {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-use {:curve :const},
-  :eye-height {:curve :const},
-  :spawn-y-offset {:curve :const},
-  :destination-epsilon {:curve :const},
-  :sync-interval-ticks {:curve :const, :type :int},
-  :ground-search-distance {:curve :const}},
- :invariants nil,
- :progression {:fire {:per-mark {:ref [:input :tunables :exp-use]}}},
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let body ?caster/body)
@@ -506,4 +472,38 @@
      :instance-key [:activation :charge-audio],
      :payload {:fade-ticks 0}})
    ^{:nid "n/n--entry--abort-3"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :plasma-cannon,
+ :tunables
+ {:damage-radius {:curve :const},
+  :sync-interval-ticks {:curve :const, :type :int},
+  :eye-height {:curve :const},
+  :targeting-distance {:curve :const},
+  :overload-keep {:curve :mastery-lerp},
+  :max-flight-ticks {:curve :const, :type :int},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :destination-epsilon {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :exp-use {:curve :const},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :spawn-y-offset {:curve :const},
+  :block-hit-extra-distance {:curve :const},
+  :ground-search-distance {:curve :const},
+  :charge-time {:curve :mastery-lerp, :type :int},
+  :explosion-radius {:curve :mastery-lerp}},
+ :invariants nil,
+ :parameters
+ {:damage-radius {:type :double},
+  :sync-interval-ticks {:type :long},
+  :eye-height {:type :double},
+  :targeting-distance {:type :double},
+  :overload-keep {:type :double},
+  :max-flight-ticks {:type :long},
+  :destination-epsilon {:type :double},
+  :damage {:type :double},
+  :spawn-y-offset {:type :double},
+  :block-hit-extra-distance {:type :double},
+  :ground-search-distance {:type :double},
+  :charge-time {:type :long},
+  :explosion-radius {:type :double}},
+ :progression {:fire {:per-mark {:ref [:input :tunables :exp-use]}}}}

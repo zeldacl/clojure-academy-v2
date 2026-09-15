@@ -1,22 +1,17 @@
 {:schema :ac/skill-v4,
- :id :mine-detect,
  :skill {:category :migrated, :level 1},
- :parameters
- {:blindness-duration-ticks {:type :long},
-  :blindness-amplifier {:type :long},
-  :targeting-range {:type :double},
-  :cooldown-endpoints {:type :any},
-  :exp-cast {:type :double}},
- :state {},
+ :entry-triggers {:default :activation/start},
  :description-key "ability.skill.electromaster.mine_detect.desc",
  :name-key "ability.skill.electromaster.mine_detect",
  :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :state {},
  :costs
  {:activate
   {:resources
    {:cp {:ref [:input :tunables :cost-down-cp]},
     :overload {:ref [:input :tunables :cost-down-overload]}}}},
  :mark-policies nil,
+ :activation :instant,
  :requires
  [:caster/id
   :caster/eye
@@ -24,19 +19,6 @@
   :progression/mastery
   :progression/level
   :rng/seed],
- :tunables
- {:targeting-range {:curve :mastery-lerp},
-  :blindness-duration-ticks {:curve :const, :type :int},
-  :blindness-amplifier {:curve :const, :type :int},
-  :cost-down-cp {:curve :mastery-lerp},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :cooldown-endpoints {:curve :pair},
-  :exp-cast {:curve :const}},
- :invariants nil,
- :progression {:cast {:per-mark {:ref [:input :tunables :exp-cast]}}},
- :activation :instant,
- :entry-triggers {:default :activation/start},
  :phases
  {:default
   [(let owner-id ?caster/id)
@@ -109,4 +91,22 @@
      ^{:nid "n/n--entry--default-9-then-4"}
      (finish {:outcome :performed})]
     [^{:nid "n/n--entry--default-9-else-0"}
-     (finish {:outcome :insufficient-resource})])]}}
+     (finish {:outcome :insufficient-resource})])]},
+ :id :mine-detect,
+ :tunables
+ {:targeting-range {:curve :mastery-lerp},
+  :blindness-duration-ticks {:curve :const, :type :int},
+  :blindness-amplifier {:curve :const, :type :int},
+  :cost-down-cp {:curve :mastery-lerp},
+  :cost-down-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :cooldown-endpoints {:curve :pair},
+  :exp-cast {:curve :const}},
+ :invariants nil,
+ :parameters
+ {:blindness-duration-ticks {:type :long},
+  :blindness-amplifier {:type :long},
+  :targeting-range {:type :double},
+  :cooldown-endpoints {:type :any},
+  :exp-cast {:type :double}},
+ :progression {:cast {:per-mark {:ref [:input :tunables :exp-cast]}}}}

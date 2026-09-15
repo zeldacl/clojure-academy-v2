@@ -1,15 +1,29 @@
 {:schema :ac/skill-v4,
- :id :electromaster/brain-course,
  :skill {:category :electromaster, :level 1},
- :parameters {},
- :state {},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.generic.brain_course.desc",
  :passive-effects [{:target :max-cp, :operation :add, :value 1000.0}],
  :name-key "ability.skill.generic.brain_course",
  :cooldown nil,
+ :state {},
  :costs nil,
  :mark-policies nil,
+ :activation :passive,
+ :phases
+ {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
+  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
+  :release
+  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
+  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]},
+ :id :electromaster/brain-course,
  :invariants nil,
+ :presentation nil,
+ :parameters {},
+ :metadata {:category-id :electromaster},
  :translations
  {:en_us
   {:ability.skill.generic.brain_course "Brain Course",
@@ -35,18 +49,4 @@
   {:ability.skill.generic.brain_course "Мозговой курс",
    :ability.skill.generic.brain_course.desc
    "Пройти тренировку для вашего мозга. Увеличивает Макс. CP на 1000."}},
- :progression nil,
- :metadata {:category-id :electromaster},
- :presentation nil,
- :activation :passive,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :phases
- {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
-  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
-  :release
-  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
-  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]}}
+ :progression nil}

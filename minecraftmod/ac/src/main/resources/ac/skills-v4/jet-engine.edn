@@ -1,10 +1,13 @@
 {:schema :ac/skill-v4,
- :id :jet-engine,
  :skill {:category :migrated, :level 1},
- :parameters
- {:target-range {:type :double},
-  :hold-required-cp {:type :double},
-  :damage {:type :double}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :description-key "ability.skill.meltdowner.jet_engine.desc",
+ :name-key "ability.skill.meltdowner.jet_engine",
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :state
  {:phase {:type :keyword, :default :marking},
   :hold-ticks {:type :long, :default 0},
@@ -13,15 +16,13 @@
   :last-position {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}},
   :velocity {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}},
   :trigger-ticks {:type :long, :default 0}},
- :description-key "ability.skill.meltdowner.jet_engine.desc",
- :name-key "ability.skill.meltdowner.jet_engine",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :costs
  {:release
   {:resources
    {:cp {:ref [:input :tunables :release-cp]},
     :overload {:ref [:input :tunables :release-overload]}}}},
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/id
   :caster/body
@@ -31,23 +32,6 @@
   :world/id
   :progression/mastery
   :rng/seed],
- :tunables
- {:target-range {:curve :const},
-  :damage {:curve :mastery-lerp},
-  :hold-required-cp {:curve :mastery-lerp},
-  :release-cp {:curve :mastery-lerp},
-  :release-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :progression-exp-use {:curve :const}},
- :invariants nil,
- :progression
- {:use {:per-mark {:ref [:input :tunables :progression-exp-use]}}},
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -514,4 +498,20 @@
        :instance-key [:activation :jet-engine-mark],
        :payload {}})
      ^{:nid "n/n--entry--abort-1-else-1"}
-     (finish {:outcome :aborted, :end-ability? true})])]}}
+     (finish {:outcome :aborted, :end-ability? true})])]},
+ :id :jet-engine,
+ :tunables
+ {:target-range {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :hold-required-cp {:curve :mastery-lerp},
+  :release-cp {:curve :mastery-lerp},
+  :release-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :progression-exp-use {:curve :const}},
+ :invariants nil,
+ :parameters
+ {:target-range {:type :double},
+  :hold-required-cp {:type :double},
+  :damage {:type :double}},
+ :progression
+ {:use {:per-mark {:ref [:input :tunables :progression-exp-use]}}}}

@@ -1,34 +1,24 @@
 {:schema :ac/skill-v4,
- :id :current-charging,
  :skill {:category :migrated, :level 1},
- :parameters
- {:cost-down-overload {:type :double},
-  :visual-max-ticks {:type :long},
-  :targeting-range {:type :double},
-  :charge-amount {:type :double}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :cooldown nil,
  :state
  {:is-item {:type :boolean, :default nil},
   :charge-ticks {:type :long, :default 0},
   :style {:type :any, :default nil},
   :overload-floor {:type :double, :default 0.0}},
- :tunables
- {:visual-max-ticks {:curve :const, :type :int},
-  :targeting-range {:curve :const},
-  :charge-amount {:curve :mastery-lerp},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :exp-effective {:curve :const},
-  :exp-ineffective {:curve :const}},
  :costs
  {:activate
   {:resources
    {:overload {:ref [:input :tunables :cost-down-overload]}}},
   :charging
   {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :invariants nil,
- :progression
- {:effective {:per-mark {:ref [:input :tunables :exp-effective]}},
-  :ineffective {:per-mark {:ref [:input :tunables :exp-ineffective]}}},
+ :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/eye
   :caster/aim
@@ -37,14 +27,6 @@
   :world/id
   :charge/ticks
   :rng/seed],
- :cooldown nil,
- :mark-policies nil,
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -460,4 +442,22 @@
      :instance-key [:activation :current-charging-audio],
      :payload {:fade-ticks 0}})
    ^{:nid "n/n--entry--abort-2"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :current-charging,
+ :tunables
+ {:visual-max-ticks {:curve :const, :type :int},
+  :targeting-range {:curve :const},
+  :charge-amount {:curve :mastery-lerp},
+  :cost-down-overload {:curve :mastery-lerp},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :exp-effective {:curve :const},
+  :exp-ineffective {:curve :const}},
+ :invariants nil,
+ :parameters
+ {:cost-down-overload {:type :double},
+  :visual-max-ticks {:type :long},
+  :targeting-range {:type :double},
+  :charge-amount {:type :double}},
+ :progression
+ {:effective {:per-mark {:ref [:input :tunables :exp-effective]}},
+  :ineffective {:per-mark {:ref [:input :tunables :exp-ineffective]}}}}

@@ -1,40 +1,23 @@
 {:schema :ac/skill-v4,
- :id :ray-barrage,
  :skill {:category :migrated, :level 1},
- :parameters
- {:targeting-range {:type :double},
-  :scatter-cone-angle {:type :double},
-  :plain-damage {:type :double},
-  :scattered-damage {:type :double}},
- :state {},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.meltdowner.ray_barrage.desc",
  :name-key "ability.skill.meltdowner.ray_barrage",
  :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :state {},
  :costs
  {:fire
   {:resources
    {:cp {:ref [:input :tunables :cost-down-cp]},
     :overload {:ref [:input :tunables :cost-down-overload]}}}},
  :mark-policies nil,
+ :activation :instant,
  :requires
  [:caster/id :caster/body :caster/eye :caster/aim :world/id :rng/seed],
- :tunables
- {:plain-damage {:curve :mastery-lerp},
-  :scattered-damage {:curve :mastery-lerp},
-  :targeting-range {:curve :const},
-  :scatter-cone-angle {:curve :const},
-  :cost-down-cp {:curve :mastery-lerp},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-hit {:curve :const}},
- :invariants nil,
- :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}},
- :activation :instant,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let caster-id ?caster/id)
@@ -302,4 +285,21 @@
   [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :unsupported})],
   :release
   [^{:nid "n/n--entry--release-0"} (finish {:outcome :unsupported})],
-  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :aborted})]}}
+  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :aborted})]},
+ :id :ray-barrage,
+ :tunables
+ {:plain-damage {:curve :mastery-lerp},
+  :scattered-damage {:curve :mastery-lerp},
+  :targeting-range {:curve :const},
+  :scatter-cone-angle {:curve :const},
+  :cost-down-cp {:curve :mastery-lerp},
+  :cost-down-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-hit {:curve :const}},
+ :invariants nil,
+ :parameters
+ {:targeting-range {:type :double},
+  :scatter-cone-angle {:type :double},
+  :plain-damage {:type :double},
+  :scattered-damage {:type :double}},
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}}}

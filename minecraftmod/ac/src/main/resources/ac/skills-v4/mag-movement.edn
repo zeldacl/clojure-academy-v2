@@ -1,14 +1,13 @@
 {:schema :ac/skill-v4,
- :id :mag-movement,
  :skill {:category :migrated, :level 1},
- :parameters
- {:targeting-range {:type :double},
-  :weak-metal-exp-threshold {:type :double},
-  :cost-down-overload {:type :double},
-  :cost-tick-cp {:type :double},
-  :acceleration {:type :double},
-  :exp-min {:type :double},
-  :exp-distance-scale {:type :double}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :description-key "ability.skill.electromaster.mag_movement.desc",
+ :name-key "ability.skill.electromaster.mag_movement",
+ :cooldown nil,
  :state
  {:has-target {:type :boolean, :default false},
   :target-kind {:type :any, :default nil},
@@ -18,15 +17,13 @@
   :motion {:type :vec3, :default [0.0 0.0 0.0]},
   :movement-ticks {:type :long, :default 0},
   :overload-floor {:type :double, :default 0.0}},
- :description-key "ability.skill.electromaster.mag_movement.desc",
- :name-key "ability.skill.electromaster.mag_movement",
- :cooldown nil,
  :costs
  {:activate
   {:resources
    {:overload {:ref [:input :tunables :cost-down-overload]}}},
   :pulse {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/id
   :caster/body
@@ -36,22 +33,6 @@
   :world/id
   :progression/mastery
   :rng/seed],
- :tunables
- {:targeting-range {:curve :const},
-  :acceleration {:curve :const},
-  :weak-metal-exp-threshold {:curve :const},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :exp-min {:curve :const},
-  :exp-distance-scale {:curve :const}},
- :invariants nil,
- :progression nil,
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
  :phases
  {:start
   [(let creative? ?caster/creative?)
@@ -457,4 +438,23 @@
      :audience {:type :nearby, :radius 32.0},
      :payload {:fade-ticks 0}})
    ^{:nid "n/n--entry--abort-10"}
-   (finish {:outcome :aborted, :end-ability? true})]}}
+   (finish {:outcome :aborted, :end-ability? true})]},
+ :id :mag-movement,
+ :tunables
+ {:targeting-range {:curve :const},
+  :acceleration {:curve :const},
+  :weak-metal-exp-threshold {:curve :const},
+  :cost-down-overload {:curve :mastery-lerp},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :exp-min {:curve :const},
+  :exp-distance-scale {:curve :const}},
+ :invariants nil,
+ :parameters
+ {:targeting-range {:type :double},
+  :weak-metal-exp-threshold {:type :double},
+  :cost-down-overload {:type :double},
+  :cost-tick-cp {:type :double},
+  :acceleration {:type :double},
+  :exp-min {:type :double},
+  :exp-distance-scale {:type :double}},
+ :progression nil}

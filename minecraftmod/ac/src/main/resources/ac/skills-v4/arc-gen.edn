@@ -1,46 +1,18 @@
 {:schema :ac/skill-v4,
- :id :arc-gen,
  :skill {:category :migrated, :level 1},
- :parameters
- {:exp-entity {:type :double},
-  :fishing-exp-threshold {:type :double},
-  :ignite-probability {:type :double},
-  :creeper-charge-chance {:type :double},
-  :damage {:type :double},
-  :exp-block {:type :double},
-  :cooldown-endpoints {:type :any},
-  :max-distance {:type :double},
-  :fishing-probability {:type :double}},
- :state {},
+ :entry-triggers {:default :activation/start},
  :description-key "ability.skill.electromaster.arc_gen.desc",
  :name-key "ability.skill.electromaster.arc_gen",
  :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :state {},
  :costs
  {:activate
   {:resources
    {:cp {:ref [:input :tunables :cost-cp]},
     :overload {:ref [:input :tunables :cost-overload]}}}},
  :mark-policies nil,
- :requires [:caster/eye :caster/aim :world/id],
- :tunables
- {:damage {:curve :mastery-lerp},
-  :max-distance {:curve :mastery-lerp},
-  :ignite-probability {:curve :mastery-lerp},
-  :fishing-probability {:curve :const},
-  :fishing-exp-threshold {:curve :const},
-  :creeper-charge-chance {:curve :const},
-  :cost-cp {:curve :mastery-lerp},
-  :cost-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :cooldown-endpoints {:curve :pair},
-  :exp-entity {:curve :affine},
-  :exp-block {:curve :affine}},
- :invariants nil,
- :progression
- {:hit-entity {:per-mark {:ref [:input :tunables :exp-entity]}},
-  :hit-block {:per-mark {:ref [:input :tunables :exp-block]}}},
  :activation :instant,
- :entry-triggers {:default :activation/start},
+ :requires [:caster/eye :caster/aim :world/id],
  :phases
  {:default
   [(let eye ?caster/eye)
@@ -213,4 +185,32 @@
      ^{:nid "n/n--entry--default-7-then-4"}
      (finish {:outcome :performed})]
     [^{:nid "n/n--entry--default-7-else-0"}
-     (finish {:outcome :insufficient-resource})])]}}
+     (finish {:outcome :insufficient-resource})])]},
+ :id :arc-gen,
+ :tunables
+ {:exp-entity {:curve :affine},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :fishing-exp-threshold {:curve :const},
+  :cost-overload {:curve :mastery-lerp},
+  :ignite-probability {:curve :mastery-lerp},
+  :cost-cp {:curve :mastery-lerp},
+  :creeper-charge-chance {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :exp-block {:curve :affine},
+  :cooldown-endpoints {:curve :pair},
+  :max-distance {:curve :mastery-lerp},
+  :fishing-probability {:curve :const}},
+ :invariants nil,
+ :parameters
+ {:exp-entity {:type :double},
+  :fishing-exp-threshold {:type :double},
+  :ignite-probability {:type :double},
+  :creeper-charge-chance {:type :double},
+  :damage {:type :double},
+  :exp-block {:type :double},
+  :cooldown-endpoints {:type :any},
+  :max-distance {:type :double},
+  :fishing-probability {:type :double}},
+ :progression
+ {:hit-entity {:per-mark {:ref [:input :tunables :exp-entity]}},
+  :hit-block {:per-mark {:ref [:input :tunables :exp-block]}}}}

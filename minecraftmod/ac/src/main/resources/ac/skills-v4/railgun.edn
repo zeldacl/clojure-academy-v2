@@ -1,39 +1,26 @@
 {:schema :ac/skill-v4,
- :id :railgun,
  :skill {:category :migrated, :level 1},
- :parameters
- {:cost-down-cp {:type :double},
-  :beam-radius {:type :double},
-  :beam-visual-distance {:type :double},
-  :reflection-damage {:type :double},
-  :qte-perform-threshold {:type :double},
-  :cost-tick-overload {:type :double},
-  :beam-query-radius {:type :double},
-  :exp-hit {:type :double},
-  :qte-active-threshold {:type :double},
-  :beam-damage {:type :double},
-  :max-distance {:type :double},
-  :beam-block-energy {:type :double},
-  :exp-reflection-hit {:type :double},
-  :cost-tick-cp {:type :double},
-  :item-charge-ticks {:type :long},
-  :beam-step {:type :double},
-  :reflection-distance {:type :double},
-  :cost-down-overload {:type :double}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort,
+  :coin-thrown :phase/coin-thrown},
+ :description-key "ability.skill.electromaster.railgun.desc",
+ :external-triggers
+ [{:source :item/use,
+   :filter {:item-ids ["ac:coin" "academy:coin"]},
+   :dispatch {:ability :railgun, :event :coin-thrown}}],
+ :name-key "ability.skill.electromaster.railgun",
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :state
  {:mode {:type :keyword, :default :armed},
   :hold-ticks {:type :long, :default 0},
   :fire-mode {:type :keyword, :default nil},
   :coin-id {:type :any, :default nil}},
- :description-key "ability.skill.electromaster.railgun.desc",
- :name-key "ability.skill.electromaster.railgun",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
  :costs nil,
- :external-triggers
- [{:source :item/use,
-   :filter {:item-ids ["ac:coin" "academy:coin"]},
-   :dispatch {:ability :railgun, :event :coin-thrown}}],
  :mark-policies nil,
+ :activation :session,
  :requires
  [:caster/eye
   :caster/aim
@@ -42,42 +29,6 @@
   :caster/creative?
   :progression/mastery
   :rng/seed],
- :tunables
- {:beam-damage {:curve :mastery-lerp},
-  :beam-radius {:curve :const},
-  :beam-query-radius {:curve :const},
-  :beam-step {:curve :const},
-  :beam-block-energy {:curve :mastery-lerp},
-  :beam-visual-distance {:curve :const},
-  :max-distance {:curve :const},
-  :qte-active-threshold {:curve :const},
-  :qte-perform-threshold {:curve :const},
-  :item-charge-ticks {:curve :const, :type :int},
-  :reflection-distance {:curve :const},
-  :reflection-damage {:curve :const},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-hit {:curve :const},
-  :exp-reflection-hit {:curve :const},
-  :cost-down-cp {:curve :mastery-lerp},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :cost-tick-overload {:curve :mastery-lerp}},
- :invariants nil,
- :progression
- {:hit
-  {:per-mark
-   {:expr :math/select,
-    :args
-    [{:ref [:state :reflection-hit?]}
-     {:ref [:input :tunables :exp-reflection-hit]}
-     {:ref [:input :tunables :exp-hit]}]}}},
- :activation :session,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort,
-  :coin-thrown :phase/coin-thrown},
  :phases
  {:start
   [(let owner-id ?caster/id)
@@ -484,4 +435,53 @@
       [^{:nid "n/n--entry--coin-thrown-1-then-3-empty"}
        (finish {:outcome :ignored})])]
     [^{:nid "n/n--entry--coin-thrown-1-else-0"}
-     (finish {:outcome :ignored})])]}}
+     (finish {:outcome :ignored})])]},
+ :id :railgun,
+ :tunables
+ {:cost-down-cp {:curve :mastery-lerp},
+  :beam-radius {:curve :const},
+  :beam-visual-distance {:curve :const},
+  :reflection-damage {:curve :const},
+  :qte-perform-threshold {:curve :const},
+  :cost-tick-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :beam-query-radius {:curve :const},
+  :exp-hit {:curve :const},
+  :qte-active-threshold {:curve :const},
+  :beam-damage {:curve :mastery-lerp},
+  :max-distance {:curve :const},
+  :beam-block-energy {:curve :mastery-lerp},
+  :exp-reflection-hit {:curve :const},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :item-charge-ticks {:curve :const, :type :int},
+  :beam-step {:curve :const},
+  :reflection-distance {:curve :const},
+  :cost-down-overload {:curve :mastery-lerp}},
+ :invariants nil,
+ :parameters
+ {:cost-down-cp {:type :double},
+  :beam-radius {:type :double},
+  :beam-visual-distance {:type :double},
+  :reflection-damage {:type :double},
+  :qte-perform-threshold {:type :double},
+  :cost-tick-overload {:type :double},
+  :beam-query-radius {:type :double},
+  :exp-hit {:type :double},
+  :qte-active-threshold {:type :double},
+  :beam-damage {:type :double},
+  :max-distance {:type :double},
+  :beam-block-energy {:type :double},
+  :exp-reflection-hit {:type :double},
+  :cost-tick-cp {:type :double},
+  :item-charge-ticks {:type :long},
+  :beam-step {:type :double},
+  :reflection-distance {:type :double},
+  :cost-down-overload {:type :double}},
+ :progression
+ {:hit
+  {:per-mark
+   {:expr :math/select,
+    :args
+    [{:ref [:state :reflection-hit?]}
+     {:ref [:input :tunables :exp-reflection-hit]}
+     {:ref [:input :tunables :exp-hit]}]}}}}

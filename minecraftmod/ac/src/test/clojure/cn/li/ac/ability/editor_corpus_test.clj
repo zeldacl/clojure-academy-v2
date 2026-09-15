@@ -31,6 +31,7 @@
             [clojure.walk :as walk]
             [cn.li.node.api :as node-api]
             [cn.li.ability.editor.graph :as graph]
+            [cn.li.ability.editor.document :as editor-doc]
             [cn.li.ac.ability.skills-catalog-v4 :as catalog]))
 
 (defn- skill-docs []
@@ -99,3 +100,36 @@
     (is (= from-catalog from-disk))
     (is (= (nids from-catalog) (nids from-disk))
         "the ^{:nid} stamps must survive the catalog's own read")))
+
+(deftest opening-and-saving-a-skill-unchanged-leaves-it-unchanged-test
+  ;; The editor's actual contract, and the one the corpus round-trip above
+  ;; does not cover: open a shipped file, save it without editing, and the
+  ;; result must be the same skill.
+  ;;
+  ;; Asserted at two strengths, because they fail for different reasons.
+  ;; DOCUMENT equality is correctness -- anything else means saving mutates
+  ;; content. TEXT equality is reviewability: if a no-op save rewrites the
+  ;; bytes, every real edit arrives as a whole-file diff and the move to a
+  ;; readable format bought nothing.
+  (let [paths (for [r ["ac/skills-v4/vec-deviation.edn"
+                       "ac/skills-v4/mark-teleport.edn"
+                       "ac/skills-v4/mag-manip.edn"
+                       "ac/skills-v4/railgun.edn"]]
+                [r (slurp (io/resource r))])
+        results (for [[r text] paths]
+                  (let [saved (:file-text (editor-doc/save (editor-doc/open text) nil))]
+                    {:resource r
+                     :doc-equal? (= (node-api/read-surface-document text)
+                                    (node-api/read-surface-document saved))
+                     :nids-equal? (= (nids (node-api/read-surface-document text))
+                                     (nids (node-api/read-surface-document saved)))
+                     :text-equal? (= text saved)}))]
+    (doseq [{:keys [resource doc-equal? nids-equal? text-equal?]} results]
+      (println (format "  %-38s doc=%s nids=%s text=%s"
+                       resource doc-equal? nids-equal? text-equal?)))
+    (is (every? :doc-equal? results)
+        "a no-op save changed the skill")
+    (is (every? :nids-equal? results)
+        "a no-op save lost node ids -- diagnostics and jump-to-node point at them")
+    (is (every? :text-equal? results)
+        "a no-op save rewrote the file, so every edit will diff as a whole file")))

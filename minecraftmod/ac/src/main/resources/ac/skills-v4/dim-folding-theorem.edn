@@ -1,19 +1,32 @@
 {:schema :ac/skill-v4,
- :id :dim-folding-theorem,
  :skill {:category :migrated, :level 1},
- :parameters
- {:damage-multipliers {:type :any},
-  :level0-probability {:type :double},
-  :exp-per-crit-level {:type :double}},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :cooldown nil,
  :state {},
+ :costs nil,
+ :mark-policies nil,
+ :activation :passive,
+ :requires [:world/id :rng/seed],
+ :phases
+ {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
+  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
+  :release
+  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
+  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]},
+ :id :dim-folding-theorem,
  :tunables
  {:damage-multipliers {:curve :pair},
   :level0-probability {:curve :mastery-lerp},
   :exp-per-crit-level {:curve :const}},
- :costs nil,
  :invariants nil,
- :progression nil,
- :requires [:world/id :rng/seed],
+ :parameters
+ {:damage-multipliers {:type :any},
+  :level0-probability {:type :double},
+  :exp-per-crit-level {:type :double}},
  :damage-policies
  [{:on :combat/damage,
    :priority 200,
@@ -56,17 +69,4 @@
     :events
     [{:type :achievement/trigger,
       :payload {:id "teleporter.critical_attack"}}]}}],
- :cooldown nil,
- :mark-policies nil,
- :activation :passive,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :phases
- {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
-  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
-  :release
-  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
-  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]}}
+ :progression nil}

@@ -1,16 +1,33 @@
 {:schema :ac/skill-v4,
- :id :meltdowner/mind-course,
  :skill {:category :meltdowner, :level 1},
- :parameters {},
- :state {},
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
  :description-key "ability.skill.generic.mind_course.desc",
  :passive-effects
  [{:target :cp-recovery-speed, :operation :multiply, :value 1.2}],
  :name-key "ability.skill.generic.mind_course",
  :cooldown nil,
+ :state {},
  :costs nil,
  :mark-policies nil,
+ :activation :passive,
+ :phases
+ {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
+  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
+  :release
+  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
+  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]},
+ :id :meltdowner/mind-course,
  :invariants nil,
+ :presentation nil,
+ :parameters {},
+ :metadata
+ {:category-id :meltdowner,
+  :prerequisites
+  [{:skill-id :meltdowner/brain-course-advanced, :min-exp 0.0}]},
  :translations
  {:en_us
   {:ability.skill.generic.mind_course "Mind Course",
@@ -36,21 +53,4 @@
   {:ability.skill.generic.mind_course "Курс разума",
    :ability.skill.generic.mind_course.desc
    "Узнайте, как лучше расслабить свой мозг. Ускоряет восстановление CP на 20%."}},
- :progression nil,
- :metadata
- {:category-id :meltdowner,
-  :prerequisites
-  [{:skill-id :meltdowner/brain-course-advanced, :min-exp 0.0}]},
- :presentation nil,
- :activation :passive,
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :phases
- {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
-  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
-  :release
-  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
-  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]}}
+ :progression nil}
