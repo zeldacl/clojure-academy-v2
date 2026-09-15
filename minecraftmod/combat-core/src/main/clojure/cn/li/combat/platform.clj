@@ -539,10 +539,10 @@
 
    Bridges disagree about how to spell it -- block traces expose
    :hit-x/:hit-y/:hit-z, entity traces :x/:y/:z, some hand back a ready
-   :position map -- and this is the single place that knows that. It used
-   to be known in two: basic-raycast's normalizer spelled it out, and the
-   block-vs-entity comparison right above trusted a :distance the bridge
-   may not have set, defending with POSITIVE_INFINITY when it had not.
+   :position map -- and this is the single place that knows that. It is
+   lifted out of basic-raycast's own normalizer, which spelled it inline,
+   so that the normalizer can derive a distance from the same point it
+   reports as :position rather than from a second reading of the result.
 
    `endpoint` is what a result that names no point means: the ray reached
    its full length without hitting anything, so its point is where it
@@ -584,14 +584,16 @@
                 (cond
                   (nil? block-hit) entity-hit
                   (nil? entity-hit) block-hit
-                  ;; Nearer wins, measured from the two hits' own points
-                  ;; rather than from a :distance the bridge may never have
-                  ;; set. The old form read that key and fell back to
-                  ;; POSITIVE_INFINITY, which silently ranked an unlabelled
-                  ;; hit as infinitely far -- so whichever bridge omitted
-                  ;; :distance always lost the comparison.
-                  (<= (point-distance ray-origin (raycast-hit-point block-hit endpoint))
-                      (point-distance ray-origin (raycast-hit-point entity-hit endpoint)))
+                  ;; The pre-V4 engine's own form, kept deliberately: it
+                  ;; picked the nearer hit with (or (:distance x) INFINITY),
+                  ;; treating a bridge that reports no :distance as
+                  ;; infinitely far. Computing the distance
+                  ;; from each hit's point instead would be defensible and
+                  ;; is NOT what ships -- whether an unlabelled hit should
+                  ;; lose is a gameplay question this module cannot settle
+                  ;; without running the game.
+                  (<= (double (or (:distance block-hit) Double/POSITIVE_INFINITY))
+                      (double (or (:distance entity-hit) Double/POSITIVE_INFINITY)))
                   block-hit
                   :else entity-hit))
               (not= false include-entities?)
@@ -621,13 +623,21 @@
                            (update position :y + target-height)
                            position)]
         (assoc result :position position
-               ;; Computed here, never taken from the bridge. It is the
-               ;; one neutral field this normalizer used to leave out, and
-               ;; leaving it out is what made (:distance hit) a read that
-               ;; could return nil -- the miss branch above sets no
-               ;; :distance at all, so four reads of it in shipped content
-               ;; were one missed shot away from throwing.
-               :distance (point-distance ray-origin hit-point)
+               ;; The bridge's own :distance wins when it reported one.
+               ;; The pre-V4 engine read exactly that key off a raw raycast
+               ;; result at four call sites, so overwriting it would change
+               ;; the shipped value.
+               ;;
+               ;; What this adds is the case that engine left undefined.
+               ;; All four of those sites guard the read with `number?` or
+               ;; `or ... INFINITY`, because a miss carries no :distance --
+               ;; the miss branch above builds four keys and none is it. So
+               ;; the key could be absent, and V4 content reads it without a
+               ;; guard. Filled with the true ray geometry (for a miss, the
+               ;; full length it travelled), matching what the resolved-
+               ;; destination path already reports for the same situation.
+               :distance (double (or (:distance result)
+                                     (point-distance ray-origin hit-point)))
                :block-position block-position
                :water? (boolean (and (= :block (:hit-type result))
                                      (= "minecraft:water" block-id)))
