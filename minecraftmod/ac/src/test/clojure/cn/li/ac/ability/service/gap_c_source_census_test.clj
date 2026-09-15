@@ -41,6 +41,7 @@
 (def ^:private compile-ns (do (require 'cn.li.node.compile) 'cn.li.node.compile))
 (def ^:private alloc-reg!-var (ns-resolve compile-ns 'alloc-reg!))
 (def ^:private coerce!-var (ns-resolve compile-ns 'coerce!))
+(def ^:private compile-field-access-var (ns-resolve compile-ns 'compile-field-access))
 
 (defn- demunge-frame
   "A Clojure fn's generated class name -> the source fn name.
@@ -110,3 +111,48 @@
         (println (format "  %6d  %-24s -> %s" n c (pr-str t))))
       (println)
       (is (map? @reaching)))))
+
+(deftest gap-c-untyped-field-read-worklist
+  "The work order for the field-schema phase: which (source type, field)
+   pairs still read as :any.
+
+   G0.2 says field reads are 73% of the problem but not WHICH fields, and a
+   schema entry needs both halves -- :position is :vec3 on a :hit-result
+   and something else on a type that happens to share the name.
+
+   Recovered from the compiler's own output rather than guessed: after
+   compile-field-access runs it has appended a :get instruction whose :src
+   is the register the source expression produced, so the source type is
+   whatever :reg-types recorded for it. No re-compilation, no inference
+   duplicated here."
+  (let [pairs (atom {})
+        orig @compile-field-access-var]
+    (with-redefs-fn
+      {compile-field-access-var
+       (fn [env locals block-id depth form k sub-form]
+         (let [result (orig env locals block-id depth form k sub-form)
+               instrs (some-> (get @(:block-registry env) (:block-id result)) deref)
+               get-instr (last (filter #(= :get (:op %)) instrs))
+               types* @(:reg-types env)
+               src-type (get types* (:src get-instr))
+               dst-type (get types* (:dst get-instr))]
+           (when (and get-instr (= :any (types/canonical-type dst-type)))
+             (swap! pairs update [src-type k] (fnil inc 0)))
+           result))}
+      #(skills-catalog/assemble {:mode :collect}))
+
+    (let [total (reduce + 0 (vals @pairs))
+          by-src (reduce (fn [acc [[s _] n]] (update acc s (fnil + 0) n)) {} @pairs)]
+      (println)
+      (println "=== gap-C: field reads still producing :any ===")
+      (println "total:" total)
+      (println)
+      (println "by SOURCE type -- a type with many is one missing schema entry:")
+      (doseq [[s n] (sort-by (comp - val) by-src)]
+        (println (format "  %6d  %s" n (pr-str s))))
+      (println)
+      (println "top (source type, field) pairs -- this is the worklist:")
+      (doseq [[[s k] n] (take 30 (sort-by (comp - val) @pairs))]
+        (println (format "  %5d  %-20s %s" n (pr-str s) (pr-str k))))
+      (println)
+      (is (map? @pairs)))))
