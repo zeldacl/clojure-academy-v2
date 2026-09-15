@@ -118,6 +118,10 @@
     :target-box {:operation :draw-batch :stage :world-after-translucent :primitive :line
                  :geometry {:kind :target-box :center (:center op) :width (:width op) :height (:height op)}
                  :material {:color (:color op)}}
+    :teleport-marker {:operation :draw-batch :stage :world-translucent :primitive :quad
+                      :geometry {:kind :teleport-marker :position (:position op)
+                                 :direction (:direction op) :age (:age op)}
+                      :material {:color (:color op)}}
     :beam {:operation :draw-batch :stage :world-after-translucent :primitive :quad
            :geometry {:kind :beam :start (:start op) :end (:end op)
                       :grow-ticks (:grow-ticks op)}
@@ -164,7 +168,7 @@
                      :alpha (double (or (:alpha op) 1.0))}}
     :emitter {:operation :draw-batch :stage :world-translucent :primitive :quad
               :geometry {:kind :emitter :anchor (:anchor op) :rate-per-tick (:rate-per-tick op)
-                        :limit (:limit op) :age (:age op) :particle (:particle op)
+                        :limit (:limit op) :chance (:chance op) :age (:age op) :particle (:particle op) :anchor-offset-y (:anchor-offset-y op)
                         :hand-origin? (boolean (:hand-origin? op))
                         :source-player-id (:source-player-id op)}
               :material {:particle (:particle op)}}

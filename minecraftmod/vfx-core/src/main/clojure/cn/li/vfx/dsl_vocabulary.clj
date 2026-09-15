@@ -32,7 +32,7 @@
 ;; shape), so a per-id table here is both simpler and more precise than
 ;; deriving from a namespace that does not exist.
 (def ^:private category-by-id
-  {:ring :geometry :vortex-column :geometry :plasma-body :geometry :target-box :geometry :beam :geometry :ray-beam :geometry :ray-fan :geometry :line :geometry
+  {:ring :geometry :vortex-column :geometry :plasma-body :geometry :teleport-marker :geometry :target-box :geometry :beam :geometry :ray-beam :geometry :ray-fan :geometry :line :geometry
    :quad :geometry :arc :geometry :surround-arc :geometry :emitter :geometry
    :particle-trail :geometry
    :trajectory :geometry
@@ -75,6 +75,12 @@
    :plasma-body
    (node {:center (p* :vec3) :alpha (p* :double)
           :age (opt :double 0.0) :seed (opt :long 0)})
+   ;; Main teleport skills render a 7-frame textured biped marker.  The
+   ;; neutral renderer owns the model geometry; the graph supplies only its
+   ;; authoritative anchor, tint, facing and age.
+   :teleport-marker
+   (node {:position (p* :vec3) :direction (opt :vec3 [0.0 0.0 1.0])
+          :color (p* :any) :age (opt :double 0.0)})
    :target-box
    (node {:center (p* :vec3) :width (p* :double) :height (p* :double)
           :color (opt :any nil)})
@@ -145,7 +151,7 @@
    ;; since none of them do per-particle server/headless simulation).
    :emitter
    (node {:anchor (p* :vec3) :rate-per-tick (opt :double nil) :limit (opt :long nil)
-         :chance (opt :double nil) :particle (opt :any nil)
+         :chance (opt :double nil) :anchor-offset-y (opt :double 0.0) :particle (opt :any nil)
          :hand-origin? (opt :boolean false) :source-player-id (opt :any nil)})
    ;; Main shift-teleport uses a bounded burst of camera-facing particles
    ;; distributed along a segment. Keeping all inputs explicit lets V4 reject

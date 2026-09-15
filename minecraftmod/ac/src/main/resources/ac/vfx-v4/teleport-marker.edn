@@ -4,12 +4,19 @@
  :inputs
  {:owner {:type :entity-ref},
   :position {:type :vec3},
+  :direction {:type :vec3, :default [0.0 0.0 1.0]},
   :color {:type :any},
   :particle-chance {:type :float}},
  :graphs
  {:render
   {:nodes
    #:n{:start {:type :start, :nid :n/start},
+       :n--entry--marker
+       {:type :component, :component :teleport-marker, :nid :n/n--entry--marker},
+       :n001 {:type :context-ref, :key :position, :nid :n/n001},
+       :n002 {:type :context-ref, :key :color, :nid :n/n002},
+       :n003 {:type :context-ref, :key :direction, :nid :n/n003},
+       :n004 {:type :context-ref, :key :age, :nid :n/n004},
        :n--entry--default-0
        {:type :component,
         :component :emitter,
@@ -17,11 +24,11 @@
         :inputs
         {:rate-per-tick 1.0,
          :limit 256,
+         :anchor-offset-y 1.62,
          :particle
-         {:life-ticks 12,
-          :color
-          {:nid :n/n--entry--default-0--1ed94c68,
-           :ref [:context :color]},
+         {:life-ticks 20,
+          :texture "academy:textures/effects/tp_particle.png",
+          :color [0 255 0 255],
           :spread {:x 1.0, :y 1.4, :z 1.0},
           :speed 0.08,
           :fade-in-ticks 5,
@@ -30,27 +37,46 @@
           :alpha {:min 153, :max 204},
           :fade-out-ticks 20,
           :velocity {:x 0.03, :y 0.05, :z 0.03}}}},
-       :n001 {:type :context-ref, :key :position, :nid :n/n001},
-       :n002 {:type :context-ref, :key :particle-chance, :nid :n/n002},
+       :n005 {:type :context-ref, :key :particle-chance, :nid :n/n005},
        :n--entry--default-1
        {:type :end,
         :result {},
         :nid :n/n--entry--default-1,
         :inputs {:outcome :performed}}},
    :links
-   [{:id :e/link001,
+   [{:id :e/marker-position,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--marker :position]}
+    {:id :e/marker-color,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--marker :color]}
+    {:id :e/marker-direction,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n--entry--marker :direction]}
+    {:id :e/marker-age,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n--entry--marker :age]}
+    {:id :e/emitter-position,
      :kind :data,
      :from [:n/n001 :value],
      :to [:n/n--entry--default-0 :anchor]}
-    {:id :e/link002,
+    {:id :e/emitter-chance,
      :kind :data,
-     :from [:n/n002 :value],
+     :from [:n/n005 :value],
      :to [:n/n--entry--default-0 :chance]}
-    {:id :e/link003,
-     :kind :exec,
-     :from [:n/n--entry--default-0 :out],
-     :to [:n/n--entry--default-1 :in]}
-    {:id :e/link004,
+    {:id :e/marker-start,
      :kind :exec,
      :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+     :to [:n/n--entry--marker :in]}
+    {:id :e/marker-emitter,
+     :kind :exec,
+     :from [:n/n--entry--marker :out],
+     :to [:n/n--entry--default-0 :in]}
+    {:id :e/emitter-end,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :out],
+     :to [:n/n--entry--default-1 :in]}]}}}

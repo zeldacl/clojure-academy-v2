@@ -580,7 +580,13 @@
     (v3-from anchor)))
 
 (defn- marker-quad [anchor color particle geometry view-ctx]
-  (let [center (hand-origin-center anchor geometry view-ctx)
+  (let [chance (number-or (:chance geometry) 1.0)
+        seed (long (hash [anchor (:age geometry)]))
+        spawn? (or (>= chance 1.0)
+                   (and (pos? chance)
+                        (< (.nextDouble (java.util.Random. seed)) chance)))
+        center (hand-origin-center anchor geometry view-ctx)
+        center (V3/add center (V3. 0.0 (number-or (:anchor-offset-y geometry) 0.0) 0.0))
         half (max 0.001 (number-or (or (:size particle) (:scale particle)) 0.08))
         texture (animated-texture particle)
         [right up] (view-basis view-ctx)
@@ -590,11 +596,99 @@
         p1 (V3/add (V3/sub center side) lift)
         p2 (V3/add (V3/add center side) lift)
         p3 (V3/sub (V3/add center side) lift)]
-    [{:kind :quad
-      :p0 p0 :p1 p1 :p2 p2 :p3 p3
-      :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
-      :texture texture :color color}]))
+    (if spawn?
+      [{:kind :quad
+        :p0 p0 :p1 p1 :p2 p2 :p3 p3
+        :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+        :texture texture :color color}]
+      [])))
 
+(def ^:private teleport-marker-frame-count 7)
+(def ^:private teleport-marker-texture-prefix
+  "academy:textures/effects/tp_mark/")
+(def ^:private teleport-marker-eye-height 1.62)
+
+;; The main branch renders EntityTPMarking as a seven-frame, textured biped.
+;; Keep its geometry in the neutral adapter so all Minecraft versions consume
+;; the same frame ABI; only the final render type remains platform-specific.
+(def ^:private teleport-marker-parts
+  [{:hw 0.25 :hh 0.25 :hd 0.25 :cx 0.0 :cy 0.25
+    :front [0.125 0.25 0.25 0.5] :back [0.375 0.5 0.25 0.5]
+    :right [0.0 0.125 0.25 0.5] :left [0.25 0.375 0.25 0.5]
+    :top [0.125 0.25 0.0 0.25] :bottom [0.25 0.375 0.0 0.25]}
+   {:hw 0.28125 :hh 0.28125 :hd 0.28125 :cx 0.0 :cy 0.25
+    :front [0.625 0.75 0.25 0.5] :back [0.875 1.0 0.25 0.5]
+    :right [0.5 0.625 0.25 0.5] :left [0.75 0.875 0.25 0.5]
+    :top [0.625 0.75 0.0 0.25] :bottom [0.75 0.875 0.0 0.25]}
+   {:hw 0.25 :hh 0.375 :hd 0.125 :cx 0.0 :cy -0.375
+    :front [0.3125 0.4375 0.5 0.875] :back [0.5 0.625 0.5 0.875]
+    :right [0.25 0.3125 0.5 0.875] :left [0.4375 0.5 0.5 0.875]
+    :top [0.3125 0.4375 0.5 0.625] :bottom [0.3125 0.4375 0.75 0.875]}
+   {:hw 0.125 :hh 0.375 :hd 0.125 :cx 0.375 :cy -0.375
+    :front [0.6875 0.75 0.5 0.875] :back [0.75 0.8125 0.5 0.875]
+    :right [0.625 0.6875 0.5 0.875] :left [0.8125 0.875 0.5 0.875]
+    :top [0.6875 0.75 0.5 0.625] :bottom [0.6875 0.75 0.75 0.875]}
+   {:hw 0.125 :hh 0.375 :hd 0.125 :cx -0.375 :cy -0.375
+    :front [0.5625 0.625 0.5 0.875] :back [0.5 0.5625 0.5 0.875]
+    :right [0.5 0.5625 0.5 0.875] :left [0.5625 0.625 0.5 0.875]
+    :top [0.5625 0.625 0.5 0.625] :bottom [0.5625 0.625 0.75 0.875]}
+   {:hw 0.125 :hh 0.375 :hd 0.125 :cx 0.125 :cy -1.125
+    :front [0.0625 0.125 0.5 0.875] :back [0.0 0.0625 0.5 0.875]
+    :right [0.0 0.0625 0.5 0.875] :left [0.0625 0.125 0.5 0.875]
+    :top [0.0625 0.125 0.5 0.625] :bottom [0.0625 0.125 0.75 0.875]}
+   {:hw 0.125 :hh 0.375 :hd 0.125 :cx -0.125 :cy -1.125
+    :front [0.1875 0.25 0.5 0.875] :back [0.125 0.1875 0.5 0.875]
+    :right [0.125 0.1875 0.5 0.875] :left [0.1875 0.25 0.5 0.875]
+    :top [0.1875 0.25 0.5 0.625] :bottom [0.1875 0.25 0.75 0.875]}])
+
+(defn- teleport-marker-face-quads [texture center part f r u color]
+  (let [{:keys [hw hh hd front back right left top bottom]} part
+        qf (fn [normal normal-half tangent-a tangent-a-half tangent-b tangent-b-half uv]
+             (let [face-center (V3/add center (V3/scale normal normal-half))
+                   side-a (V3/scale tangent-a tangent-a-half)
+                   side-b (V3/scale tangent-b tangent-b-half)]
+               {:kind :quad
+                :p0 (V3/add (V3/sub face-center side-a) side-b)
+                :p1 (V3/sub (V3/sub face-center side-a) side-b)
+                :p2 (V3/sub (V3/add face-center side-a) side-b)
+                :p3 (V3/add (V3/add face-center side-a) side-b)
+                :u0 (nth uv 0) :u1 (nth uv 1)
+                :v0 (nth uv 2) :v1 (nth uv 3)
+                :texture texture :color color :no-depth-test? true}))]
+    [(qf f hd r hw u hh front)
+     (qf (V3/scale f -1.0) hd r hw u hh back)
+     (qf r hw f hd u hh right)
+     (qf (V3/scale r -1.0) hw f hd u hh left)
+     (qf u hh r hw f hd top)
+     (qf (V3/scale u -1.0) hh r hw f hd bottom)]))
+
+(defn- teleport-marker-ops [geometry material]
+  (let [position (v3-from (:position geometry))
+        direction (v3-from (:direction geometry))
+        dx (.-x direction)
+        dz (.-z direction)
+        horizontal (Math/sqrt (+ (* dx dx) (* dz dz)))
+        [look-x look-z] (if (> horizontal 1.0e-8)
+                          [(/ dx horizontal) (/ dz horizontal)]
+                          [0.0 1.0])
+        ;; Main's MarkRender faces the marker back toward the caster.
+        forward (V3. (- look-x) 0.0 (- look-z))
+        right (V3. (.-z forward) 0.0 (- (.-x forward)))
+        up (V3. 0.0 1.0 0.0)
+        anchor (V3. (.-x position)
+                    (+ (.-y position) teleport-marker-eye-height)
+                    (.-z position))
+        age (number-or (:age geometry) 0.0)
+        frame (mod (long (Math/floor (/ age 2.5))) teleport-marker-frame-count)
+        texture (str teleport-marker-texture-prefix frame ".png")
+        color (or (material-color material) default-color)]
+    (vec (mapcat (fn [part]
+                   (let [center (V3. (+ (.-x anchor) (number-or (:cx part) 0.0))
+                                     (+ (.-y anchor) (number-or (:cy part) 0.0))
+                                     (.-z anchor))]
+                     (teleport-marker-face-quads texture center part
+                                                  forward right up color)))
+                 teleport-marker-parts))))
 (defn- first-field [fields keys]
   (some (fn [key]
           (let [value (get fields key)]
@@ -858,6 +952,7 @@
                            :arc (arc-geometry/arc-quad-ops geometry material color)
                            :vortex-column (vortex-column-ops geometry view-ctx)
                            :plasma-body (plasma-body-ops geometry)
+                           :teleport-marker (teleport-marker-ops geometry material)
                            :surround-arc (arc-geometry/surround-arc-quad-ops geometry material color)
                            :emitter (marker-quad (:anchor geometry) color (:particle geometry)
                                                  geometry view-ctx)

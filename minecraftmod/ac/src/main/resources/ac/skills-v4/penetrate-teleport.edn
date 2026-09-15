@@ -150,7 +150,7 @@
             {:nid :n/n--entry--start-10-t-39d454da,
              :ref [:local :destination]}}},
           :color [255 255 255 255],
-          :particle-chance 0.4},
+          :particle-chance 0.4, :direction {:nid :n/n--entry--start-10-t-direction, :ref [:local :aim]}},
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--start-10-else-0
        {:type :component,
@@ -173,7 +173,7 @@
             {:nid :n/n--entry--start-10-e-d57786d7,
              :ref [:local :destination]}}},
           :color [255 51 51 255],
-          :particle-chance 0.0},
+          :particle-chance 0.0, :direction {:nid :n/n--entry--start-10-e-direction, :ref [:local :aim]}},
          :audience {:type :nearby, :radius 64.0}}},
        :n024 {:type :merge, :nid :n/n024},
        :n--entry--start-11
@@ -459,7 +459,7 @@
             {:nid :n/n--entry--pulse-10-t-4be3bfce,
              :ref [:local :destination]}}},
           :color [255 255 255 255],
-          :particle-chance 0.4},
+          :particle-chance 0.4, :direction {:nid :n/n--entry--pulse-10-t-direction, :ref [:local :aim]}},
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--pulse-10-else-0
        {:type :component,
@@ -482,7 +482,7 @@
             {:nid :n/n--entry--pulse-10-e-1f4ffd1e,
              :ref [:local :destination]}}},
           :color [255 51 51 255],
-          :particle-chance 0.0},
+          :particle-chance 0.0, :direction {:nid :n/n--entry--pulse-10-e-direction, :ref [:local :aim]}},
          :audience {:type :nearby, :radius 64.0}}},
        :n048 {:type :merge, :nid :n/n048},
        :n--entry--pulse-11
@@ -808,18 +808,11 @@
         {:effect-id :audio-one-shot,
          :operation :spawn,
          :payload
-         {:position
-          {:nid :n/n--entry--release-10-be3c541d,
-           :component :value/field,
-           :inputs
-           {:field :position,
-            :value
-            {:nid :n/n--entry--release-10-9a28f465,
-             :ref [:local :destination]}}},
-          :sound-id "academy:tp.tp",
-          :volume 0.5,
-          :pitch 1.0},
-         :audience {:type :nearby, :radius 64.0}}},
+         {:position {:nid :n/n--entry--release-10-audio-position, :ref [:local :eye]},
+         :sound-id "academy:tp.tp",
+         :volume 0.5,
+         :pitch 1.0},
+         :audience {:type :owner}}},
        :n--entry--release-11-else-0
        {:type :component,
         :component :effect/vfx,
