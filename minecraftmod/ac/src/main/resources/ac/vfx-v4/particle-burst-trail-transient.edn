@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :particle-burst-trail-transient,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:count-limit {:type :int},
@@ -28,5 +29,4 @@
       :alpha ?alpha},
      :anchor ?start})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

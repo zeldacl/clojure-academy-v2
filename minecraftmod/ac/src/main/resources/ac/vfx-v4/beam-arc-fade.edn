@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :beam-arc-fade,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:arc-pattern {:type :any},
@@ -87,5 +88,4 @@
        :alpha fade-alpha})]
     [])
    ^{:nid "n/n--entry--default-2"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

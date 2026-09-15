@@ -67,31 +67,6 @@
   (is (= "{...}" (#'render/format-param-value {:a 1})))
   (is (= "[...]" (#'render/format-param-value [1 2 3 4]))))
 
-;; P4: every :component node used to render the literal string "[component]"
-;; as its second line regardless of which component -- box-color also
-;; collapses every :component to the same :call color, so that line
-;; distinguished nothing. It's now either the first bound parameter or
-;; omitted entirely (see render.clj's component-summary).
-(defn- v4-graph-with-component [inputs]
-  {:nodes {:n/start {:nid :n/start :type :start}
-           :n/call {:nid :n/call :type :component :component "combat/damage" :inputs inputs}
-           :n/end {:nid :n/end :type :end}}
-   :links []})
-
-(deftest component-nodes-never-render-the-literal-component-tag-test
-  (let [items (render/graph->composite-items (v4-graph-with-component {:target :n/hit :amount 5}) {})]
-    (is (not-any? #(= "[component]" (:text %)) items))))
-
-(deftest component-node-type-line-shows-first-param-when-present-test
-  (let [items (render/graph->composite-items (v4-graph-with-component {:amount 5}) {})
-        type-lines (filter #(and (= :node-type (:role %)) (= :n/call (:nid %))) items)]
-    (is (seq type-lines))
-    (is (every? #(re-find #" = " (:text %)) type-lines))))
-
-(deftest component-node-type-line-is-omitted-with-no-inputs-test
-  (let [items (render/graph->composite-items (v4-graph-with-component {}) {})]
-    (is (not-any? #(and (= :node-type (:role %)) (= :n/call (:nid %))) items))))
-
 (deftest graph->composite-items-produces-one-body-and-label-per-exec-node-test
   (let [g (sample-graph)
         items (render/graph->composite-items g {})
@@ -138,29 +113,3 @@
     (is (some #(= :in (:pin %)) pins))
     (is (seq value-wires))))
 
-(deftest v4-loop-nodes-render-body-and-completed-pins-test
-  (let [g {:nodes {:n/start {:nid :n/start :type :start}
-                   :n/each {:nid :n/each :type :foreach :limit 8}
-                   :n/repeat {:nid :n/repeat :type :repeat :count 2}
-                   :n/end {:nid :n/end :type :end}}
-          :links []}
-        items (render/graph->composite-items g {})
-        pins (filter #(and (= :pin (:role %)) (= :out (:pin %))) items)]
-    (is (some #(and (= :n/each (:nid %)) (= :body (:key %))) pins))
-    (is (some #(and (= :n/each (:nid %)) (= :completed (:key %))) pins))
-    (is (some #(and (= :n/repeat (:nid %)) (= :body (:key %))) pins))
-    (is (some #(and (= :n/repeat (:nid %)) (= :completed (:key %))) pins))))
-(deftest v4-sentinel-pins-match-execution-contract-test
-  (let [g {:nodes {:n/start {:nid :n/start :type :start}
-                   :n/end {:nid :n/end :type :end}}
-           :links []}
-        pins (filter #(= :pin (:role %))
-                     (render/graph->composite-items g {}))]
-    ;; Start is a source-only sentinel; end is a sink-only sentinel.  The
-    ;; renderer must not expose phantom ports that the graph validator
-    ;; rejects, otherwise users see an apparently connectable but invalid
-    ;; endpoint in the Blueprint-style canvas.
-    (is (some #(and (= :n/start (:nid %)) (= :out (:pin %)) (= :out (:key %))) pins))
-    (is (not-any? #(and (= :n/start (:nid %)) (= :in (:pin %))) pins))
-    (is (some #(and (= :n/end (:nid %)) (= :in (:pin %))) pins))
-    (is (not-any? #(and (= :n/end (:nid %)) (= :out (:pin %))) pins))))

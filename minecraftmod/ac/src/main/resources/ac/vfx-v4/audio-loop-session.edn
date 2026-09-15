@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :audio-loop-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:position {:type :vec3},
@@ -20,5 +21,4 @@
      :pitch ?pitch,
      :looping? ?looping?})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

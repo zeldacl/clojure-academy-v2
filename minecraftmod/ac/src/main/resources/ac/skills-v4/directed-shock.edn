@@ -1,24 +1,50 @@
 {:schema :ac/skill-v4,
+ :id :directed-shock,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.vecmanip.directed_shock.desc",
- :name-key "ability.skill.vecmanip.directed_shock",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :session,
+ :parameters
+ {:hit-impulse {:type :double},
+  :charge-min-ticks {:type :long},
+  :targeting-distance {:type :double},
+  :knockback-exp-threshold {:type :double},
+  :damage {:type :double},
+  :charge-max-accepted-ticks {:type :long},
+  :charge-max-tolerant-ticks {:type :long},
+  :knockback-scale {:type :double},
+  :target-eye-height {:type :double},
+  :knockback-y-adjust {:type :double},
+  :punch-animation-ticks {:type :long}},
  :state
  {:charge-ticks {:type :long, :default 0},
   :punched? {:type :boolean, :default false},
   :punch-ticks {:type :long, :default 0}},
+ :tunables
+ {:hit-impulse {:curve :const},
+  :release-overload {:curve :mastery-lerp},
+  :charge-min-ticks {:curve :const, :type :int},
+  :targeting-distance {:curve :const},
+  :knockback-exp-threshold {:curve :const},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-hit {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :charge-max-accepted-ticks {:curve :const, :type :int},
+  :charge-max-tolerant-ticks {:curve :const, :type :int},
+  :knockback-scale {:curve :const},
+  :target-eye-height {:curve :const},
+  :exp-miss {:curve :const},
+  :knockback-y-adjust {:curve :const},
+  :punch-animation-ticks {:curve :const, :type :int},
+  :release-cp {:curve :mastery-lerp}},
  :costs
  {:release
   {:resources
    {:cp {:ref [:input :tunables :release-cp]},
     :overload {:ref [:input :tunables :release-overload]}}}},
- :mark-policies nil,
- :activation :session,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression
+ {:hit {:per-mark {:ref [:input :tunables :exp-hit]}},
+  :miss {:per-mark {:ref [:input :tunables :exp-miss]}}},
+ :invariants nil,
  :requires
  [:caster/body
   :caster/eye
@@ -27,6 +53,14 @@
   :world/id
   :rng/seed
   :progression/mastery],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.vecmanip.directed_shock",
+ :description-key "ability.skill.vecmanip.directed_shock.desc",
+ :mark-policies nil,
  :phases
  {:start
   [^{:nid "n/n--entry--start-0"}
@@ -335,38 +369,4 @@
      :instance-key [:activation :directed-shock-hand],
      :payload {}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :directed-shock,
- :tunables
- {:hit-impulse {:curve :const},
-  :release-overload {:curve :mastery-lerp},
-  :charge-min-ticks {:curve :const, :type :int},
-  :targeting-distance {:curve :const},
-  :knockback-exp-threshold {:curve :const},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-hit {:curve :const},
-  :damage {:curve :mastery-lerp},
-  :charge-max-accepted-ticks {:curve :const, :type :int},
-  :charge-max-tolerant-ticks {:curve :const, :type :int},
-  :knockback-scale {:curve :const},
-  :target-eye-height {:curve :const},
-  :exp-miss {:curve :const},
-  :knockback-y-adjust {:curve :const},
-  :punch-animation-ticks {:curve :const, :type :int},
-  :release-cp {:curve :mastery-lerp}},
- :invariants nil,
- :parameters
- {:hit-impulse {:type :double},
-  :charge-min-ticks {:type :long},
-  :targeting-distance {:type :double},
-  :knockback-exp-threshold {:type :double},
-  :damage {:type :double},
-  :charge-max-accepted-ticks {:type :long},
-  :charge-max-tolerant-ticks {:type :long},
-  :knockback-scale {:type :double},
-  :target-eye-height {:type :double},
-  :knockback-y-adjust {:type :double},
-  :punch-animation-ticks {:type :long}},
- :progression
- {:hit {:per-mark {:ref [:input :tunables :exp-hit]}},
-  :miss {:per-mark {:ref [:input :tunables :exp-miss]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

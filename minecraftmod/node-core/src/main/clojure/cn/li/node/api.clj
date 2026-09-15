@@ -37,12 +37,21 @@
    consume them, then the body -- which is the bulk and belongs last. Keys
    not listed follow, sorted, so an unrecognised one is still written
    deterministically rather than dropped or floated."
-  [:schema :id :skill :activation
+  [:schema :id :skill :lifecycle :activation
    :parameters :state :tunables
    :costs :cooldown :progression :invariants
-   :requires :entry-triggers
-   :name-key :description-key :metadata :presentation :mark-policies
-   :phases :do])
+   :requires :entry-triggers :external-triggers
+   :name-key :description-key :metadata :presentation
+   :mark-policies :damage-policies])
+
+(def ^:private body-keys
+  "Written last, whatever else the document has. The body is the bulk, and
+   a reader scrolling past a hundred statements to reach a two-line
+   :lifecycle has the file backwards. Pinned separately rather than placed
+   at the end of the order above, because an UNLISTED key would otherwise
+   sort after them -- which is exactly what happened to :damage-policies
+   and :external-triggers."
+  [:phases :do])
 
 (defn- canonical
   "doc -> the same doc with its top-level keys in a fixed order.
@@ -51,11 +60,19 @@
    eight keys iterates in hash order, which is deterministic for identical
    content but has no relation to how the file was written, so a no-op
    save rewrote every line and every real edit would have arrived as a
-   whole-file diff."
+   whole-file diff.
+
+   Must run LAST. stamps-only walks the whole document with postwalk, which
+   REBUILDS every map it visits and so discards the ordering this imposes.
+   Running it first produced files in hash order while a byte-equality
+   check still passed, because both sides were equally unordered -- which
+   is why the assertion for this reads the key order directly."
   [doc]
-  (let [known (filter #(contains? doc %) document-key-order)
-        rest* (sort (remove (set document-key-order) (keys doc)))]
-    (apply array-map (mapcat (fn [k] [k (get doc k)]) (concat known rest*)))))
+  (let [placed (into (set document-key-order) body-keys)
+        known (filter #(contains? doc %) document-key-order)
+        rest* (sort (remove placed (keys doc)))
+        body (filter #(contains? doc %) body-keys)]
+    (apply array-map (mapcat (fn [k] [k (get doc k)]) (concat known rest* body)))))
 
 (defn- stamps-only
   "doc -> the same doc with every form's metadata reduced to its :nid.
@@ -88,7 +105,14 @@
    reason content is in this form at all."
   [doc]
   (binding [*print-meta* true *print-length* nil *print-level* nil]
-    (with-out-str (pp/pprint (stamps-only (canonical doc))))))
+    (with-out-str (pp/pprint (canonical (stamps-only doc))))))
+
+(defn document-entries
+  "A surface ability document -> {phase-key [stmt ...]}. surface/entries-of,
+   exposed so callers outside node-core read phases the same way normalize
+   does rather than re-deciding the grammar."
+  [doc]
+  (surface/entries-of doc))
 
 (defn compile-surface-document!
   "A surface document (already read) -> {:ir ir :diagnostics [...]}.

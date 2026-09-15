@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :railgun-charge-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:anchor {:type :any},
@@ -27,5 +28,4 @@
      :anchor ?anchor,
      :source-player-id ?source-player-id})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

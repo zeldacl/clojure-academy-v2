@@ -245,16 +245,10 @@
 
 ;; --- pure state --------------------------------------------------------
 
-(defn- entries-of [form]
-  (cond
-    (contains? form :phases) (:phases form)
-    (contains? form :do) {:default (:do form)}
-    :else (throw (ex-info "document has neither :do nor :phases" {:form form}))))
-
 (defn- recompute
   "Refresh graph state from the document's surface form."
   [{:keys [document opts] :as state}]
-  (let [entries (entries-of (:form document)) phase (or (:phase state) (ffirst entries)) stmts (get entries phase)]
+  (let [entries (node-api/document-entries (:form document)) phase (or (:phase state) (ffirst entries)) stmts (get entries phase)]
     (assoc state :phase phase :phases (vec (keys entries)) :graph (graph/form->graph stmts)
            :diagnostics (check/diagnostics (:form document) opts) :cost-summary (check/cost-summary (:form document) opts))))
 

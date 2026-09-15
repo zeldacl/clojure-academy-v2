@@ -1,19 +1,46 @@
 {:schema :ac/skill-v4,
+ :id :location-teleport,
  :skill {:category :migrated, :level 1},
- :entry-triggers {:default :activation/start},
- :description-key "ability.skill.teleporter.location_teleport.desc",
- :name-key "ability.skill.teleporter.location_teleport",
- :cooldown nil,
- :state {},
- :costs nil,
- :mark-policies nil,
  :activation :instant,
+ :parameters
+ {:teleport-radius {:type :double},
+  :cross-dimension-exp-threshold {:type :double},
+  :int-distance-threshold {:type :double},
+  :cross-dimension-multiplier {:type :double},
+  :exp-short {:type :double},
+  :overload {:type :double},
+  :cooldown-ticks {:type :any},
+  :min-distance-multiplier {:type :double},
+  :exp-long {:type :double},
+  :cp-base {:type :any},
+  :distance-cap {:type :double}},
+ :state {},
+ :tunables
+ {:teleport-radius {:curve :const},
+  :cross-dimension-exp-threshold {:curve :const},
+  :int-distance-threshold {:curve :const},
+  :cross-dimension-multiplier {:curve :const},
+  :exp-short {:curve :const},
+  :overload {:curve :const},
+  :cooldown-ticks {:curve :pair, :type :float},
+  :min-distance-multiplier {:curve :const},
+  :exp-long {:curve :const},
+  :cp-base {:curve :pair},
+  :distance-cap {:curve :const}},
+ :costs nil,
+ :cooldown nil,
+ :progression nil,
+ :invariants nil,
  :requires
  [:caster/id
   :world/id
   :caster/creative?
   :rng/seed
   :progression/mastery],
+ :entry-triggers {:default :activation/start},
+ :name-key "ability.skill.teleporter.location_teleport",
+ :description-key "ability.skill.teleporter.location_teleport.desc",
+ :mark-policies nil,
  :phases
  {:default
   [(let mastery ?progression/mastery)
@@ -125,31 +152,4 @@
       [^{:nid "n/n--entry--default-4--404a9cd2"}
        (finish {:outcome :cross-dimension-exp-required})])]
     [^{:nid "n/n--entry--default-4-else-0"}
-     (finish {:outcome :location-not-found})])]},
- :id :location-teleport,
- :tunables
- {:teleport-radius {:curve :const},
-  :cross-dimension-exp-threshold {:curve :const},
-  :int-distance-threshold {:curve :const},
-  :cross-dimension-multiplier {:curve :const},
-  :exp-short {:curve :const},
-  :overload {:curve :const},
-  :cooldown-ticks {:curve :pair, :type :float},
-  :min-distance-multiplier {:curve :const},
-  :exp-long {:curve :const},
-  :cp-base {:curve :pair},
-  :distance-cap {:curve :const}},
- :invariants nil,
- :parameters
- {:teleport-radius {:type :double},
-  :cross-dimension-exp-threshold {:type :double},
-  :int-distance-threshold {:type :double},
-  :cross-dimension-multiplier {:type :double},
-  :exp-short {:type :double},
-  :overload {:type :double},
-  :cooldown-ticks {:type :any},
-  :min-distance-multiplier {:type :double},
-  :exp-long {:type :double},
-  :cp-base {:type :any},
-  :distance-cap {:type :double}},
- :progression nil}
+     (finish {:outcome :location-not-found})])]}}

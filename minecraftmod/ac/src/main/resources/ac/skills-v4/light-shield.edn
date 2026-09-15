@@ -1,25 +1,38 @@
 {:schema :ac/skill-v4,
+ :id :light-shield,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.meltdowner.light_shield.desc",
- :name-key "ability.skill.meltdowner.light_shield",
- :cooldown
- {:deactivate
-  {:ticks
-   {:expr :math/mul,
-    :args
-    [{:ref [:state :active-ticks]}
-     {:expr :math/sub,
-      :args [2.0 {:ref [:input :context :skill-exp]}]}]}}},
+ :activation :toggle,
+ :parameters
+ {:activate-overload {:type :double},
+  :max-active-ticks {:type :double},
+  :touch-radius {:type :double},
+  :front-cone-degrees {:type :double},
+  :touch-damage {:type :double},
+  :slowness-duration-ticks {:type :double},
+  :slowness-amplifier {:type :long}},
  :state
  {:active-ticks {:type :long, :default 0},
   :last-absorb-tick {:type :long, :default -1},
   :overload-floor {:type :double, :default 0.0},
   :shield-id {:type :any, :default nil}},
+ :tunables
+ {:touch-cp {:curve :mastery-lerp},
+  :max-active-ticks {:curve :mastery-lerp},
+  :touch-overload {:curve :mastery-lerp},
+  :tick-cp {:curve :mastery-lerp},
+  :exp-tick {:curve :const},
+  :touch-damage {:curve :mastery-lerp},
+  :slowness-amplifier {:curve :const, :type :int},
+  :front-cone-degrees {:curve :const},
+  :activate-overload {:curve :mastery-lerp},
+  :exp-touch {:curve :const},
+  :slowness-duration-ticks {:curve :const, :type :int},
+  :absorb-cp {:curve :mastery-lerp},
+  :absorb-overload {:curve :mastery-lerp},
+  :exp-attacked {:curve :const},
+  :absorb-interval-ticks {:curve :const, :type :int},
+  :absorb-damage {:curve :mastery-lerp},
+  :touch-radius {:curve :const}},
  :costs
  {:activate
   {:resources
@@ -29,8 +42,19 @@
   {:resources
    {:cp {:ref [:input :tunables :touch-cp]},
     :overload {:ref [:input :tunables :touch-overload]}}}},
- :mark-policies nil,
- :activation :toggle,
+ :cooldown
+ {:deactivate
+  {:ticks
+   {:expr :math/mul,
+    :args
+    [{:ref [:state :active-ticks]}
+     {:expr :math/sub,
+      :args [2.0 {:ref [:input :context :skill-exp]}]}]}}},
+ :progression
+ {:tick {:per-mark {:ref [:input :tunables :exp-tick]}},
+  :touch {:per-mark {:ref [:input :tunables :exp-touch]}},
+  :attacked {:per-mark {:ref [:input :tunables :exp-attacked]}}},
+ :invariants nil,
  :requires
  [:caster/id
   :caster/body
@@ -40,6 +64,35 @@
   :world/id
   :progression/mastery
   :rng/seed],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.meltdowner.light_shield",
+ :description-key "ability.skill.meltdowner.light_shield.desc",
+ :mark-policies nil,
+ :damage-policies
+ [{:on :combat/damage,
+   :priority 80,
+   :when
+   {:expr :bool/and,
+    :args
+    [{:expr :value/eq,
+      :args [{:ref [:input :context :ability-id]} :light-shield]}
+     {:ref [:input :context :enabled?]}
+     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
+   :program
+   {:component :damage/absorb,
+    :cap {:ref [:input :tunables :absorb-damage]},
+    :interval-ticks {:ref [:input :tunables :absorb-interval-ticks]},
+    :last-tick-path [:last-absorb-tick],
+    :front? {:ref [:input :context :front?]},
+    :cost
+    {:cp {:ref [:input :tunables :absorb-overload]},
+     :overload {:ref [:input :tunables :absorb-cp]}},
+    :progression-tag :attacked,
+    :progression-scale {:ref [:input :tunables :exp-attacked]}}}],
  :phases
  {:start
   [(let activate-budget ?budget/activate)
@@ -393,57 +446,4 @@
      :instance-key [:activation :light-shield-audio],
      :payload {:fade-ticks 0}})
    ^{:nid "n/n--entry--abort-9"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :light-shield,
- :tunables
- {:touch-cp {:curve :mastery-lerp},
-  :max-active-ticks {:curve :mastery-lerp},
-  :touch-overload {:curve :mastery-lerp},
-  :tick-cp {:curve :mastery-lerp},
-  :exp-tick {:curve :const},
-  :touch-damage {:curve :mastery-lerp},
-  :slowness-amplifier {:curve :const, :type :int},
-  :front-cone-degrees {:curve :const},
-  :activate-overload {:curve :mastery-lerp},
-  :exp-touch {:curve :const},
-  :slowness-duration-ticks {:curve :const, :type :int},
-  :absorb-cp {:curve :mastery-lerp},
-  :absorb-overload {:curve :mastery-lerp},
-  :exp-attacked {:curve :const},
-  :absorb-interval-ticks {:curve :const, :type :int},
-  :absorb-damage {:curve :mastery-lerp},
-  :touch-radius {:curve :const}},
- :invariants nil,
- :parameters
- {:activate-overload {:type :double},
-  :max-active-ticks {:type :double},
-  :touch-radius {:type :double},
-  :front-cone-degrees {:type :double},
-  :touch-damage {:type :double},
-  :slowness-duration-ticks {:type :double},
-  :slowness-amplifier {:type :long}},
- :damage-policies
- [{:on :combat/damage,
-   :priority 80,
-   :when
-   {:expr :bool/and,
-    :args
-    [{:expr :value/eq,
-      :args [{:ref [:input :context :ability-id]} :light-shield]}
-     {:ref [:input :context :enabled?]}
-     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
-   :program
-   {:component :damage/absorb,
-    :cap {:ref [:input :tunables :absorb-damage]},
-    :interval-ticks {:ref [:input :tunables :absorb-interval-ticks]},
-    :last-tick-path [:last-absorb-tick],
-    :front? {:ref [:input :context :front?]},
-    :cost
-    {:cp {:ref [:input :tunables :absorb-overload]},
-     :overload {:ref [:input :tunables :absorb-cp]}},
-    :progression-tag :attacked,
-    :progression-scale {:ref [:input :tunables :exp-attacked]}}}],
- :progression
- {:tick {:per-mark {:ref [:input :tunables :exp-tick]}},
-  :touch {:per-mark {:ref [:input :tunables :exp-touch]}},
-  :attacked {:per-mark {:ref [:input :tunables :exp-attacked]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

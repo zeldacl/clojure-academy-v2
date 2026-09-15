@@ -86,7 +86,15 @@
       (str/starts-with? s "%") [:state (str->keyword (subs s 1))]
       :else [:local sym])))
 
-(defn- entries-of [doc]
+(defn entries-of
+  "An ability document -> {phase-key [stmt ...]}.
+
+   Public because it is the ONE answer to \"which phases does this document
+   have and what is in each\". normalize needs it, and so does anything that
+   shows a document's phases without compiling it -- the node editor's phase
+   tabs, for one, which carried a verbatim copy of this until it drifted
+   into being a second definition of the grammar."
+  [doc]
   (cond
     (contains? doc :phases) (:phases doc)
     (contains? doc :do) {:default (:do doc)}

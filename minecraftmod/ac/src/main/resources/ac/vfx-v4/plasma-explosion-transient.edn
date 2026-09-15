@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :plasma-explosion-transient,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters {:position {:type :vec3}},
  :entry-triggers {:render :vfx/render},
@@ -18,5 +19,4 @@
      :particle {:particle-type :smoke-large, :speed 0.1},
      :anchor ?position})
    ^{:nid "n/end"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

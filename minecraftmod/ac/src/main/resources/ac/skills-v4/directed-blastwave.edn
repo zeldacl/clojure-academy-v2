@@ -1,24 +1,54 @@
 {:schema :ac/skill-v4,
+ :id :directed-blastwave,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.vecmanip.directed_blastwave.desc",
- :name-key "ability.skill.vecmanip.directed_blastwave",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :session,
+ :parameters
+ {:hardness-caps {:type :any},
+  :hardness-mid-threshold {:type :double},
+  :hardness-low-threshold {:type :double},
+  :break-probability {:type :any},
+  :charge-min-ticks {:type :long},
+  :targeting-distance {:type :double},
+  :damage {:type :double},
+  :charge-max-accepted-ticks {:type :long},
+  :charge-max-tolerant-ticks {:type :long},
+  :knockback-scale {:type :double},
+  :drop-probability {:type :any},
+  :aoe-radius {:type :double},
+  :punch-animation-ticks {:type :long}},
  :state
  {:charge-ticks {:type :long, :default 0},
   :punched? {:type :boolean, :default false},
   :punch-ticks {:type :long, :default 0}},
+ :tunables
+ {:hardness-caps {:curve :pair},
+  :hardness-mid-threshold {:curve :const},
+  :hardness-low-threshold {:curve :const},
+  :break-probability {:curve :mastery-lerp},
+  :release-overload {:curve :mastery-lerp},
+  :charge-min-ticks {:curve :const, :type :int},
+  :targeting-distance {:curve :const},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-hit {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :charge-max-accepted-ticks {:curve :const, :type :int},
+  :charge-max-tolerant-ticks {:curve :const, :type :int},
+  :knockback-scale {:curve :const},
+  :drop-probability {:curve :mastery-lerp},
+  :exp-miss {:curve :const},
+  :aoe-radius {:curve :const},
+  :punch-animation-ticks {:curve :const, :type :int},
+  :release-cp {:curve :mastery-lerp}},
  :costs
  {:release
   {:resources
    {:cp {:ref [:input :tunables :release-cp]},
     :overload {:ref [:input :tunables :release-overload]}}}},
- :mark-policies nil,
- :activation :session,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression
+ {:hit {:per-mark {:ref [:input :tunables :exp-hit]}},
+  :miss {:per-mark {:ref [:input :tunables :exp-miss]}}},
+ :invariants nil,
  :requires
  [:caster/body
   :caster/eye
@@ -27,6 +57,14 @@
   :world/id
   :rng/seed
   :charge/ticks],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.vecmanip.directed_blastwave",
+ :description-key "ability.skill.vecmanip.directed_blastwave.desc",
+ :mark-policies nil,
  :phases
  {:start
   [^{:nid "n/n--entry--start-0"}
@@ -307,42 +345,4 @@
      :instance-key [:activation :directed-blastwave-charge],
      :payload {}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :directed-blastwave,
- :tunables
- {:hardness-caps {:curve :pair},
-  :hardness-mid-threshold {:curve :const},
-  :hardness-low-threshold {:curve :const},
-  :break-probability {:curve :mastery-lerp},
-  :release-overload {:curve :mastery-lerp},
-  :charge-min-ticks {:curve :const, :type :int},
-  :targeting-distance {:curve :const},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-hit {:curve :const},
-  :damage {:curve :mastery-lerp},
-  :charge-max-accepted-ticks {:curve :const, :type :int},
-  :charge-max-tolerant-ticks {:curve :const, :type :int},
-  :knockback-scale {:curve :const},
-  :drop-probability {:curve :mastery-lerp},
-  :exp-miss {:curve :const},
-  :aoe-radius {:curve :const},
-  :punch-animation-ticks {:curve :const, :type :int},
-  :release-cp {:curve :mastery-lerp}},
- :invariants nil,
- :parameters
- {:hardness-caps {:type :any},
-  :hardness-mid-threshold {:type :double},
-  :hardness-low-threshold {:type :double},
-  :break-probability {:type :any},
-  :charge-min-ticks {:type :long},
-  :targeting-distance {:type :double},
-  :damage {:type :double},
-  :charge-max-accepted-ticks {:type :long},
-  :charge-max-tolerant-ticks {:type :long},
-  :knockback-scale {:type :double},
-  :drop-probability {:type :any},
-  :aoe-radius {:type :double},
-  :punch-animation-ticks {:type :long}},
- :progression
- {:hit {:per-mark {:ref [:input :tunables :exp-hit]}},
-  :miss {:per-mark {:ref [:input :tunables :exp-miss]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :directed-blastwave-charge,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:center {:type :vec3},
@@ -12,5 +13,4 @@
   [^{:nid "n/n--entry--default-0"}
    (ring {:center ?center, :radius ?charge-ticks, :color ?punched?})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

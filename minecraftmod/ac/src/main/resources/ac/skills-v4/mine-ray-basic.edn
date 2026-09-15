@@ -1,23 +1,32 @@
 {:schema :ac/skill-v4,
+ :id :mine-ray-basic,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :session,
+ :parameters
+ {:cost-down-overload {:type :double},
+  :targeting-range {:type :double},
+  :break-speed {:type :double}},
  :state
  {:target {:type :any, :default nil},
   :hardness-left {:type :double, :default 3.4028235E38},
   :starting-hardness {:type :double, :default 3.4028235E38},
   :overload-floor {:type :double, :default 0.0}},
+ :tunables
+ {:targeting-range {:curve :const},
+  :break-speed {:curve :mastery-lerp},
+  :cost-down-overload {:curve :mastery-lerp},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-block {:curve :const}},
  :costs
  {:activate
   {:resources
    {:overload {:ref [:input :tunables :cost-down-overload]}}},
   :tick {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :mark-policies nil,
- :activation :session,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression
+ {:block {:per-mark {:ref [:input :tunables :exp-block]}}},
+ :invariants nil,
  :requires
  [:caster/body
   :caster/eye
@@ -28,6 +37,36 @@
   :world/id
   :progression/mastery
   :rng/seed],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :metadata
+ {:name-key "ability.skill.meltdowner.mine_ray_basic",
+  :description-key "ability.skill.meltdowner.mine_ray_basic.desc"},
+ :presentation
+ {:variant :basic,
+  :startup-sound-id "academy:md.mine_basic_startup",
+  :loop-sound-id "academy:md.mine_loop",
+  :progress-color [150 220 255 180],
+  :particle
+  {:material :additive,
+   :texture "academy:textures/effects/md_particle.png",
+   :life-ticks 10,
+   :speed 0.1,
+   :spread {:x 0.3, :y 0.3, :z 0.3}},
+  :beam-style
+  {:outer-alpha 50.0,
+   :inner-radius 0.03,
+   :glow-width 0.3,
+   :outer-radius 0.045,
+   :glow-textures "mdray_small",
+   :inner-alpha 230.0,
+   :inner-rgb {:r 216, :g 248, :b 216},
+   :glow-alpha 127.0,
+   :outer-rgb {:r 106, :g 242, :b 106}}},
+ :mark-policies nil,
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -398,43 +437,4 @@
    ^{:nid "n/n--entry--abort-4"}
    (cooldown/start {:name :main, :ticks main-cooldown})
    ^{:nid "n/n--entry--abort-5"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :mine-ray-basic,
- :tunables
- {:targeting-range {:curve :const},
-  :break-speed {:curve :mastery-lerp},
-  :cost-down-overload {:curve :mastery-lerp},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-block {:curve :const}},
- :invariants nil,
- :presentation
- {:variant :basic,
-  :startup-sound-id "academy:md.mine_basic_startup",
-  :loop-sound-id "academy:md.mine_loop",
-  :progress-color [150 220 255 180],
-  :particle
-  {:material :additive,
-   :texture "academy:textures/effects/md_particle.png",
-   :life-ticks 10,
-   :speed 0.1,
-   :spread {:x 0.3, :y 0.3, :z 0.3}},
-  :beam-style
-  {:outer-alpha 50.0,
-   :inner-radius 0.03,
-   :glow-width 0.3,
-   :outer-radius 0.045,
-   :glow-textures "mdray_small",
-   :inner-alpha 230.0,
-   :inner-rgb {:r 216, :g 248, :b 216},
-   :glow-alpha 127.0,
-   :outer-rgb {:r 106, :g 242, :b 106}}},
- :parameters
- {:cost-down-overload {:type :double},
-  :targeting-range {:type :double},
-  :break-speed {:type :double}},
- :metadata
- {:name-key "ability.skill.meltdowner.mine_ray_basic",
-  :description-key "ability.skill.meltdowner.mine_ray_basic.desc"},
- :progression
- {:block {:per-mark {:ref [:input :tunables :exp-block]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

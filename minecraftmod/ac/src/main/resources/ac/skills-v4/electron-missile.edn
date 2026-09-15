@@ -1,13 +1,17 @@
 {:schema :ac/skill-v4,
+ :id :electron-missile,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.meltdowner.electron_missile.desc",
- :name-key "ability.skill.meltdowner.electron_missile",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :session,
+ :parameters
+ {:fire-interval-ticks {:type :long},
+  :seek-range {:type :double},
+  :cost-attack-cp {:type :double},
+  :max-balls {:type :long},
+  :cost-attack-overload {:type :double},
+  :damage {:type :double},
+  :max-hold-ticks {:type :long},
+  :spawn-interval-ticks {:type :long},
+  :cost-down-overload {:type :double}},
  :state
  {:ticks {:type :long, :default 0},
   :balls {:type :long, :default 0},
@@ -15,16 +19,38 @@
   :next-fire-tick {:type :long, :default 0},
   :overload-floor {:type :double, :default 0.0},
   :ball-ids {:type :any, :default []}},
+ :tunables
+ {:fire-interval-ticks {:curve :const, :type :int},
+  :seek-range {:curve :mastery-lerp},
+  :cost-attack-cp {:curve :mastery-lerp},
+  :max-balls {:curve :const, :type :int},
+  :cost-attack-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :const, :type :int},
+  :exp-hit {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :max-hold-ticks {:curve :mastery-lerp, :type :int},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :spawn-interval-ticks {:curve :const, :type :int},
+  :cost-down-overload {:curve :const}},
  :costs
  {:activate
   {:resources
    {:overload {:ref [:input :tunables :cost-down-overload]}}},
   :charging
   {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :mark-policies nil,
- :activation :session,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}},
+ :invariants nil,
  :requires
  [:caster/body :caster/id :world/id :progression/mastery :rng/seed],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.meltdowner.electron_missile",
+ :description-key "ability.skill.meltdowner.electron_missile.desc",
+ :mark-policies nil,
  :phases
  {:start
   [(let owner-id ?caster/id)
@@ -442,30 +468,4 @@
    ^{:nid "n/n--entry--abort-8"}
    (cooldown/start {:name :main, :ticks main-cooldown})
    ^{:nid "n/n--entry--abort-9"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :electron-missile,
- :tunables
- {:fire-interval-ticks {:curve :const, :type :int},
-  :seek-range {:curve :mastery-lerp},
-  :cost-attack-cp {:curve :mastery-lerp},
-  :max-balls {:curve :const, :type :int},
-  :cost-attack-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :const, :type :int},
-  :exp-hit {:curve :const},
-  :damage {:curve :mastery-lerp},
-  :max-hold-ticks {:curve :mastery-lerp, :type :int},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :spawn-interval-ticks {:curve :const, :type :int},
-  :cost-down-overload {:curve :const}},
- :invariants nil,
- :parameters
- {:fire-interval-ticks {:type :long},
-  :seek-range {:type :double},
-  :cost-attack-cp {:type :double},
-  :max-balls {:type :long},
-  :cost-attack-overload {:type :double},
-  :damage {:type :double},
-  :max-hold-ticks {:type :long},
-  :spawn-interval-ticks {:type :long},
-  :cost-down-overload {:type :double}},
- :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :plasma-body-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters {:center {:type :vec3}},
  :entry-triggers {:render :vfx/render},
@@ -20,5 +21,4 @@
      :age ?age,
      :seed ?seed})
    ^{:nid "n/end"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

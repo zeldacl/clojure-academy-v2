@@ -1,24 +1,48 @@
 {:schema :ac/skill-v4,
+ :id :body-intensify,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.electromaster.body_intensify.desc",
- :name-key "ability.skill.electromaster.body_intensify",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :session,
+ :parameters
+ {:effect-hunger-multiplier {:type :double},
+  :effect-hunger-amplifier {:type :long},
+  :charge-min-ticks {:type :long},
+  :effect-probability-offset-ticks {:type :double},
+  :effect-probability-divisor {:type :double},
+  :effect-duration-multiplier {:type :double},
+  :cooldown-endpoints {:type :any},
+  :charge-max-ticks {:type :long},
+  :charge-max-tolerant-ticks {:type :long},
+  :progression-exp-use {:type :double},
+  :cost-down-overload {:type :double},
+  :effect-available-effects {:type :any}},
  :state
  {:hold-ticks {:type :long, :default 0},
   :overload-floor {:type :double, :default 0.0}},
+ :tunables
+ {:effect-hunger-multiplier {:curve :const},
+  :effect-hunger-amplifier {:curve :const, :type :int},
+  :charge-min-ticks {:curve :const, :type :int},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :effect-probability-offset-ticks {:curve :const},
+  :effect-probability-divisor {:curve :const},
+  :effect-duration-multiplier {:curve :mastery-lerp},
+  :cooldown-endpoints {:curve :pair},
+  :charge-max-ticks {:curve :const, :type :int},
+  :charge-max-tolerant-ticks {:curve :const, :type :int},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :progression-exp-use {:curve :const},
+  :cost-down-overload {:curve :mastery-lerp},
+  :effect-available-effects {:curve :const, :type :string-list}},
  :costs
  {:activate
   {:resources
    {:overload {:ref [:input :tunables :cost-down-overload]}}},
   :charging
   {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :mark-policies nil,
- :activation :session,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression
+ {:use {:per-mark {:ref [:input :tunables :progression-exp-use]}}},
+ :invariants nil,
  :requires
  [:caster/id
   :caster/eye
@@ -26,6 +50,14 @@
   :world/id
   :progression/mastery
   :rng/seed],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.electromaster.body_intensify",
+ :description-key "ability.skill.electromaster.body_intensify.desc",
+ :mark-policies nil,
  :phases
  {:start
   [(let owner-id ?caster/id)
@@ -372,36 +404,4 @@
      :instance-key [:activation :body-intensify-audio],
      :payload {:fade-ticks 0}})
    ^{:nid "n/n--entry--abort-2"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :body-intensify,
- :tunables
- {:effect-hunger-multiplier {:curve :const},
-  :effect-hunger-amplifier {:curve :const, :type :int},
-  :charge-min-ticks {:curve :const, :type :int},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :effect-probability-offset-ticks {:curve :const},
-  :effect-probability-divisor {:curve :const},
-  :effect-duration-multiplier {:curve :mastery-lerp},
-  :cooldown-endpoints {:curve :pair},
-  :charge-max-ticks {:curve :const, :type :int},
-  :charge-max-tolerant-ticks {:curve :const, :type :int},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :progression-exp-use {:curve :const},
-  :cost-down-overload {:curve :mastery-lerp},
-  :effect-available-effects {:curve :const, :type :string-list}},
- :invariants nil,
- :parameters
- {:effect-hunger-multiplier {:type :double},
-  :effect-hunger-amplifier {:type :long},
-  :charge-min-ticks {:type :long},
-  :effect-probability-offset-ticks {:type :double},
-  :effect-probability-divisor {:type :double},
-  :effect-duration-multiplier {:type :double},
-  :cooldown-endpoints {:type :any},
-  :charge-max-ticks {:type :long},
-  :charge-max-tolerant-ticks {:type :long},
-  :progression-exp-use {:type :double},
-  :cost-down-overload {:type :double},
-  :effect-available-effects {:type :any}},
- :progression
- {:use {:per-mark {:ref [:input :tunables :progression-exp-use]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

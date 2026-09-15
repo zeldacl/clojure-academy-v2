@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :block-progress-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:target {:type :vec3},
@@ -12,5 +13,4 @@
   [^{:nid "n/n--entry--default-0"}
    (ring {:center ?target, :radius ?progress, :color ?color})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

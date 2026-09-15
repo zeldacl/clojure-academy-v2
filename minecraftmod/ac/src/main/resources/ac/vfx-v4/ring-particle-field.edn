@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :ring-particle-field,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:position {:type :vec3},
@@ -28,5 +29,4 @@
      :limit ?limit,
      :particle ?particle})
    ^{:nid "n/n--entry--default-2"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

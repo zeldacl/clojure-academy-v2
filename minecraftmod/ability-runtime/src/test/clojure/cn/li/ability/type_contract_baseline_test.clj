@@ -4,7 +4,11 @@
    The recurring V4 authoring bugs -- a node call missing an argument, a map
    passed where a list is wanted, nil reaching a :double -- are not escaping
    because the checks are wrong. cn.li.node.compile reports ~30 diagnostic
-   codes and cn.li.node.graph-document enforces ~60 structural invariants.
+   codes. (An earlier version of this note also credited cn.li.node.graph-
+   document's ~60 structural invariants; those were about wires and went
+   with the node/wire form -- a surface document cannot have a dangling
+   link.)
+
    They escape because the CONTRACT those checks read is nearly vacuous:
    cn.li.node.types/assignable? has exactly four rules and two of them are
    :any passing in either direction, so every :any-typed declaration is a

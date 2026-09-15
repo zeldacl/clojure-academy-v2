@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :block-scan-transient,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:life-ticks {:type :int},
@@ -24,5 +25,4 @@
      {:texture ?texture, :life-ticks ?life-ticks, :color ?base-color},
      :anchor ?origin})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

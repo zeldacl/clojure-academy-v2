@@ -1,9 +1,9 @@
 {:schema :ac/vfx-v4,
  :id :blood-retrograde-charge,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters {:speed {:type :float}},
  :entry-triggers {:render :vfx/render},
  :phases
  {:render
-  [^{:nid "n/n--entry--default-0"} (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+  [^{:nid "n/n--entry--default-0"} (finish {:outcome :performed})]}}

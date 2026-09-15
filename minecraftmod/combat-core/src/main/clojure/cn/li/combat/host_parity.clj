@@ -4,8 +4,12 @@
    - vocab says query (:returns set) but host only registered an action
      (:kernel/trace-beam and value-returning :entity/spawn had this shape)
    - vocab/IR capability never registered at all
-   - V4 graph :component that resolves to neither a pure op, lib :defn,
-     vocab node, nor a graph_compile special form
+
+   A third check lived here and is gone with its subject: it scanned a
+   persisted graph document for :component keywords resolving to nothing.
+   Content is surface DSL, which has no :component keys, and the question
+   it asked -- does every call resolve -- is the compiler's :unknown-node,
+   which sees every call rather than only the ones spelled as graph nodes.
 
    Compile already catches unknown-call-target / arity / type-mismatch /
    nil-typed-param when skills assemble. This namespace covers the gap

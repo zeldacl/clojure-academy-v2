@@ -1,21 +1,40 @@
 {:schema :ac/skill-v4,
+ :id :blood-retrograde,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.vecmanip.blood_retrograde.desc",
- :name-key "ability.skill.vecmanip.blood_retrograde",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :session,
+ :parameters
+ {:max-charge-ticks {:type :long},
+  :release-overload {:type :double},
+  :targeting-distance {:type :double},
+  :fallback-height {:type :double},
+  :damage {:type :double},
+  :fallback-width {:type :double},
+  :fx-ratio-ticks {:type :double},
+  :release-cp {:type :double},
+  :spray-angles {:type :any}},
  :state {:charge-ticks {:type :long, :default 0}},
+ :tunables
+ {:max-charge-ticks {:curve :const, :type :int},
+  :entity-search-radius {:curve :const},
+  :release-overload {:curve :mastery-lerp},
+  :targeting-distance {:curve :const},
+  :fallback-eye-height {:curve :const},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-hit {:curve :const},
+  :fallback-height {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :fallback-width {:curve :const},
+  :fx-ratio-ticks {:curve :const},
+  :release-cp {:curve :mastery-lerp},
+  :spray-angles {:curve :pair}},
  :costs
  {:release
   {:resources
    {:cp {:ref [:input :tunables :release-cp]},
     :overload {:ref [:input :tunables :release-overload]}}}},
- :mark-policies nil,
- :activation :session,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}},
+ :invariants nil,
  :requires
  [:caster/body
   :caster/eye
@@ -24,6 +43,14 @@
   :world/id
   :rng/seed
   :charge/ticks],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.vecmanip.blood_retrograde",
+ :description-key "ability.skill.vecmanip.blood_retrograde.desc",
+ :mark-policies nil,
  :phases
  {:start
   [^{:nid "n/n--entry--start-0"}
@@ -319,31 +346,4 @@
      :instance-key [:activation :blood-charge],
      :payload {}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :blood-retrograde,
- :tunables
- {:max-charge-ticks {:curve :const, :type :int},
-  :entity-search-radius {:curve :const},
-  :release-overload {:curve :mastery-lerp},
-  :targeting-distance {:curve :const},
-  :fallback-eye-height {:curve :const},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-hit {:curve :const},
-  :fallback-height {:curve :const},
-  :damage {:curve :mastery-lerp},
-  :fallback-width {:curve :const},
-  :fx-ratio-ticks {:curve :const},
-  :release-cp {:curve :mastery-lerp},
-  :spray-angles {:curve :pair}},
- :invariants nil,
- :parameters
- {:max-charge-ticks {:type :long},
-  :release-overload {:type :double},
-  :targeting-distance {:type :double},
-  :fallback-height {:type :double},
-  :damage {:type :double},
-  :fallback-width {:type :double},
-  :fx-ratio-ticks {:type :double},
-  :release-cp {:type :double},
-  :spray-angles {:type :any}},
- :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

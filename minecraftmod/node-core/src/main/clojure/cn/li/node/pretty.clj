@@ -1,7 +1,19 @@
 (ns cn.li.node.pretty
   "IR -> DSL doc-map, the inverse of cn.li.node.compile/compile-program.
-   This is the round-trip path a future graph editor needs: edit the IR,
-   print it back to reviewable/diffable DSL text, reload.
+
+   Its stated reason to exist is obsolete and its real one is not. It was
+   written as the round-trip path a future graph editor would need -- edit
+   the IR, print it back to reviewable text, reload. That editor exists now
+   and never touches the IR: it edits the surface AST directly
+   (cn.li.ability.editor.graph), and persisted content IS reviewable text,
+   so there is nothing to print back.
+
+   What it is used for, in node-core's own tests, is a compiler property:
+   compile a program, unparse the IR, compile again, and assert the two IRs
+   match. That says the IR retains enough to regenerate the program, which
+   is worth asserting and has no other checker. The scope limit below is
+   acceptable for that -- fixtures are straight-line -- and would not be
+   for content, which is why this is a test oracle and not a tool.
 
    Reconstructs exactly the structural patterns cn.li.node.compile itself
    emits:

@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :screen-flash-session,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:alpha {:type :float},
@@ -9,5 +10,4 @@
  :entry-triggers {:render :vfx/render},
  :phases
  {:render
-  [^{:nid "n/n--entry--default-0"} (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+  [^{:nid "n/n--entry--default-0"} (finish {:outcome :performed})]}}

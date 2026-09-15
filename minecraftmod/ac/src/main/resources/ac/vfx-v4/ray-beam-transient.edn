@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :ray-beam-transient,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:start {:type :vec3},
@@ -15,5 +16,4 @@
    (ray-beam
     {:start ?start, :end ?end, :grow-ticks ?grow-ticks, :style ?style})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

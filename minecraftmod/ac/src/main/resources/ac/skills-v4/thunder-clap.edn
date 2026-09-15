@@ -1,12 +1,32 @@
 {:schema :ac/skill-v4,
+ :id :thunder-clap,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.electromaster.thunder_clap.desc",
- :name-key "ability.skill.electromaster.thunder_clap",
+ :activation :session,
+ :parameters
+ {:targeting-range {:type :double},
+  :charge-min {:type :long},
+  :charge-max {:type :long},
+  :damage {:type :double},
+  :overcharge-multiplier {:type :any},
+  :aoe-radius {:type :double}},
+ :state {},
+ :tunables
+ {:overcharge-multiplier {:curve :pair},
+  :targeting-range {:curve :const},
+  :cooldown-per-hold {:curve :mastery-lerp},
+  :charge-max {:curve :const, :type :int},
+  :damage {:curve :mastery-lerp},
+  :charge-min {:curve :const, :type :int},
+  :exp-use {:curve :const},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :aoe-radius {:curve :mastery-lerp},
+  :cost-down-overload {:curve :mastery-lerp}},
+ :costs
+ {:activate
+  {:resources
+   {:overload {:ref [:input :tunables :cost-down-overload]}}},
+  :charging
+  {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
  :cooldown
  {:main
   {:ticks
@@ -14,16 +34,17 @@
     :args
     [{:ref [:input :capabilities :charge/ticks]}
      {:ref [:input :tunables :cooldown-per-hold]}]}}},
- :state {},
- :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :charging
-  {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :mark-policies nil,
- :activation :session,
+ :progression {:cast {:per-mark {:ref [:input :tunables :exp-use]}}},
+ :invariants nil,
  :requires [:caster/eye :caster/aim :world/id :charge/ticks],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.electromaster.thunder_clap",
+ :description-key "ability.skill.electromaster.thunder_clap.desc",
+ :mark-policies nil,
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -384,25 +405,4 @@
      :instance-key [:activation :thunder-clap],
      :payload {:local-walk-speed nil}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :thunder-clap,
- :tunables
- {:overcharge-multiplier {:curve :pair},
-  :targeting-range {:curve :const},
-  :cooldown-per-hold {:curve :mastery-lerp},
-  :charge-max {:curve :const, :type :int},
-  :damage {:curve :mastery-lerp},
-  :charge-min {:curve :const, :type :int},
-  :exp-use {:curve :const},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :aoe-radius {:curve :mastery-lerp},
-  :cost-down-overload {:curve :mastery-lerp}},
- :invariants nil,
- :parameters
- {:targeting-range {:type :double},
-  :charge-min {:type :long},
-  :charge-max {:type :long},
-  :damage {:type :double},
-  :overcharge-multiplier {:type :any},
-  :aoe-radius {:type :double}},
- :progression {:cast {:per-mark {:ref [:input :tunables :exp-use]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

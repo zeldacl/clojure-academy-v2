@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :billboard-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:anchor {:type :any},
@@ -24,5 +25,4 @@
       :age ?age},
      :anchor ?anchor})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

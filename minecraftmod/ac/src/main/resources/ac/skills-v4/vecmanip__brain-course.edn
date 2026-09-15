@@ -1,29 +1,24 @@
 {:schema :ac/skill-v4,
+ :id :vecmanip/brain-course,
  :skill {:category :vecmanip, :level 1},
+ :activation :passive,
+ :parameters {},
+ :state {},
+ :costs nil,
+ :cooldown nil,
+ :progression nil,
+ :invariants nil,
  :entry-triggers
  {:start :phase/start,
   :pulse :phase/pulse,
   :release :phase/release,
   :abort :phase/abort},
- :description-key "ability.skill.generic.brain_course.desc",
- :passive-effects [{:target :max-cp, :operation :add, :value 1000.0}],
  :name-key "ability.skill.generic.brain_course",
- :cooldown nil,
- :state {},
- :costs nil,
- :mark-policies nil,
- :activation :passive,
- :phases
- {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
-  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
-  :release
-  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
-  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]},
- :id :vecmanip/brain-course,
- :invariants nil,
- :presentation nil,
- :parameters {},
+ :description-key "ability.skill.generic.brain_course.desc",
  :metadata {:category-id :vecmanip},
+ :presentation nil,
+ :mark-policies nil,
+ :passive-effects [{:target :max-cp, :operation :add, :value 1000.0}],
  :translations
  {:en_us
   {:ability.skill.generic.brain_course "Brain Course",
@@ -49,4 +44,9 @@
   {:ability.skill.generic.brain_course "Мозговой курс",
    :ability.skill.generic.brain_course.desc
    "Пройти тренировку для вашего мозга. Увеличивает Макс. CP на 1000."}},
- :progression nil}
+ :phases
+ {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
+  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
+  :release
+  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
+  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]}}

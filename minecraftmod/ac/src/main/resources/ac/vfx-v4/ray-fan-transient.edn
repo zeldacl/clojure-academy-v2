@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :ray-fan-transient,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:life-ticks {:type :int},
@@ -30,5 +31,4 @@
      :origin ?origin,
      :direction ?direction})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

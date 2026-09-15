@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :beam-fade-audio,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:sound-position {:type :vec3},
@@ -64,5 +65,4 @@
        :alpha fade-alpha})]
     [])
    ^{:nid "n/n--entry--default-3"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

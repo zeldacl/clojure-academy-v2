@@ -152,7 +152,13 @@
      (doseq [{:keys [id ir document]} skills]
        (let [triggers (:entry-triggers ir)
              ir-entries (set (keys (:entries ir)))
-             doc-graphs (set (keys (or (:graphs document) (:entries document))))]
+             ;; :phases. This read (:graphs) or (:entries) until the surface
+             ;; migration, neither of which a document has any more, so it
+             ;; silently became the empty set and the check below stopped
+             ;; running -- the `seq` guard that used to skip graph-less
+             ;; documents was what hid it. Every skill declares :phases, so
+             ;; there is nothing to skip and no guard.
+             doc-phases (set (keys (:phases document)))]
          (when-not (seq triggers)
            (throw (ex-info "V4 skill IR missing :entry-triggers"
                            {:id id :ir-entries (vec ir-entries)})))
@@ -161,11 +167,11 @@
                            {:id id
                             :triggers (vec (keys triggers))
                             :ir-entries (vec ir-entries)})))
-         (when (and (seq doc-graphs) (not= ir-entries doc-graphs))
-           (throw (ex-info "V4 IR :entries keys must match document graphs"
+         (when-not (= ir-entries doc-phases)
+           (throw (ex-info "V4 IR :entries keys must match the document's :phases"
                            {:id id
                             :ir-entries (vec ir-entries)
-                            :document-graphs (vec doc-graphs)})))))
+                            :document-phases (vec doc-phases)})))))
      {:skills skills
       :registrations skills
       :sources (into {} (map (juxt :id :document) skills))

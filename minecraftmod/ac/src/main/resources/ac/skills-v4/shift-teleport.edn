@@ -1,24 +1,30 @@
 {:schema :ac/skill-v4,
+ :id :shift-teleport,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.teleporter.shift_teleport.desc",
- :name-key "ability.skill.teleporter.shift_teleport",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :session,
+ :parameters
+ {:maximum-range {:type :double},
+  :damage {:type :double},
+  :exp-base {:type :double}},
  :state
  {:hand-item {:type :any, :default nil},
   :trace {:type :any, :default nil},
   :targets {:type :any, :default []}},
+ :tunables
+ {:maximum-range {:curve :mastery-lerp},
+  :damage {:curve :mastery-lerp},
+  :release-cp {:curve :mastery-lerp},
+  :release-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-base {:curve :const}},
  :costs
  {:release
   {:resources
    {:cp {:ref [:input :tunables :release-cp]},
     :overload {:ref [:input :tunables :release-overload]}}}},
- :mark-policies nil,
- :activation :session,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression nil,
+ :invariants nil,
  :requires
  [:caster/eye
   :caster/body
@@ -27,6 +33,14 @@
   :world/id
   :caster/creative?
   :rng/seed],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.teleporter.shift_teleport",
+ :description-key "ability.skill.teleporter.shift_teleport.desc",
+ :mark-policies nil,
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -431,18 +445,4 @@
        (:id target)],
       :payload {}}))
    ^{:nid "n/n--entry--abort-3"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :shift-teleport,
- :tunables
- {:maximum-range {:curve :mastery-lerp},
-  :damage {:curve :mastery-lerp},
-  :release-cp {:curve :mastery-lerp},
-  :release-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-base {:curve :const}},
- :invariants nil,
- :parameters
- {:maximum-range {:type :double},
-  :damage {:type :double},
-  :exp-base {:type :double}},
- :progression nil}
+   (finish {:outcome :aborted, :end-ability? true})]}}

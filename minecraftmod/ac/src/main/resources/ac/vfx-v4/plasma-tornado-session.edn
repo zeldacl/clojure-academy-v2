@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :plasma-tornado-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters {:origin-base {:type :vec3}},
  :entry-triggers {:render :vfx/render},
@@ -26,5 +27,4 @@
      :height 12.0,
      :spacing {:min 1.0, :max 2.0}})
    ^{:nid "n/end"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

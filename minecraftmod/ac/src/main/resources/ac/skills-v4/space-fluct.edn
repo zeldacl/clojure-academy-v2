@@ -1,23 +1,14 @@
 {:schema :ac/skill-v4,
- :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :cooldown nil,
- :state {},
- :costs nil,
- :mark-policies nil,
- :activation :passive,
- :requires [:world/id :rng/seed],
- :phases
- {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
-  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
-  :release
-  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
-  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]},
  :id :space-fluct,
+ :skill {:category :migrated, :level 1},
+ :activation :passive,
+ :parameters
+ {:damage-multipliers {:type :any},
+  :level0-probability {:type :double},
+  :level1-probability {:type :double},
+  :level2-probability {:type :double},
+  :exp-critical {:type :double}},
+ :state {},
  :tunables
  {:damage-multipliers
   {:curve :pair, :source-skill-id :dim-folding-theorem},
@@ -25,13 +16,17 @@
   :level1-probability {:curve :mastery-lerp},
   :level2-probability {:curve :mastery-lerp},
   :exp-critical {:curve :const}},
+ :costs nil,
+ :cooldown nil,
+ :progression nil,
  :invariants nil,
- :parameters
- {:damage-multipliers {:type :any},
-  :level0-probability {:type :double},
-  :level1-probability {:type :double},
-  :level2-probability {:type :double},
-  :exp-critical {:type :double}},
+ :requires [:world/id :rng/seed],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :mark-policies nil,
  :damage-policies
  [{:on :combat/damage,
    :priority 200,
@@ -84,4 +79,9 @@
     {:level-2
      [{:type :achievement/trigger,
        :payload {:id "teleporter.mastery"}}]}}}],
- :progression nil}
+ :phases
+ {:start [^{:nid "n/n--entry--start-0"} (finish {:outcome :passive})],
+  :pulse [^{:nid "n/n--entry--pulse-0"} (finish {:outcome :passive})],
+  :release
+  [^{:nid "n/n--entry--release-0"} (finish {:outcome :passive})],
+  :abort [^{:nid "n/n--entry--abort-0"} (finish {:outcome :passive})]}}

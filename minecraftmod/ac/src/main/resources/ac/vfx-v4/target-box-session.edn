@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :target-box-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:position {:type :vec3},
@@ -13,5 +14,4 @@
    (target-box
     {:center ?position, :width ?width, :color ?color, :height ?height})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

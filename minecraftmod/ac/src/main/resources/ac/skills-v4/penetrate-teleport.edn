@@ -1,23 +1,39 @@
 {:schema :ac/skill-v4,
+ :id :penetrate-teleport,
  :skill {:category :migrated, :level 1},
+ :activation :session,
+ :parameters
+ {:max-distance {:type :double},
+  :cp-per-block {:type :double},
+  :release-overload {:type :double},
+  :scan-step {:type :double}},
+ :state
+ {:destination {:type :any, :default nil},
+  :can-teleport? {:type :boolean, :default false},
+  :desired-distance {:type :double, :default 0.5}},
+ :tunables
+ {:max-distance {:curve :mastery-lerp},
+  :cp-per-block {:curve :mastery-lerp},
+  :release-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :exp-per-distance {:curve :const},
+  :scan-step {:curve :const}},
+ :costs nil,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression
+ {:teleport {:per-mark {:ref [:input :tunables :exp-per-distance]}}},
+ :invariants nil,
+ :requires
+ [:caster/eye :caster/aim :caster/id :world/id :charge/ticks],
  :entry-triggers
  {:start :phase/start,
   :pulse :phase/pulse,
   :release :phase/release,
   :abort :phase/abort,
   :slot-wheel :phase/slot-wheel},
- :description-key "ability.skill.teleporter.penetrate_teleport.desc",
  :name-key "ability.skill.teleporter.penetrate_teleport",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :state
- {:destination {:type :any, :default nil},
-  :can-teleport? {:type :boolean, :default false},
-  :desired-distance {:type :double, :default 0.5}},
- :costs nil,
+ :description-key "ability.skill.teleporter.penetrate_teleport.desc",
  :mark-policies nil,
- :activation :session,
- :requires
- [:caster/eye :caster/aim :caster/id :world/id :charge/ticks],
  :phases
  {:start
   [(let owner-id ?caster/id)
@@ -278,20 +294,4 @@
    ^{:nid "n/n--entry--slot-wheel-3"}
    (state! :desired-distance desired-distance-next)
    ^{:nid "n/n--entry--slot-wheel-4"}
-   (finish {:outcome :distance-updated})]},
- :id :penetrate-teleport,
- :tunables
- {:max-distance {:curve :mastery-lerp},
-  :cp-per-block {:curve :mastery-lerp},
-  :release-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :exp-per-distance {:curve :const},
-  :scan-step {:curve :const}},
- :invariants nil,
- :parameters
- {:max-distance {:type :double},
-  :cp-per-block {:type :double},
-  :release-overload {:type :double},
-  :scan-step {:type :double}},
- :progression
- {:teleport {:per-mark {:ref [:input :tunables :exp-per-distance]}}}}
+   (finish {:outcome :distance-updated})]}}

@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :endpoint-burst,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:sound-pitch {:type :float},
@@ -33,5 +34,4 @@
      :pitch ?sound-pitch,
      :position ?to})
    ^{:nid "n/n--entry--default-3"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

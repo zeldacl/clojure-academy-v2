@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :blood-retrograde-impact,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:spray-duplicates {:type :int},
@@ -30,5 +31,4 @@
       :size ?splash-size},
      :anchor ?origin})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

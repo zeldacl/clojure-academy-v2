@@ -28,6 +28,7 @@
    stamp and still pass."
   (:require [clojure.test :refer [deftest is]]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.walk :as walk]
             [cn.li.node.api :as node-api]
             [cn.li.ability.editor.graph :as graph]
@@ -133,3 +134,32 @@
         "a no-op save lost node ids -- diagnostics and jump-to-node point at them")
     (is (every? :text-equal? results)
         "a no-op save rewrote the file, so every edit will diff as a whole file")))
+
+(deftest a-written-document-is-in-canonical-section-order-test
+  ;; Byte equality between a file and its no-op save cannot see this: if the
+  ;; writer's ordering silently does not apply, both sides are equally
+  ;; unordered and the comparison still passes. It happened -- stamps-only
+  ;; postwalks the document, which rebuilds every map and discards ordering,
+  ;; so running it after the ordering undid it. Hence an assertion that
+  ;; reads the order rather than comparing two things produced the same way.
+  ;; Read from the TEXT, not from the parsed document: edn/read hands back
+  ;; a hash map for anything over eight keys, so (keys doc) is hash order no
+  ;; matter what the file says. Asserting on the parse would have reported a
+  ;; failure that was entirely in the assertion.
+  (let [head [":schema" ":id"]
+        top-keys (fn [text]
+                   ;; A top-level key is the first thing on a line, at
+                   ;; nesting depth one: the opening "{" for the first, a
+                   ;; single leading space for the rest. pprint indents
+                   ;; everything nested further.
+                   (vec (keep (fn [line]
+                                (let [m (re-find #"^[{ ](:[a-z?!*+-]+)" line)]
+                                  (second m)))
+                              (str/split-lines text))))]
+    (doseq [r ["ac/skills-v4/vec-deviation.edn" "ac/skills-v4/railgun.edn"
+               "ac/vfx-v4/arc-strike-transient.edn"]]
+      (let [ks (top-keys (slurp (io/resource r)))]
+        (is (= head (vec (take (count head) ks)))
+            (str r " does not start in canonical section order: " (pr-str (take 8 ks))))
+        (is (= ":phases" (last ks))
+            (str r " does not end with its body: " (pr-str (take-last 3 ks))))))))

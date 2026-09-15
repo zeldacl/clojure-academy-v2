@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :ring-fade-audio,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:fade-at {:type :int},
@@ -65,5 +66,4 @@
        :alpha fade-alpha})]
     [])
    ^{:nid "n/n--entry--default-3"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

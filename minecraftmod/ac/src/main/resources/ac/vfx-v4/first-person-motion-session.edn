@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :first-person-motion-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:stage {:type :resource-id},
@@ -16,5 +17,4 @@
      :duration-ticks ?duration-ticks,
      :curves ?curves})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

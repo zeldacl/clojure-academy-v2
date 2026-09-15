@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :particle-trail-audio-transient,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:sound-position {:type :vec3},
@@ -43,5 +44,4 @@
     {:sound-id ?sound-id,
      :position ?sound-position,
      :volume ?sound-volume,
-     :pitch ?sound-pitch})]},
- :lifecycle {:mode :transient}}
+     :pitch ?sound-pitch})]}}

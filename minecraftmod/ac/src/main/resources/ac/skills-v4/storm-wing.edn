@@ -1,5 +1,58 @@
 {:schema :ac/skill-v4,
+ :id :storm-wing,
  :skill {:category :migrated, :level 1},
+ :activation :toggle,
+ :parameters
+ {:soft-block-search-radius {:type :double},
+  :movement-acceleration {:type :double},
+  :soft-block-tries {:type :long},
+  :soft-hardness-max {:type :double},
+  :mastery-knockback-speed {:type :any},
+  :near-ground-distance {:type :double},
+  :near-ground-eye-height {:type :double},
+  :movement-speed-scale {:type :any},
+  :movement-speed-multipliers {:type :any},
+  :hover-near-ground-velocity {:type :double},
+  :mastery-knockback-radius {:type :double},
+  :hover-air-velocity {:type :double},
+  :low-exp-threshold {:type :double},
+  :charge-time {:type :long},
+  :movement-speed-exp-threshold {:type :double}},
+ :state
+ {:phase {:type :long, :default 0},
+  :charge-ticks {:type :long, :default 0},
+  :previous-can-fly? {:type :boolean, :default false},
+  :move-direction {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}}},
+ :tunables
+ {:soft-block-search-radius {:curve :const},
+  :movement-acceleration {:curve :const},
+  :exp-tick {:curve :const},
+  :soft-block-tries {:curve :const, :type :int},
+  :cost-tick-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :soft-hardness-max {:curve :const},
+  :mastery-knockback-speed {:curve :pair},
+  :near-ground-distance {:curve :const},
+  :near-ground-eye-height {:curve :const},
+  :movement-speed-scale {:curve :pair},
+  :movement-speed-multipliers {:curve :pair},
+  :cost-tick-cp {:curve :mastery-lerp},
+  :hover-near-ground-velocity {:curve :const},
+  :mastery-knockback-radius {:curve :const},
+  :hover-air-velocity {:curve :const},
+  :low-exp-threshold {:curve :const},
+  :charge-time {:curve :mastery-lerp, :type :int},
+  :movement-speed-exp-threshold {:curve :const}},
+ :costs
+ {:flight
+  {:resources
+   {:cp {:ref [:input :tunables :cost-tick-cp]},
+    :overload {:ref [:input :tunables :cost-tick-overload]}}}},
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression
+ {:flight-tick {:per-mark {:ref [:input :tunables :exp-tick]}}},
+ :invariants nil,
+ :requires [:caster/body :caster/id :world/id :charge/ticks],
  :entry-triggers
  {:movement/right-press :phase/right-press,
   :movement/back-press :phase/back-press,
@@ -17,22 +70,9 @@
   :movement/left-tick :phase/left-tick,
   :movement/left-press :phase/left-press,
   :movement/right-release :phase/right-release},
- :description-key "ability.skill.vecmanip.storm_wing.desc",
  :name-key "ability.skill.vecmanip.storm_wing",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :state
- {:phase {:type :long, :default 0},
-  :charge-ticks {:type :long, :default 0},
-  :previous-can-fly? {:type :boolean, :default false},
-  :move-direction {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}}},
- :costs
- {:flight
-  {:resources
-   {:cp {:ref [:input :tunables :cost-tick-cp]},
-    :overload {:ref [:input :tunables :cost-tick-overload]}}}},
+ :description-key "ability.skill.vecmanip.storm_wing.desc",
  :mark-policies nil,
- :activation :toggle,
- :requires [:caster/body :caster/id :world/id :charge/ticks],
  :phases
  {:movement/right-press
   [(let phase %phase)
@@ -716,44 +756,4 @@
   [^{:nid "n/n--entry--movement-r-e01d6688"}
    (state! :move-direction nil)
    ^{:nid "n/n163"}
-   (finish {:outcome :ended})]},
- :id :storm-wing,
- :tunables
- {:soft-block-search-radius {:curve :const},
-  :movement-acceleration {:curve :const},
-  :exp-tick {:curve :const},
-  :soft-block-tries {:curve :const, :type :int},
-  :cost-tick-overload {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :soft-hardness-max {:curve :const},
-  :mastery-knockback-speed {:curve :pair},
-  :near-ground-distance {:curve :const},
-  :near-ground-eye-height {:curve :const},
-  :movement-speed-scale {:curve :pair},
-  :movement-speed-multipliers {:curve :pair},
-  :cost-tick-cp {:curve :mastery-lerp},
-  :hover-near-ground-velocity {:curve :const},
-  :mastery-knockback-radius {:curve :const},
-  :hover-air-velocity {:curve :const},
-  :low-exp-threshold {:curve :const},
-  :charge-time {:curve :mastery-lerp, :type :int},
-  :movement-speed-exp-threshold {:curve :const}},
- :invariants nil,
- :parameters
- {:soft-block-search-radius {:type :double},
-  :movement-acceleration {:type :double},
-  :soft-block-tries {:type :long},
-  :soft-hardness-max {:type :double},
-  :mastery-knockback-speed {:type :any},
-  :near-ground-distance {:type :double},
-  :near-ground-eye-height {:type :double},
-  :movement-speed-scale {:type :any},
-  :movement-speed-multipliers {:type :any},
-  :hover-near-ground-velocity {:type :double},
-  :mastery-knockback-radius {:type :double},
-  :hover-air-velocity {:type :double},
-  :low-exp-threshold {:type :double},
-  :charge-time {:type :long},
-  :movement-speed-exp-threshold {:type :double}},
- :progression
- {:flight-tick {:per-mark {:ref [:input :tunables :exp-tick]}}}}
+   (finish {:outcome :ended})]}}

@@ -1,23 +1,83 @@
 {:schema :ac/skill-v4,
+ :id :vec-reflection,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.vecmanip.vec_reflection.desc",
- :name-key "ability.skill.vecmanip.vec_reflection",
- :cooldown nil,
+ :activation :toggle,
+ :parameters
+ {:damage-multiplier {:type :any},
+  :large-fireball-ids {:type :any},
+  :damage-cp {:type :any},
+  :min-reflected-damage {:type :double},
+  :target-radius {:type :double},
+  :max-reflections {:type :long},
+  :excluded-entity-ids {:type :any},
+  :small-fireball-ids {:type :any},
+  :affected-entity-difficulty {:type :any},
+  :exp-damage-scale {:type :double}},
  :state {:visited-projectiles {:type :any, :default nil}},
+ :tunables
+ {:tick-cp {:curve :mastery-lerp},
+  :damage-multiplier {:curve :mastery-lerp},
+  :large-fireball-ids {:curve :const, :type :string-list},
+  :reflect-entity-cp {:curve :mastery-lerp},
+  :damage-cp {:curve :mastery-lerp},
+  :overload-keep {:curve :mastery-lerp},
+  :min-reflected-damage {:curve :const},
+  :exp-reflect-entity-scale {:curve :const},
+  :target-radius {:curve :const},
+  :max-reflections {:curve :const, :type :int},
+  :excluded-entity-ids {:curve :const, :type :string-list},
+  :small-fireball-ids {:curve :const, :type :string-list},
+  :affected-entity-difficulty {:curve :const, :type :string-list},
+  :exp-damage-scale {:curve :const}},
  :costs
  {:activate
   {:resources {:overload {:ref [:input :tunables :overload-keep]}}},
   :per-tick {:resources {:cp {:ref [:input :tunables :tick-cp]}}},
   :per-reflect
   {:resources {:cp {:ref [:input :tunables :reflect-entity-cp]}}}},
- :mark-policies nil,
- :activation :toggle,
+ :cooldown nil,
+ :progression
+ {:reflect-entity
+  {:per-mark {:ref [:input :tunables :exp-reflect-entity-scale]}},
+  :damaged {:per-mark {:ref [:input :tunables :exp-damage-scale]}}},
+ :invariants
+ {:overload-floor {:ref [:input :tunables :overload-keep]}},
  :requires [:caster/eye :caster/aim],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.vecmanip.vec_reflection",
+ :description-key "ability.skill.vecmanip.vec_reflection.desc",
+ :mark-policies nil,
+ :damage-policies
+ [{:on :combat/damage,
+   :priority 60,
+   :when
+   {:expr :bool/and,
+    :args
+    [{:ref [:input :context :enabled?]}
+     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
+   :program
+   {:component :damage/reflect,
+    :multiplier
+    {:expr :math/lerp,
+     :args
+     [{:ref [:input :tunables :damage-multiplier 0]}
+      {:ref [:input :tunables :damage-multiplier 1]}
+      {:ref [:input :context :skill-exp]}]},
+    :cost-per-damage
+    {:expr :math/lerp,
+     :args
+     [{:ref [:input :tunables :damage-cp 0]}
+      {:ref [:input :tunables :damage-cp 1]}
+      {:ref [:input :context :skill-exp]}]},
+    :minimum {:ref [:input :tunables :min-reflected-damage]},
+    :max-depth {:ref [:input :tunables :max-reflections]},
+    :cost-resource :cp,
+    :progression-tag :damaged,
+    :progression-scale {:ref [:input :tunables :exp-damage-scale]}}}],
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -193,64 +253,4 @@
      :instance-key [:activation :vec-reflection],
      :payload {}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted, :end-ability? true})]},
- :id :vec-reflection,
- :tunables
- {:tick-cp {:curve :mastery-lerp},
-  :damage-multiplier {:curve :mastery-lerp},
-  :large-fireball-ids {:curve :const, :type :string-list},
-  :reflect-entity-cp {:curve :mastery-lerp},
-  :damage-cp {:curve :mastery-lerp},
-  :overload-keep {:curve :mastery-lerp},
-  :min-reflected-damage {:curve :const},
-  :exp-reflect-entity-scale {:curve :const},
-  :target-radius {:curve :const},
-  :max-reflections {:curve :const, :type :int},
-  :excluded-entity-ids {:curve :const, :type :string-list},
-  :small-fireball-ids {:curve :const, :type :string-list},
-  :affected-entity-difficulty {:curve :const, :type :string-list},
-  :exp-damage-scale {:curve :const}},
- :invariants
- {:overload-floor {:ref [:input :tunables :overload-keep]}},
- :parameters
- {:damage-multiplier {:type :any},
-  :large-fireball-ids {:type :any},
-  :damage-cp {:type :any},
-  :min-reflected-damage {:type :double},
-  :target-radius {:type :double},
-  :max-reflections {:type :long},
-  :excluded-entity-ids {:type :any},
-  :small-fireball-ids {:type :any},
-  :affected-entity-difficulty {:type :any},
-  :exp-damage-scale {:type :double}},
- :damage-policies
- [{:on :combat/damage,
-   :priority 60,
-   :when
-   {:expr :bool/and,
-    :args
-    [{:ref [:input :context :enabled?]}
-     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
-   :program
-   {:component :damage/reflect,
-    :multiplier
-    {:expr :math/lerp,
-     :args
-     [{:ref [:input :tunables :damage-multiplier 0]}
-      {:ref [:input :tunables :damage-multiplier 1]}
-      {:ref [:input :context :skill-exp]}]},
-    :cost-per-damage
-    {:expr :math/lerp,
-     :args
-     [{:ref [:input :tunables :damage-cp 0]}
-      {:ref [:input :tunables :damage-cp 1]}
-      {:ref [:input :context :skill-exp]}]},
-    :minimum {:ref [:input :tunables :min-reflected-damage]},
-    :max-depth {:ref [:input :tunables :max-reflections]},
-    :cost-resource :cp,
-    :progression-tag :damaged,
-    :progression-scale {:ref [:input :tunables :exp-damage-scale]}}}],
- :progression
- {:reflect-entity
-  {:per-mark {:ref [:input :tunables :exp-reflect-entity-scale]}},
-  :damaged {:per-mark {:ref [:input :tunables :exp-damage-scale]}}}}
+   (finish {:outcome :aborted, :end-ability? true})]}}

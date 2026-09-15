@@ -1,5 +1,45 @@
 {:schema :ac/skill-v4,
+ :id :flashing,
  :skill {:category :migrated, :level 1},
+ :activation :toggle,
+ :parameters
+ {:blink-distance {:type :double},
+  :activate-cp {:type :double},
+  :activate-overload {:type :double},
+  :max-active-ticks {:type :double},
+  :blink-cp {:type :double},
+  :blink-overload {:type :double},
+  :post-blink-fall-protect-ticks {:type :double}},
+ :state
+ {:destination {:type :any, :default nil},
+  :active-ticks {:type :long, :default 0},
+  :fall-protect-ticks {:type :long, :default 0},
+  :overload-floor {:type :double, :default 0.0}},
+ :tunables
+ {:max-active-ticks {:curve :mastery-lerp},
+  :activate-cp {:curve :mastery-lerp},
+  :blink-cp {:curve :mastery-lerp},
+  :deactivate-cooldown-ticks {:curve :mastery-lerp},
+  :exp-per-blink {:curve :const},
+  :post-blink-fall-protect-ticks {:curve :mastery-lerp},
+  :activate-overload {:curve :mastery-lerp},
+  :blink-overload {:curve :mastery-lerp},
+  :blink-interval-ticks {:curve :mastery-lerp},
+  :blink-distance {:curve :mastery-lerp}},
+ :costs nil,
+ :cooldown
+ {:deactivate
+  {:ticks {:ref [:input :tunables :deactivate-cooldown-ticks]}}},
+ :progression
+ {:blink {:per-mark {:ref [:input :tunables :exp-per-blink]}}},
+ :invariants nil,
+ :requires
+ [:caster/eye
+  :caster/body
+  :caster/aim
+  :caster/id
+  :caster/creative?
+  :world/id],
  :entry-triggers
  {:movement/right-press :phase/right-press,
   :movement/back-press :phase/back-press,
@@ -17,26 +57,9 @@
   :movement/left-tick :phase/left-tick,
   :movement/left-press :phase/left-press,
   :movement/right-release :phase/right-release},
- :description-key "ability.skill.teleporter.flashing.desc",
  :name-key "ability.skill.teleporter.flashing",
- :cooldown
- {:deactivate
-  {:ticks {:ref [:input :tunables :deactivate-cooldown-ticks]}}},
- :state
- {:destination {:type :any, :default nil},
-  :active-ticks {:type :long, :default 0},
-  :fall-protect-ticks {:type :long, :default 0},
-  :overload-floor {:type :double, :default 0.0}},
- :costs nil,
+ :description-key "ability.skill.teleporter.flashing.desc",
  :mark-policies nil,
- :activation :toggle,
- :requires
- [:caster/eye
-  :caster/body
-  :caster/aim
-  :caster/id
-  :caster/creative?
-  :world/id],
  :phases
  {:movement/right-press
   [(let owner-id ?caster/id)
@@ -375,27 +398,4 @@
     $post-blink-fall-protect-ticks
     blink-progression)
    ^{:nid "n/n216"}
-   (finish {:outcome :ended})]},
- :id :flashing,
- :tunables
- {:max-active-ticks {:curve :mastery-lerp},
-  :activate-cp {:curve :mastery-lerp},
-  :blink-cp {:curve :mastery-lerp},
-  :deactivate-cooldown-ticks {:curve :mastery-lerp},
-  :exp-per-blink {:curve :const},
-  :post-blink-fall-protect-ticks {:curve :mastery-lerp},
-  :activate-overload {:curve :mastery-lerp},
-  :blink-overload {:curve :mastery-lerp},
-  :blink-interval-ticks {:curve :mastery-lerp},
-  :blink-distance {:curve :mastery-lerp}},
- :invariants nil,
- :parameters
- {:blink-distance {:type :double},
-  :activate-cp {:type :double},
-  :activate-overload {:type :double},
-  :max-active-ticks {:type :double},
-  :blink-cp {:type :double},
-  :blink-overload {:type :double},
-  :post-blink-fall-protect-ticks {:type :double}},
- :progression
- {:blink {:per-mark {:ref [:input :tunables :exp-per-blink]}}}}
+   (finish {:outcome :ended})]}}

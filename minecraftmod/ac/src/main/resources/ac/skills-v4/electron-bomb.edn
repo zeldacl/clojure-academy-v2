@@ -1,13 +1,26 @@
 {:schema :ac/skill-v4,
+ :id :electron-bomb,
  :skill {:category :migrated, :level 1},
- :entry-triggers {:default :activation/start},
- :description-key "ability.skill.meltdowner.electron_bomb.desc",
- :name-key "ability.skill.meltdowner.electron_bomb",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :state {},
- :costs nil,
- :mark-policies nil,
  :activation :instant,
+ :parameters
+ {:damage {:type :double},
+  :cooldown-ticks {:type :double},
+  :exp-hit {:type :double},
+  :settle-ticks {:type :long},
+  :settle-ticks-improved {:type :long},
+  :improved-exp-threshold {:type :double}},
+ :state {},
+ :tunables
+ {:damage {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :exp-hit {:curve :const},
+  :settle-ticks {:curve :const, :type :int},
+  :settle-ticks-improved {:curve :const, :type :int},
+  :improved-exp-threshold {:curve :const}},
+ :costs nil,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression {:cast {:per-mark {:ref [:input :tunables :exp-hit]}}},
+ :invariants nil,
  :requires
  [:caster/id
   :caster/eye
@@ -15,6 +28,10 @@
   :world/id
   :progression/mastery
   :rng/seed],
+ :entry-triggers {:default :activation/start},
+ :name-key "ability.skill.meltdowner.electron_bomb",
+ :description-key "ability.skill.meltdowner.electron_bomb.desc",
+ :mark-policies nil,
  :phases
  {:default
   [(let owner-id ?caster/id)
@@ -98,21 +115,4 @@
    ^{:nid "n/n--entry--default-14"}
    (cooldown/start {:name :main, :ticks main-cooldown})
    ^{:nid "n/n--entry--default-15"}
-   (finish {:outcome :performed})]},
- :id :electron-bomb,
- :tunables
- {:damage {:curve :mastery-lerp},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :exp-hit {:curve :const},
-  :settle-ticks {:curve :const, :type :int},
-  :settle-ticks-improved {:curve :const, :type :int},
-  :improved-exp-threshold {:curve :const}},
- :invariants nil,
- :parameters
- {:damage {:type :double},
-  :cooldown-ticks {:type :double},
-  :exp-hit {:type :double},
-  :settle-ticks {:type :long},
-  :settle-ticks-improved {:type :long},
-  :improved-exp-threshold {:type :double}},
- :progression {:cast {:per-mark {:ref [:input :tunables :exp-hit]}}}}
+   (finish {:outcome :performed})]}}

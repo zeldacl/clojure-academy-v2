@@ -1,18 +1,50 @@
 {:schema :ac/skill-v4,
+ :id :thunder-bolt,
  :skill {:category :migrated, :level 1},
- :entry-triggers {:default :activation/start},
- :description-key "ability.skill.electromaster.thunder_bolt.desc",
- :name-key "ability.skill.electromaster.thunder_bolt",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :instant,
+ :parameters
+ {:slowness-aoe-retry-duration-ticks {:type :long},
+  :targeting-range {:type :double},
+  :direct-damage {:type :double},
+  :slowness-amplifier {:type :long},
+  :slowness-chance {:type :double},
+  :aoe-damage {:type :double},
+  :creeper-charge-chance {:type :double},
+  :slowness-duration-ticks {:type :long},
+  :slowness-exp-threshold {:type :double},
+  :aoe-radius {:type :double}},
  :state {},
+ :tunables
+ {:slowness-aoe-retry-duration-ticks {:curve :const, :type :int},
+  :exp-effective {:curve :const},
+  :targeting-range {:curve :const},
+  :direct-damage {:curve :mastery-lerp},
+  :cost-down-cp {:curve :mastery-lerp},
+  :slowness-amplifier {:curve :const, :type :int},
+  :slowness-chance {:curve :const},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-ineffective {:curve :const},
+  :aoe-damage {:curve :mastery-lerp},
+  :creeper-charge-chance {:curve :const},
+  :slowness-duration-ticks {:curve :const, :type :int},
+  :slowness-exp-threshold {:curve :const},
+  :aoe-radius {:curve :const},
+  :cost-down-overload {:curve :mastery-lerp}},
  :costs
  {:fire
   {:resources
    {:cp {:ref [:input :tunables :cost-down-cp]},
     :overload {:ref [:input :tunables :cost-down-overload]}}}},
- :mark-policies nil,
- :activation :instant,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression
+ {:effective {:per-mark {:ref [:input :tunables :exp-effective]}},
+  :ineffective {:per-mark {:ref [:input :tunables :exp-ineffective]}}},
+ :invariants nil,
  :requires [:caster/id :caster/eye :caster/aim :world/id :rng/seed],
+ :entry-triggers {:default :activation/start},
+ :name-key "ability.skill.electromaster.thunder_bolt",
+ :description-key "ability.skill.electromaster.thunder_bolt.desc",
+ :mark-policies nil,
  :phases
  {:default
   [(let fire-budget ?budget/fire)
@@ -251,36 +283,4 @@
      ^{:nid "n/n--entry--default-2-then-21"}
      (finish {:outcome :performed, :end-ability? true})]
     [^{:nid "n/n--entry--default-2-else-0"}
-     (finish {:outcome :insufficient-resource})])]},
- :id :thunder-bolt,
- :tunables
- {:slowness-aoe-retry-duration-ticks {:curve :const, :type :int},
-  :exp-effective {:curve :const},
-  :targeting-range {:curve :const},
-  :direct-damage {:curve :mastery-lerp},
-  :cost-down-cp {:curve :mastery-lerp},
-  :slowness-amplifier {:curve :const, :type :int},
-  :slowness-chance {:curve :const},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-ineffective {:curve :const},
-  :aoe-damage {:curve :mastery-lerp},
-  :creeper-charge-chance {:curve :const},
-  :slowness-duration-ticks {:curve :const, :type :int},
-  :slowness-exp-threshold {:curve :const},
-  :aoe-radius {:curve :const},
-  :cost-down-overload {:curve :mastery-lerp}},
- :invariants nil,
- :parameters
- {:slowness-aoe-retry-duration-ticks {:type :long},
-  :targeting-range {:type :double},
-  :direct-damage {:type :double},
-  :slowness-amplifier {:type :long},
-  :slowness-chance {:type :double},
-  :aoe-damage {:type :double},
-  :creeper-charge-chance {:type :double},
-  :slowness-duration-ticks {:type :long},
-  :slowness-exp-threshold {:type :double},
-  :aoe-radius {:type :double}},
- :progression
- {:effective {:per-mark {:ref [:input :tunables :exp-effective]}},
-  :ineffective {:per-mark {:ref [:input :tunables :exp-ineffective]}}}}
+     (finish {:outcome :insufficient-resource})])]}}

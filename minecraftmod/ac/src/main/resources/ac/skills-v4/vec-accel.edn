@@ -1,21 +1,37 @@
 {:schema :ac/skill-v4,
+ :id :vec-accel,
  :skill {:category :migrated, :level 1},
- :entry-triggers
- {:start :phase/start,
-  :pulse :phase/pulse,
-  :release :phase/release,
-  :abort :phase/abort},
- :description-key "ability.skill.vecmanip.vec_accel.desc",
- :name-key "ability.skill.vecmanip.vec_accel",
- :cooldown nil,
+ :activation :session,
+ :parameters
+ {:pitch-offset-radians {:type :double},
+  :groundless-exp-threshold {:type :double},
+  :max-charge-ticks {:type :long},
+  :release-overload {:type :double},
+  :ground-check-distance {:type :double},
+  :cooldown-ticks {:type :long},
+  :speed-progress {:type :any},
+  :max-velocity {:type :double},
+  :release-cp {:type :double}},
  :state
  {:charge-ticks {:type :long, :default 0},
   :can-perform? {:type :boolean, :default true},
   :look-dir {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}},
   :init-vel {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}}},
+ :tunables
+ {:pitch-offset-radians {:curve :const},
+  :groundless-exp-threshold {:curve :const},
+  :max-charge-ticks {:curve :const, :type :int},
+  :release-overload {:curve :mastery-lerp},
+  :ground-check-distance {:curve :const},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-use {:curve :const},
+  :speed-progress {:curve :pair},
+  :max-velocity {:curve :const},
+  :release-cp {:curve :mastery-lerp}},
  :costs nil,
- :mark-policies nil,
- :activation :session,
+ :cooldown nil,
+ :progression {:launch {:per-mark {:ref [:input :tunables :exp-use]}}},
+ :invariants nil,
  :requires
  [:caster/eye
   :caster/body
@@ -23,6 +39,14 @@
   :caster/id
   :world/id
   :charge/ticks],
+ :entry-triggers
+ {:start :phase/start,
+  :pulse :phase/pulse,
+  :release :phase/release,
+  :abort :phase/abort},
+ :name-key "ability.skill.vecmanip.vec_accel",
+ :description-key "ability.skill.vecmanip.vec_accel.desc",
+ :mark-policies nil,
  :phases
  {:start
   [(let eye ?caster/eye)
@@ -211,28 +235,4 @@
      :instance-key [:activation :vec-accel-trajectory],
      :payload {}})
    ^{:nid "n/n--entry--abort-1"}
-   (finish {:outcome :aborted})]},
- :id :vec-accel,
- :tunables
- {:pitch-offset-radians {:curve :const},
-  :groundless-exp-threshold {:curve :const},
-  :max-charge-ticks {:curve :const, :type :int},
-  :release-overload {:curve :mastery-lerp},
-  :ground-check-distance {:curve :const},
-  :cooldown-ticks {:curve :mastery-lerp, :type :int},
-  :exp-use {:curve :const},
-  :speed-progress {:curve :pair},
-  :max-velocity {:curve :const},
-  :release-cp {:curve :mastery-lerp}},
- :invariants nil,
- :parameters
- {:pitch-offset-radians {:type :double},
-  :groundless-exp-threshold {:type :double},
-  :max-charge-ticks {:type :long},
-  :release-overload {:type :double},
-  :ground-check-distance {:type :double},
-  :cooldown-ticks {:type :long},
-  :speed-progress {:type :any},
-  :max-velocity {:type :double},
-  :release-cp {:type :double}},
- :progression {:launch {:per-mark {:ref [:input :tunables :exp-use]}}}}
+   (finish {:outcome :aborted})]}}

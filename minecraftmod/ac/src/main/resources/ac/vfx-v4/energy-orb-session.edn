@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :energy-orb-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:limit {:type :int},
@@ -72,5 +73,4 @@
      :color ?outer-color,
      :alpha fade-alpha})
    ^{:nid "n/n--entry--default-7"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

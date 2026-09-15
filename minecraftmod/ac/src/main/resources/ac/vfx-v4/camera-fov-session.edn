@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :camera-fov-session,
+ :lifecycle {:mode :session},
  :activation :instant,
  :parameters
  {:offset {:type :float},
@@ -10,5 +11,4 @@
   [^{:nid "n/n--entry--default-0"}
    (camera-fov {:duration-ticks 1, :value ?offset})
    ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :session}}
+   (finish {:outcome :performed})]}}

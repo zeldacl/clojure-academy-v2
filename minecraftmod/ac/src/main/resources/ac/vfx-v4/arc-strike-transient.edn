@@ -1,5 +1,6 @@
 {:schema :ac/vfx-v4,
  :id :arc-strike-transient,
+ :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
  {:hand-origin? {:type :bool},
@@ -45,5 +46,4 @@
      :pitch ?sound-pitch,
      :position ?sound-position})
    ^{:nid "n/n--entry--default-2"}
-   (finish {:outcome :performed})]},
- :lifecycle {:mode :transient}}
+   (finish {:outcome :performed})]}}

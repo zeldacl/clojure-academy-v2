@@ -1,18 +1,46 @@
 {:schema :ac/skill-v4,
+ :id :arc-gen,
  :skill {:category :migrated, :level 1},
- :entry-triggers {:default :activation/start},
- :description-key "ability.skill.electromaster.arc_gen.desc",
- :name-key "ability.skill.electromaster.arc_gen",
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :activation :instant,
+ :parameters
+ {:exp-entity {:type :double},
+  :fishing-exp-threshold {:type :double},
+  :ignite-probability {:type :double},
+  :creeper-charge-chance {:type :double},
+  :damage {:type :double},
+  :exp-block {:type :double},
+  :cooldown-endpoints {:type :any},
+  :max-distance {:type :double},
+  :fishing-probability {:type :double}},
  :state {},
+ :tunables
+ {:exp-entity {:curve :affine},
+  :cooldown-ticks {:curve :mastery-lerp},
+  :fishing-exp-threshold {:curve :const},
+  :cost-overload {:curve :mastery-lerp},
+  :ignite-probability {:curve :mastery-lerp},
+  :cost-cp {:curve :mastery-lerp},
+  :creeper-charge-chance {:curve :const},
+  :damage {:curve :mastery-lerp},
+  :exp-block {:curve :affine},
+  :cooldown-endpoints {:curve :pair},
+  :max-distance {:curve :mastery-lerp},
+  :fishing-probability {:curve :const}},
  :costs
  {:activate
   {:resources
    {:cp {:ref [:input :tunables :cost-cp]},
     :overload {:ref [:input :tunables :cost-overload]}}}},
- :mark-policies nil,
- :activation :instant,
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :progression
+ {:hit-entity {:per-mark {:ref [:input :tunables :exp-entity]}},
+  :hit-block {:per-mark {:ref [:input :tunables :exp-block]}}},
+ :invariants nil,
  :requires [:caster/eye :caster/aim :world/id],
+ :entry-triggers {:default :activation/start},
+ :name-key "ability.skill.electromaster.arc_gen",
+ :description-key "ability.skill.electromaster.arc_gen.desc",
+ :mark-policies nil,
  :phases
  {:default
   [(let eye ?caster/eye)
@@ -185,32 +213,4 @@
      ^{:nid "n/n--entry--default-7-then-4"}
      (finish {:outcome :performed})]
     [^{:nid "n/n--entry--default-7-else-0"}
-     (finish {:outcome :insufficient-resource})])]},
- :id :arc-gen,
- :tunables
- {:exp-entity {:curve :affine},
-  :cooldown-ticks {:curve :mastery-lerp},
-  :fishing-exp-threshold {:curve :const},
-  :cost-overload {:curve :mastery-lerp},
-  :ignite-probability {:curve :mastery-lerp},
-  :cost-cp {:curve :mastery-lerp},
-  :creeper-charge-chance {:curve :const},
-  :damage {:curve :mastery-lerp},
-  :exp-block {:curve :affine},
-  :cooldown-endpoints {:curve :pair},
-  :max-distance {:curve :mastery-lerp},
-  :fishing-probability {:curve :const}},
- :invariants nil,
- :parameters
- {:exp-entity {:type :double},
-  :fishing-exp-threshold {:type :double},
-  :ignite-probability {:type :double},
-  :creeper-charge-chance {:type :double},
-  :damage {:type :double},
-  :exp-block {:type :double},
-  :cooldown-endpoints {:type :any},
-  :max-distance {:type :double},
-  :fishing-probability {:type :double}},
- :progression
- {:hit-entity {:per-mark {:ref [:input :tunables :exp-entity]}},
-  :hit-block {:per-mark {:ref [:input :tunables :exp-block]}}}}
+     (finish {:outcome :insufficient-resource})])]}}
