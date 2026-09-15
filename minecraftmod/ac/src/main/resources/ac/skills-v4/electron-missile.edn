@@ -33,13 +33,10 @@
   :spawn-interval-ticks {:curve :const, :type :int},
   :cost-down-overload {:curve :const}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :charging
-  {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}},
+ {:activate {:resources {:overload $cost-down-overload}},
+  :charging {:resources {:cp $cost-tick-cp}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:hit {:per-mark $exp-hit}},
  :invariants nil,
  :requires
  [:caster/body :caster/id :world/id :progression/mastery :rng/seed],

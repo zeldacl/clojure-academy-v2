@@ -30,7 +30,7 @@
   :release-cp {:curve :mastery-lerp}},
  :costs nil,
  :cooldown nil,
- :progression {:launch {:per-mark {:ref [:input :tunables :exp-use]}}},
+ :progression {:launch {:per-mark $exp-use}},
  :invariants nil,
  :requires
  [:caster/eye

@@ -34,14 +34,10 @@
   :cost-down-overload {:curve :mastery-lerp},
   :effect-available-effects {:curve :const, :type :string-list}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :charging
-  {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression
- {:use {:per-mark {:ref [:input :tunables :progression-exp-use]}}},
+ {:activate {:resources {:overload $cost-down-overload}},
+  :charging {:resources {:cp $cost-tick-cp}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:use {:per-mark $progression-exp-use}},
  :invariants nil,
  :requires
  [:caster/id

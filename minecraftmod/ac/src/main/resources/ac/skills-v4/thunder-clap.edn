@@ -22,19 +22,11 @@
   :aoe-radius {:curve :mastery-lerp},
   :cost-down-overload {:curve :mastery-lerp}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :charging
-  {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
+ {:activate {:resources {:overload $cost-down-overload}},
+  :charging {:resources {:cp $cost-tick-cp}}},
  :cooldown
- {:main
-  {:ticks
-   {:expr :math/mul,
-    :args
-    [{:ref [:input :capabilities :charge/ticks]}
-     {:ref [:input :tunables :cooldown-per-hold]}]}}},
- :progression {:cast {:per-mark {:ref [:input :tunables :exp-use]}}},
+ {:main {:ticks (math/mul ?charge/ticks $cooldown-per-hold)}},
+ :progression {:cast {:per-mark $exp-use}},
  :invariants nil,
  :requires [:caster/eye :caster/aim :world/id :charge/ticks],
  :entry-triggers

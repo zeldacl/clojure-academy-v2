@@ -60,9 +60,9 @@
 
 (defn conforms?
   "Best-effort static type check for a LITERAL value against declared type
-   `t`. Only meaningful when `value` is not itself a deferred expression
-   ({:ref ...}/{:expr ...}) -- callers should skip this check for those,
-   since their real type is only known once evaluated. Opaque handles and
+   `t`. A value that is not literal has no statically known type, so
+   callers judge that first (literal-edn?) rather than guessing. Opaque
+   handles and
    :node values are accepted structurally; verifying their internal shape
    is the producing/consuming primitive's own job, not the type system's."
   [t value]
@@ -78,25 +78,16 @@
     (node-type? t) (map? value)
     :else true))
 
-(defn deferred?
-  "True when `value` is an expression form resolved only at runtime/compile
-   substitution time ({:ref ...} or {:expr ...}), for which conforms? cannot
-   meaningfully judge a literal shape."
-  [value]
-  (and (map? value) (or (vector? (:ref value)) (keyword? (:expr value)))))
-
-(defn graph-fragment?
-  "True when `value` is a nested V4 graph fragment (inline :ref / :component /
-   typed node), not a fully concrete EDN literal."
-  [value]
-  (or (deferred? value)
-      (and (map? value) (keyword? (:component value)))
-      (and (map? value) (keyword? (:type value)) (contains? value :nid))))
-
 (defn literal-edn?
-  "True when `value` is fully concrete EDN (numbers, keywords, nested maps of
-   the same) with no graph fragments. Used to decide whether compile-time
-   payload shape checks apply."
+  "True when `value` is fully concrete EDN -- numbers, keywords, strings,
+   and nested maps/vectors of the same. Decides whether a compile-time
+   payload shape check has anything to check.
+
+   It used to also exclude `graph fragments`: an inline {:ref [...]},
+   {:expr ...} or {:component ...} that stood for a value resolved later.
+   Content has none of those spellings now -- a reference is a sigil and a
+   call is a call -- so the exclusion could never fire, and the two
+   predicates behind it (deferred?, graph-fragment?) went with it."
   [value]
   (cond
     (nil? value) true
@@ -104,7 +95,6 @@
     (boolean? value) true
     (string? value) true
     (keyword? value) true
-    (graph-fragment? value) false
     (map? value) (every? literal-edn? (vals value))
     (vector? value) (every? literal-edn? value)
     :else false))
@@ -152,9 +142,8 @@
    reports these as ordinary diagnostics so the editor can list them and the
    catalog can refuse to start on them).
 
-   Only LITERAL values are judged -- a payload slot wired to a graph node or
-   `{:ref ...}` fragment has no statically known value, so it is skipped
-   rather than guessed at."
+   Only LITERAL values are judged -- a payload slot holding an expression
+   has no statically known value, so it is skipped rather than guessed at."
   ([effect-id input-specs payload]
    (payload-problems effect-id input-specs payload {}))
   ([effect-id input-specs payload {:keys [require-inputs?]

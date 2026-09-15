@@ -10,6 +10,7 @@
             [clojure.walk :as walk]
             [cn.li.node.digest :as digest]
             [cn.li.node.compile :as compile]
+            [cn.li.node.expr :as expr]
             [cn.li.node.surface :as surface]
             [cn.li.node.schema-export :as schema-export]
             [cn.li.node.cost :as cost]
@@ -124,6 +125,19 @@
    catalog in ac's surface-migration-test."
   [doc opts mode]
   (compile/compile-program (surface/normalize doc) opts mode))
+(defn evaluate-op
+  "One operator and its already-resolved arguments -> the value.
+
+   The single definition of what :math/mul and friends mean. Exposed here
+   because a content module resolving a declaration's formula needs the
+   same semantics the compiler gives a program, and reaching into
+   cn.li.node.expr directly is a layering violation
+   (verifyContentModuleCoreIsolation) -- the rule is right, and one more
+   api function is cheaper than a second operator table, which is what the
+   callers had before."
+  [op args]
+  (expr/evaluate op args))
+
 (defn cost-summary [ir vocab] (cost/analyze ir vocab))
 (defn export-schema [node-environment] (schema-export/export-environment node-environment))
 (defn build-environment [opts] (environment/build opts))

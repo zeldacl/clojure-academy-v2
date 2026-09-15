@@ -45,12 +45,9 @@
   :movement-speed-exp-threshold {:curve :const}},
  :costs
  {:flight
-  {:resources
-   {:cp {:ref [:input :tunables :cost-tick-cp]},
-    :overload {:ref [:input :tunables :cost-tick-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression
- {:flight-tick {:per-mark {:ref [:input :tunables :exp-tick]}}},
+  {:resources {:cp $cost-tick-cp, :overload $cost-tick-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:flight-tick {:per-mark $exp-tick}},
  :invariants nil,
  :requires [:caster/body :caster/id :world/id :charge/ticks],
  :entry-triggers

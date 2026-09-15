@@ -19,11 +19,9 @@
   :exp-hit {:curve :const}},
  :costs
  {:fire
-  {:resources
-   {:cp {:ref [:input :tunables :cost-down-cp]},
-    :overload {:ref [:input :tunables :cost-down-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}},
+  {:resources {:cp $cost-down-cp, :overload $cost-down-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:hit {:per-mark $exp-hit}},
  :invariants nil,
  :requires
  [:caster/id :caster/body :caster/eye :caster/aim :world/id :rng/seed],

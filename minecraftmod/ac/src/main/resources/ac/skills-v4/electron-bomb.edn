@@ -18,8 +18,8 @@
   :settle-ticks-improved {:curve :const, :type :int},
   :improved-exp-threshold {:curve :const}},
  :costs nil,
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression {:cast {:per-mark {:ref [:input :tunables :exp-hit]}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:cast {:per-mark $exp-hit}},
  :invariants nil,
  :requires
  [:caster/id

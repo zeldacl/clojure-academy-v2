@@ -20,11 +20,9 @@
   :exp-cast {:curve :const}},
  :costs
  {:activate
-  {:resources
-   {:cp {:ref [:input :tunables :cost-down-cp]},
-    :overload {:ref [:input :tunables :cost-down-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression {:cast {:per-mark {:ref [:input :tunables :exp-cast]}}},
+  {:resources {:cp $cost-down-cp, :overload $cost-down-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:cast {:per-mark $exp-cast}},
  :invariants nil,
  :requires
  [:caster/id

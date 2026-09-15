@@ -27,14 +27,11 @@
   :max-distance {:curve :mastery-lerp},
   :fishing-probability {:curve :const}},
  :costs
- {:activate
-  {:resources
-   {:cp {:ref [:input :tunables :cost-cp]},
-    :overload {:ref [:input :tunables :cost-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ {:activate {:resources {:cp $cost-cp, :overload $cost-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
  :progression
- {:hit-entity {:per-mark {:ref [:input :tunables :exp-entity]}},
-  :hit-block {:per-mark {:ref [:input :tunables :exp-block]}}},
+ {:hit-entity {:per-mark $exp-entity},
+  :hit-block {:per-mark $exp-block}},
  :invariants nil,
  :requires [:caster/eye :caster/aim :world/id],
  :entry-triggers {:default :activation/start},

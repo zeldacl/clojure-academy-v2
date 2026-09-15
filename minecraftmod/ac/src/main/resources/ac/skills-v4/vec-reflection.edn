@@ -30,18 +30,14 @@
   :affected-entity-difficulty {:curve :const, :type :string-list},
   :exp-damage-scale {:curve :const}},
  :costs
- {:activate
-  {:resources {:overload {:ref [:input :tunables :overload-keep]}}},
-  :per-tick {:resources {:cp {:ref [:input :tunables :tick-cp]}}},
-  :per-reflect
-  {:resources {:cp {:ref [:input :tunables :reflect-entity-cp]}}}},
+ {:activate {:resources {:overload $overload-keep}},
+  :per-tick {:resources {:cp $tick-cp}},
+  :per-reflect {:resources {:cp $reflect-entity-cp}}},
  :cooldown nil,
  :progression
- {:reflect-entity
-  {:per-mark {:ref [:input :tunables :exp-reflect-entity-scale]}},
-  :damaged {:per-mark {:ref [:input :tunables :exp-damage-scale]}}},
- :invariants
- {:overload-floor {:ref [:input :tunables :overload-keep]}},
+ {:reflect-entity {:per-mark $exp-reflect-entity-scale},
+  :damaged {:per-mark $exp-damage-scale}},
+ :invariants {:overload-floor $overload-keep},
  :requires [:caster/eye :caster/aim],
  :entry-triggers
  {:start :phase/start,

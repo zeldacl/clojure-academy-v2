@@ -31,10 +31,8 @@
   :progression-exp-throw {:curve :const}},
  :costs
  {:release
-  {:resources
-   {:cp {:ref [:input :tunables :cost-up-cp]},
-    :overload {:ref [:input :tunables :cost-up-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+  {:resources {:cp $cost-up-cp, :overload $cost-up-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
  :progression nil,
  :invariants nil,
  :requires

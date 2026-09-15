@@ -36,14 +36,10 @@
   :scatter-angle-degrees {:curve :const},
   :cost-down-overload {:curve :mastery-lerp}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :charging
-  {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
+ {:activate {:resources {:overload $cost-down-overload}},
+  :charging {:resources {:cp $cost-tick-cp}}},
  :cooldown nil,
- :progression
- {:ball-fired {:per-mark {:ref [:input :tunables :exp-per-ball]}}},
+ :progression {:ball-fired {:per-mark $exp-per-ball}},
  :invariants nil,
  :requires
  [:caster/eye

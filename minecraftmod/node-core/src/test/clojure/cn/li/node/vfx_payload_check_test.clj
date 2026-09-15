@@ -159,10 +159,24 @@
                 {:require-inputs? true})))))
 
 (deftest non-literal-values-are-skipped-test
-  ;; A slot wired to a graph node / sigil has no statically known value.
+  ;; A slot holding an expression has no statically known value. The two
+  ;; shapes content actually uses: a name, and a call.
+  ;;
+  ;; This used to pass {:ref [:local :eye]}, which was how a wired slot was
+  ;; spelled when payloads were graph fragments. As a stand-in it stopped
+  ;; working the moment literal-edn? no longer special-cased that map --
+  ;; and it was a map of literals, so the check would have run on it. The
+  ;; spellings below need no special case: a symbol and a list are simply
+  ;; not literal EDN.
   (is (empty? (types/payload-problems
                :beam-arc-fade (:beam-arc-fade effect-inputs)
-               {:start {:ref [:local :eye]}}))))
+               {:start 'eye})))
+  (is (empty? (types/payload-problems
+               :beam-arc-fade (:beam-arc-fade effect-inputs)
+               {:start '?caster/eye})))
+  (is (empty? (types/payload-problems
+               :beam-arc-fade (:beam-arc-fade effect-inputs)
+               {:start '(vec3/add eye aim)}))))
 
 (deftest checking-is-skipped-without-effect-inputs-test
   ;; vfx-core's own compiles and most unit tests supply none; there is

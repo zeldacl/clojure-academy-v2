@@ -42,11 +42,9 @@
   :ground-search-distance {:curve :const},
   :charge-time {:curve :mastery-lerp, :type :int},
   :explosion-radius {:curve :mastery-lerp}},
- :costs
- {:charging
-  {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression {:fire {:per-mark {:ref [:input :tunables :exp-use]}}},
+ :costs {:charging {:resources {:cp $cost-tick-cp}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:fire {:per-mark $exp-use}},
  :invariants nil,
  :requires
  [:caster/eye

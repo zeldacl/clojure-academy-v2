@@ -20,9 +20,8 @@
   :exp-per-distance {:curve :const},
   :entity-eye-height {:curve :const}},
  :costs nil,
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression
- {:teleport {:per-mark {:ref [:input :tunables :exp-per-distance]}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:teleport {:per-mark $exp-per-distance}},
  :invariants nil,
  :requires
  [:caster/eye :caster/aim :caster/id :world/id :charge/ticks],

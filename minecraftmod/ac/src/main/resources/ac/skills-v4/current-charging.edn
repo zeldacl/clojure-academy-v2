@@ -21,15 +21,12 @@
   :exp-effective {:curve :const},
   :exp-ineffective {:curve :const}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :charging
-  {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
+ {:activate {:resources {:overload $cost-down-overload}},
+  :charging {:resources {:cp $cost-tick-cp}}},
  :cooldown nil,
  :progression
- {:effective {:per-mark {:ref [:input :tunables :exp-effective]}},
-  :ineffective {:per-mark {:ref [:input :tunables :exp-ineffective]}}},
+ {:effective {:per-mark $exp-effective},
+  :ineffective {:per-mark $exp-ineffective}},
  :invariants nil,
  :requires
  [:caster/eye

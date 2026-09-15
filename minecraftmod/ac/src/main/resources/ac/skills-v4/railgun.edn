@@ -47,15 +47,11 @@
   :reflection-distance {:curve :const},
   :cost-down-overload {:curve :mastery-lerp}},
  :costs nil,
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
  :progression
  {:hit
   {:per-mark
-   {:expr :math/select,
-    :args
-    [{:ref [:state :reflection-hit?]}
-     {:ref [:input :tunables :exp-reflection-hit]}
-     {:ref [:input :tunables :exp-hit]}]}}},
+   (math/select %reflection-hit? $exp-reflection-hit $exp-hit)}},
  :invariants nil,
  :requires
  [:caster/eye

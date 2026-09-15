@@ -47,13 +47,10 @@
   :launch-scale {:curve :mastery-lerp}},
  :costs
  {:release
-  {:resources
-   {:cp {:ref [:input :tunables :release-cp]},
-    :overload {:ref [:input :tunables :release-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+  {:resources {:cp $release-cp, :overload $release-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
  :progression
- {:hit {:per-mark {:ref [:input :tunables :exp-entity]}},
-  :use {:per-mark {:ref [:input :tunables :exp-use]}}},
+ {:hit {:per-mark $exp-entity}, :use {:per-mark $exp-use}},
  :invariants nil,
  :requires
  [:caster/body

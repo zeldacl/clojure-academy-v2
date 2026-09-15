@@ -41,13 +41,9 @@
   :release-cp {:curve :mastery-lerp}},
  :costs
  {:release
-  {:resources
-   {:cp {:ref [:input :tunables :release-cp]},
-    :overload {:ref [:input :tunables :release-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression
- {:hit {:per-mark {:ref [:input :tunables :exp-hit]}},
-  :miss {:per-mark {:ref [:input :tunables :exp-miss]}}},
+  {:resources {:cp $release-cp, :overload $release-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:hit {:per-mark $exp-hit}, :miss {:per-mark $exp-miss}},
  :invariants nil,
  :requires
  [:caster/body

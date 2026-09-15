@@ -28,10 +28,8 @@
   :exp-min {:curve :const},
   :exp-distance-scale {:curve :const}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :pulse {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
+ {:activate {:resources {:overload $cost-down-overload}},
+  :pulse {:resources {:cp $cost-tick-cp}}},
  :cooldown nil,
  :progression nil,
  :invariants nil,

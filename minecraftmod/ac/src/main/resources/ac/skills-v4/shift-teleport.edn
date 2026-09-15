@@ -19,10 +19,8 @@
   :exp-base {:curve :const}},
  :costs
  {:release
-  {:resources
-   {:cp {:ref [:input :tunables :release-cp]},
-    :overload {:ref [:input :tunables :release-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+  {:resources {:cp $release-cp, :overload $release-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
  :progression nil,
  :invariants nil,
  :requires

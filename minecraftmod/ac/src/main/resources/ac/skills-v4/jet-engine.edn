@@ -24,12 +24,9 @@
   :progression-exp-use {:curve :const}},
  :costs
  {:release
-  {:resources
-   {:cp {:ref [:input :tunables :release-cp]},
-    :overload {:ref [:input :tunables :release-overload]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression
- {:use {:per-mark {:ref [:input :tunables :progression-exp-use]}}},
+  {:resources {:cp $release-cp, :overload $release-overload}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:use {:per-mark $progression-exp-use}},
  :invariants nil,
  :requires
  [:caster/id

@@ -19,13 +19,10 @@
   :cooldown-ticks {:curve :mastery-lerp, :type :int},
   :exp-block {:curve :const}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :tick {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
- :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
- :progression
- {:block {:per-mark {:ref [:input :tunables :exp-block]}}},
+ {:activate {:resources {:overload $cost-down-overload}},
+  :tick {:resources {:cp $cost-tick-cp}}},
+ :cooldown {:main {:ticks $cooldown-ticks}},
+ :progression {:block {:per-mark $exp-block}},
  :invariants nil,
  :requires
  [:caster/body

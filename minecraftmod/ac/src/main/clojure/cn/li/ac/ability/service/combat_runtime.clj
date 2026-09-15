@@ -28,6 +28,8 @@
             [cn.li.mcmod.platform.position :as position]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
+            [clojure.string :as str]
+            [cn.li.node.api :as node-api]
             [cn.li.node.rng :as rng]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
             [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
@@ -638,44 +640,57 @@
                            :skill-exp skill-exp}
                           e)))))))
 
-;; S8: materializing :costs/:cooldown/:progression/:invariants for the NEW
-;; engine. The old engine leaves these as raw {:ref ...}/{:expr ...}
-;; formula trees in :input and resolves them lazily, per-node, at the
-;; exact graph node that reads them (see the old engine's own source-
-;; value/spend-budget helpers) -- the new engine's ?budget/?cooldown/
-;; ?progression/?invariant capabilities are plain fixed values read once
-;; before dispatch starts (the player-spell admission layer establishes
-;; the same fixed-before-dispatch contract for player spells), so this
-;; namespace must do that resolution itself, once, up front.
-;; resolve-final-formula-v2 below is NOT a general port of the old
-;; resolver -- it covers exactly the
-;; {:ref [:input :tunables k]} / {:ref [:input :context k]} / {:ref
-;; [:input :capabilities k]} / {:ref [:state k]} /
-;; {:expr :math/mul|:math/sub|:math/select :args [...]}
-;; shapes every real ac/skills-v4/*.edn :costs/:cooldown/:progression/
-;; :invariants declaration actually uses (grep-confirmed across all 39
-;; files before writing this, not assumed complete).
+;; Materializing :costs/:cooldown/:progression/:invariants for dispatch.
+;; The engine's ?budget/?cooldown/?progression/?invariant capabilities are
+;; plain fixed values read once before dispatch starts (the player-spell
+;; admission layer establishes the same fixed-before-dispatch contract), so
+;; this namespace resolves the declarations itself, once, up front.
+;;
+;; Declarations are surface DSL, the same as everything else in the file:
+;; $tunable, ?context/x, %state, and calls like (math/mul a b). This used
+;; to be a {:expr :args} tree with {:ref [...]} leaves and a case over
+;; three opcode names -- the THIRD implementation of operator semantics in
+;; the repo, after combat-core's damage policies and node-core's own
+;; table, and the one that spelled :math/mul variadic where node-core
+;; spells it binary. There is one table now, and converting the spelling is
+;; what forced the arity to be stated: shipped content had a three-factor
+;; multiply that nests explicitly rather than relying on a reduce.
+(defn- formula-scope-lookup
+  "A sigil -> its value in `scope`, or ::unresolved.
+
+   ::unresolved rather than nil because materialize-final-map-v2 OMITS
+   entries it cannot resolve, and a declaration that legitimately resolves
+   to nil must not be mistaken for one naming something absent."
+  [sym scope]
+  (let [s (str sym)]
+    (cond
+      (str/starts-with? s "$") (get-in scope [:tunables (keyword (subs s 1))] ::unresolved)
+      (str/starts-with? s "%") (get-in scope [:state (keyword (subs s 1))] ::unresolved)
+      (str/starts-with? s "?")
+      (let [k (subs s 1)]
+        (if (str/starts-with? k "context/")
+          (get-in scope [:context (keyword (subs k (count "context/")))] ::unresolved)
+          (get-in scope [:capabilities (keyword k)] ::unresolved)))
+      :else ::unresolved)))
+
 (defn- resolve-final-formula-v2
   [value scope]
   (cond
-    (and (map? value) (contains? value :ref))
-    (let [[root a b] (:ref value)]
-      (case root
-        :input (case a
-                 :tunables (get-in scope [:tunables b])
-                 :context (get-in scope [:context b])
-                 :capabilities (get-in scope [:capabilities b])
-                 (throw (ex-info "unsupported S8 final formula :input ref"
-                                 {:ref (:ref value)})))
-        :state (get-in scope [:state a])
-        (throw (ex-info "unsupported S8 final formula ref root" {:ref (:ref value)}))))
-    (and (map? value) (contains? value :expr))
-    (let [args (mapv #(resolve-final-formula-v2 % scope) (:args value))]
-      (case (:expr value)
-        :math/mul (reduce * (map double args))
-        :math/sub (apply - (map double args))
-        :math/select (if (first args) (second args) (nth args 2))
-        (throw (ex-info "unsupported S8 final formula expr" {:expr (:expr value)}))))
+    (symbol? value)
+    (let [v (formula-scope-lookup value scope)]
+      (if (= ::unresolved v)
+        (throw (ex-info "final formula names something the activation scope has no value for"
+                        {:sigil value}))
+        v))
+
+    ;; (:key x) -- a field read, for a reference deeper than one level.
+    (and (seq? value) (keyword? (first value)))
+    (get (resolve-final-formula-v2 (second value) scope) (first value))
+
+    (seq? value)
+    (node-api/evaluate-op (keyword (namespace (first value)) (name (first value)))
+                          (mapv #(resolve-final-formula-v2 % scope) (rest value)))
+
     (map? value) (into {} (map (fn [[k v]] [k (resolve-final-formula-v2 v scope)])) value)
     (vector? value) (mapv #(resolve-final-formula-v2 % scope) value)
     :else value))

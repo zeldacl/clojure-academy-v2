@@ -43,22 +43,15 @@
   :beam-step {:curve :const},
   :cost-down-overload {:curve :mastery-lerp}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :cost-down-overload]}}},
-  :tick {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}},
+ {:activate {:resources {:overload $cost-down-overload}},
+  :tick {:resources {:cp $cost-tick-cp}}},
  :cooldown
  {:main
   {:ticks
-   {:expr :math/mul,
-    :args
-    [{:ref [:state :time-rate]}
-     {:ref [:input :tunables :cooldown-base-multiplier]}
-     {:ref [:input :tunables :cooldown-ticks]}]}}},
- :progression
- {:use
-  {:per-mark {:ref [:input :tunables :exp-use]},
-   :weight {:ref [:state :time-rate]}}},
+   (math/mul
+    %time-rate
+    (math/mul $cooldown-base-multiplier $cooldown-ticks))}},
+ :progression {:use {:per-mark $exp-use, :weight %time-rate}},
  :invariants nil,
  :requires
  [:caster/body

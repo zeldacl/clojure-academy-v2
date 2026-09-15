@@ -34,26 +34,16 @@
   :absorb-damage {:curve :mastery-lerp},
   :touch-radius {:curve :const}},
  :costs
- {:activate
-  {:resources
-   {:overload {:ref [:input :tunables :activate-overload]}}},
-  :tick {:resources {:cp {:ref [:input :tunables :tick-cp]}}},
-  :touch
-  {:resources
-   {:cp {:ref [:input :tunables :touch-cp]},
-    :overload {:ref [:input :tunables :touch-overload]}}}},
+ {:activate {:resources {:overload $activate-overload}},
+  :tick {:resources {:cp $tick-cp}},
+  :touch {:resources {:cp $touch-cp, :overload $touch-overload}}},
  :cooldown
  {:deactivate
-  {:ticks
-   {:expr :math/mul,
-    :args
-    [{:ref [:state :active-ticks]}
-     {:expr :math/sub,
-      :args [2.0 {:ref [:input :context :skill-exp]}]}]}}},
+  {:ticks (math/mul %active-ticks (math/sub 2.0 ?context/skill-exp))}},
  :progression
- {:tick {:per-mark {:ref [:input :tunables :exp-tick]}},
-  :touch {:per-mark {:ref [:input :tunables :exp-touch]}},
-  :attacked {:per-mark {:ref [:input :tunables :exp-attacked]}}},
+ {:tick {:per-mark $exp-tick},
+  :touch {:per-mark $exp-touch},
+  :attacked {:per-mark $exp-attacked}},
  :invariants nil,
  :requires
  [:caster/id
