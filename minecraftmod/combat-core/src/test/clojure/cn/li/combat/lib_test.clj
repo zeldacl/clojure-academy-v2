@@ -22,8 +22,8 @@
   (let [calls (atom [])
         host {:query! (fn [cap args _fr] (swap! calls conj [cap args]) {:position {:x 9.0 :y 0.0 :z 0.0}})
               :command! (fn [_cap _args _fr])}
-        text "{:ability :t-directional :activation :instant
-               :tunables {:eye-y {:type :double} :distance {:type :double}}
+        text "{:id :t-directional :activation :instant
+               :parameters {:eye-y {:type :double} :distance {:type :double}}
                :do [(target/directional-destination ?caster/eye ?caster/aim $eye-y :forward $distance {})
                     (finish {:outcome :performed})]}"
         input {:tunables {:eye-y 1.5 :distance 20.0}
@@ -43,8 +43,8 @@
                          {:type :landing :position {:x 5.0 :y 6.0 :z 7.0}}
                          {:entity-id nil :position {:x 5.0 :y 6.0 :z 7.0}}))
               :command! (fn [_cap _args _fr])}
-        text "{:ability :t-raycast-dest :activation :instant
-               :tunables {:distance {:type :double}}
+        text "{:id :t-raycast-dest :activation :instant
+               :parameters {:distance {:type :double}}
                :do [(target/raycast-destination ?caster/eye ?caster/aim $distance {} true true)
                     (finish {:outcome :performed})]}"
         input {:tunables {:distance 30.0}
@@ -65,8 +65,8 @@
                        (swap! calls conj [cap args])
                        (if (contains? args :hit) {:type :landing} {:entity-id nil}))
               :command! (fn [_cap _args _fr])}
-        text "{:ability :t-hold :activation :instant
-               :tunables {:hold-ticks {:type :double} :range-per-hold-tick {:type :double}
+        text "{:id :t-hold :activation :instant
+               :parameters {:hold-ticks {:type :double} :range-per-hold-tick {:type :double}
                           :maximum-range {:type :double} :available-resource {:type :double}
                           :resource-per-distance {:type :double}}
                :do [(target/hold-destination ?caster/eye ?caster/aim $hold-ticks $range-per-hold-tick
@@ -85,8 +85,8 @@
   (let [calls (atom [])
         host {:query! (fn [cap args _fr] (swap! calls conj [cap args]) {:entity-id nil})
               :command! (fn [_cap _args _fr])}
-        text "{:ability :t-pen :activation :instant
-               :tunables {:distance {:type :double} :scan-step {:type :double}
+        text "{:id :t-pen :activation :instant
+               :parameters {:distance {:type :double} :scan-step {:type :double}
                           :clearance-steps {:type :long} :available-resource {:type :double}
                           :resource-per-distance {:type :double} :marker-offset-y {:type :double}}
                :do [(target/penetration-destination ?caster/eye ?caster/aim $distance $scan-step
@@ -117,8 +117,8 @@
                          :random/chance (do (swap! calls conj [:chance args]) true)
                          :block/break (do (swap! calls conj [:break args]) nil)))
               :command! (fn [_cap _args _fr])}
-        text "{:ability :t-budget :activation :instant
-               :tunables {:energy {:type :double} :drop-chance {:type :double}}
+        text "{:id :t-budget :activation :instant
+               :parameters {:energy {:type :double} :drop-chance {:type :double}}
                :do [(let blocks (target/blocks {:shape {} :limit 128}))
                     (terrain/apply-break-budget blocks $energy $drop-chance)
                     (finish {:outcome :performed})]}"
@@ -141,8 +141,8 @@
   (let [calls (atom [])
         host {:query! (fn [cap args _fr] (swap! calls conj [:query cap args]) ["e1" "e2"])
               :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
-        text "{:ability :t-area :activation :instant
-               :tunables {:radius {:type :double} :amount {:type :double}}
+        text "{:id :t-area :activation :instant
+               :parameters {:radius {:type :double} :amount {:type :double}}
                :do [(combat/area-damage ?caster/eye $radius $amount :fire 10)
                     (finish {:outcome :performed})]}"
         input {:tunables {:radius 4.0 :amount 8.0} :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0}}}]
@@ -161,8 +161,8 @@
                                    :reflection-damage 9.0 :damage-type :electric}
                                   {:reflection-accepted? false :id "d1" :damage 3.0 :damage-type :fire}]})
               :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
-        text "{:ability :t-beam :activation :instant
-               :tunables {:length {:type :double} :radius {:type :double} :damage {:type :double}}
+        text "{:id :t-beam :activation :instant
+               :parameters {:length {:type :double} :radius {:type :double} :damage {:type :double}}
                :do [(combat/beam-strike ?caster/eye ?caster/eye ?caster/aim $length $length $radius
                       $radius 256 $damage :fire 4096 nil 1.0)
                     (finish {:outcome :performed})]}"
@@ -174,8 +174,8 @@
            @calls))))
 
 (deftest beam-strike-rejects-nil-required-argument-at-compile-time-test
-  (let [text "{:ability :t-beam-nil :activation :instant
-               :tunables {:length {:type :double} :radius {:type :double} :damage {:type :double}}
+  (let [text "{:id :t-beam-nil :activation :instant
+               :parameters {:length {:type :double} :radius {:type :double} :damage {:type :double}}
                :do [(combat/beam-strike ?caster/eye ?caster/eye ?caster/aim $length nil $radius
                       $radius 256 $damage :fire 4096 nil 1.0)
                     (finish {:outcome :performed})]}" ]
@@ -199,8 +199,8 @@
                                          r)
                          :block/break (do (swap! calls conj [:break args]) nil)))
               :command! (fn [_cap _args _fr])}
-        text "{:ability :t-break-area :activation :instant
-               :tunables {:radius {:type :double} :hardness-max {:type :double}
+        text "{:id :t-break-area :activation :instant
+               :parameters {:radius {:type :double} :hardness-max {:type :double}
                           :break-chance {:type :double} :drop-chance {:type :double}}
                :do [(terrain/break-area ?caster/eye $radius $hardness-max $break-chance $drop-chance 64)
                     (finish {:outcome :performed})]}"
@@ -224,8 +224,8 @@
                                        {:position {:x 2.0 :y 0.0 :z 0.0}}]
                          :block/break nil))
               :command! (fn [_cap _args _fr])}
-        text "{:ability :t-random-break :activation :instant
-               :tunables {:radius {:type :double} :hardness-max {:type :double}}
+        text "{:id :t-random-break :activation :instant
+               :parameters {:radius {:type :double} :hardness-max {:type :double}}
                :do [(terrain/random-break ?caster/eye $radius 3 $hardness-max)
                     (finish {:outcome :performed})]}"
         input {:tunables {:radius 5.0 :hardness-max 2.0} :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0}}}]
@@ -241,8 +241,8 @@
   (let [calls (atom [])
         host {:query! (fn [_cap _args _fr] ["e1" "e2"])
               :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
-        text "{:ability :t-tp :activation :instant
-               :tunables {:radius {:type :double}}
+        text "{:id :t-tp :activation :instant
+               :parameters {:radius {:type :double}}
                :do [(combat/teleport-group ?caster/eye $radius 20)
                     (finish {:outcome :performed})]}"
         input {:tunables {:radius 6.0} :capabilities {:caster/eye {:x 2.0 :y 0.0 :z 0.0}}}]
@@ -258,8 +258,8 @@
         host {:query! (fn [cap _args _fr]
                        (case cap :entity/select ["e1"] :entity/snapshot {:position {:x 3.0 :y 0.0 :z 0.0}}))
               :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
-        text "{:ability :t-radial :activation :instant
-               :tunables {:radius {:type :double} :speed {:type :double}}
+        text "{:id :t-radial :activation :instant
+               :parameters {:radius {:type :double} :speed {:type :double}}
                :do [(motion/radial-impulse ?caster/eye $radius $speed 10)
                     (finish {:outcome :performed})]}"
         input {:tunables {:radius 8.0 :speed 5.0} :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0}}}]
@@ -275,8 +275,8 @@
                        (swap! calls conj [:query cap args])
                        {:affected-blocks [{:position {:x 1.0 :y 0.0 :z 0.0} :block-id :air}]})
               :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
-        text "{:ability :t-wave :activation :instant
-               :tunables {:initial-energy {:type :double} :max-iterations {:type :long}
+        text "{:id :t-wave :activation :instant
+               :parameters {:initial-energy {:type :double} :max-iterations {:type :long}
                           :seed {:type :long} :mastery {:type :double} :mastery-threshold {:type :double}
                           :mastery-radius {:type :long} :mastery-hardness-cap {:type :double}
                           :ground-break-probability {:type :double} :drop-probability {:type :double}

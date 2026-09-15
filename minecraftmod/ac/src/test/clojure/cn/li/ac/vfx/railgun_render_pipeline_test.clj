@@ -108,17 +108,18 @@
       (is (< (Math/abs (- center-z 29.76)) 1.0e-6)))))
 
 (deftest railgun-charge-payload-identifies-caster-test
+  ;; Skills are surface DSL now, so the charge spawn is a (vfx! {...}) form
+  ;; rather than a node with an :inputs map, and a local reference is the
+  ;; bare symbol the body binds rather than a {:ref [:local ...]} wrapper.
+  ;; The contract being pinned is the same one.
   (let [skill (load-v4 "ac/skills-v4/railgun.edn")
-        charge-node (some (fn [value]
-                            (when (and (map? value)
-                                       (= :effect/vfx (:component value))
-                                       (= :railgun-charge-session
-                                          (get-in value [:inputs :effect-id]))
-                                       (= :spawn (get-in value [:inputs :operation])))
-                              value))
-                          (tree-seq coll? identity skill))]
-    (is (= {:ref [:local :owner-id]}
-           (get-in charge-node [:inputs :payload :source-player-id]))
+        charge (some (fn [f]
+                       (when (and (seq? f) (= 'vfx! (first f)) (map? (second f))
+                                  (= :railgun-charge-session (:effect-id (second f)))
+                                  (= :spawn (:operation (second f))))
+                         (second f)))
+                     (tree-seq coll? seq skill))]
+    (is (= 'owner-id (get-in charge [:payload :source-player-id]))
         "first-person charge resolution needs the caster id")
     (is (= :any
            (get-in (load-v4 "ac/vfx-v4/railgun-charge-session.edn")

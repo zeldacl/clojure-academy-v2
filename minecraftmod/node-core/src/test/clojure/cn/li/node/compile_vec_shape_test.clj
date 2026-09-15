@@ -8,7 +8,7 @@
   (testing "a concrete vector with the wrong shape must fail before the
             emitter can destructure it and produce a runtime vec3 error"
     (let [doc (surface/parse
-               "{:ability :bad-vec3 :tunables {}
+               "{:id :bad-vec3 :parameters {}
                  :do [(let v (vec3/add [1.0 2.0] [0.0 0.0 0.0]))
                       (finish {:outcome :performed})]}")]
       (try

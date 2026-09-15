@@ -88,15 +88,27 @@
   (let [u (or (classpath-edn/find-resource r) (io/resource r))]
     (when-not u
       (throw (ex-info "V4 skill resource not found" {:resource r})))
-    (binding [*read-eval* false]
-      (read-string (slurp u)))))
+    ;; node-api/read-surface-document, not read-string: skills are surface
+    ;; DSL text now, read as EDN with tagged literals rejected. The ^{:nid}
+    ;; stamps that anchor diagnostics are ordinary reader metadata and
+    ;; survive it.
+    (node-api/read-surface-document (slurp u))))
 
 (defn- read-skill [r]
   (let [d (read-resource r)]
-    (node-api/validate-v4-document! d)
-    (when-not (= :skill (node-api/v4-document-kind d))
+    ;; A surface document declares :id and :phases. There is no schema tag
+    ;; and no structural graph validation to run -- the sixty-odd rules the
+    ;; graph form needed were about wires (dangling links, double-driven
+    ;; ports, duplicate node ids), and a form with no wires cannot break
+    ;; them. What remains is that the document names itself and has a body,
+    ;; and compilation reports everything else as a diagnostic.
+    (when-not (= :ac/skill-v4 (:schema d))
       (throw (ex-info "V4 skill catalog contains a non-skill"
                       {:resource r :schema (:schema d)})))
+    (when-not (keyword? (:id d))
+      (throw (ex-info "V4 skill document has no :id" {:resource r})))
+    (when-not (map? (:phases d))
+      (throw (ex-info "V4 skill document has no :phases" {:resource r :id (:id d)})))
     {:resource r :id (:id d) :document d}))
 
 (defn assemble
@@ -115,9 +127,9 @@
          skills (mapv (fn [r]
                         (let [{:keys [id document] :as s} (read-skill r)
                               {:keys [ir diagnostics]}
-                              (node-api/compile-v4-skill-document! document opts mode)]
+                              (node-api/compile-surface-document! document opts mode)]
                           (assoc s
-                                 :semantic-digest (node-api/v4-document-semantic-digest document)
+                                 :semantic-digest (node-api/content-hash document)
                                  :ir ir
                                  :diagnostics diagnostics)))
                       resources)

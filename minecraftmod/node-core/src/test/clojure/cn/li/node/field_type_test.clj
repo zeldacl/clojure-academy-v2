@@ -22,7 +22,7 @@
   [body opts-extra]
   (compile/compile-program
    (surface/normalize
-    (surface/read-doc (str "{:ability :t :activation :instant :do " body "}")))
+    (surface/read-doc (str "{:id :t :activation :instant :do " body "}")))
    (merge fx/opts opts-extra)
    :collect))
 

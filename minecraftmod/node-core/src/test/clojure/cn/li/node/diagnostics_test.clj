@@ -9,7 +9,7 @@
             [cn.li.node.test-fixtures :as fx]))
 
 (def ^:private multi-error-text
-  "{:ability :many-errors :tunables {}
+  "{:id :many-errors :parameters {}
     :do [(target/raycast {:from ?caster/eye :dir ?caster/eye :bogus-param 1})
          (cooldown/start {:name :main :ticks $missing-tunable})
          (unbound-local-here)

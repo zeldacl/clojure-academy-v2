@@ -11,7 +11,7 @@
             [cn.li.node.test-fixtures :as fx]))
 
 (def ^:private text
-  "{:ability :railgun-ish :tunables {}
+  "{:id :railgun-ish :parameters {}
     :state {:mode {:type :keyword :default :armed} :hold-ticks {:type :long :default 0}}
     :do [(state! :mode :charging)
          (let m %mode)
@@ -33,8 +33,8 @@
       (is (some #(= :vfx (:op %)) instrs)))))
 
 (deftest unknown-state-key-is-a-real-error-test
-  (doseq [text ["{:ability :bad :state {} :do [(state! :nope true) (finish {:outcome :performed})]}"
-               "{:ability :bad :state {} :do [(let x %nope) (finish {:outcome :performed})]}"]]
+  (doseq [text ["{:id :bad :state {} :do [(state! :nope true) (finish {:outcome :performed})]}"
+               "{:id :bad :state {} :do [(let x %nope) (finish {:outcome :performed})]}"]]
     (let [doc (surface/parse text)]
       (try
         (compile/compile! doc fx/opts)

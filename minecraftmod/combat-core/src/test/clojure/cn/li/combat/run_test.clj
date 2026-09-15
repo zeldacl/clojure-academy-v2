@@ -9,9 +9,9 @@
             [cn.li.combat.run :as run]))
 
 (def ^:private thunder-bolt-ish
-  "{:ability :thunder-bolt-ish
+  "{:id :thunder-bolt-ish
     :activation :instant
-    :tunables {:range {:type :double} :damage {:type :double}}
+    :parameters {:range {:type :double} :damage {:type :double}}
     :do
     [(let hit (target/raycast {:origin ?caster/eye :direction ?caster/aim :distance $range
                                :include-entities? true :include-blocks? true :living-only? true}))
@@ -57,8 +57,8 @@
       (is (= {:outcome :performed :next-phase nil :end-ability? true} (.-result frame))))))
 
 (def ^:private break-budget-text
-  "{:ability :break-budget-test
-    :tunables {:energy {:type :double}}
+  "{:id :break-budget-test
+    :parameters {:energy {:type :double}}
     :do
     [(let remaining $energy)
      (let blocks (target/blocks {:shape {} :limit 128}))
@@ -104,7 +104,7 @@
             entity/spawn :add-tags [\"ac_electron_bomb\"]) -- proves a
             :vec-lit argument's RUNTIME value, not just that it compiles"
     (let [ir (run/compile-doc!
-              "{:ability :tag-test :activation :instant :tunables {}
+              "{:id :tag-test :activation :instant :parameters {}
                 :do [(cooldown/start {:name :main :ticks 1})
                      (vfx! {:effect-id :arc-strike-transient :operation :spawn
                            :start ?caster/eye :tags [:a \"b\" 3]})
@@ -126,7 +126,7 @@
             dispatch bug this whole test file's docstring warns about
             was caught exactly this way, not by a compile-only check)"
     (let [ir (run/compile-doc!
-              "{:ability :indexed-mark :activation :instant :tunables {}
+              "{:id :indexed-mark :activation :instant :parameters {}
                 :do [(let xs (target/entities {:shape {:type :sphere :center ?caster/eye :radius 4.0}
                                                :limit 8}))
                      (each [t i] xs

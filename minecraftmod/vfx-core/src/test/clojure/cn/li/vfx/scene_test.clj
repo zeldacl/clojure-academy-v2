@@ -4,7 +4,7 @@
             [cn.li.mcmod.runtime.effect-emit :as emit]))
 
 (def ^:private arc-strike-scene
-  "{:ability :arc-strike-scene
+  "{:id :arc-strike-scene
     :do [(beam {:start ?start :end ?end :grow-ticks 4})
          (ring {:center ?start :radius 1.0 :segments 16})
          (finish {:outcome :performed})]}")
@@ -133,7 +133,7 @@
   (testing "a scene using an undeclared ?capability is a real compile error,
             same as combat's ?caster/eye -- catches an author typo instead
             of silently reading nil at sample time"
-    (let [doc "{:ability :bad :do [(beam {:start ?nope :end ?nope :grow-ticks 0}) (finish {:outcome :performed})]}"]
+    (let [doc "{:id :bad :do [(beam {:start ?nope :end ?nope :grow-ticks 0}) (finish {:outcome :performed})]}"]
       (is (thrown? clojure.lang.ExceptionInfo (scene/compile-doc! doc {}))))))
 
 

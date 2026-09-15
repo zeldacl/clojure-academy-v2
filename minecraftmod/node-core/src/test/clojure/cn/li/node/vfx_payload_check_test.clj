@@ -24,7 +24,7 @@
 
 (defn- diagnostics-for [payload]
   (let [doc (surface/read-doc
-             (str "{:ability :t :activation :instant :do "
+             (str "{:id :t :activation :instant :do "
                   "[(vfx! {:effect-id :beam-arc-fade :operation :update :payload " (pr-str payload) "})]}"))
         {:keys [diagnostics]} (compile/compile-program
                                (surface/normalize doc)
@@ -34,7 +34,7 @@
 
 (defn- diagnostics-full [payload]
   (let [doc (surface/read-doc
-             (str "{:ability :t :activation :instant :do "
+             (str "{:id :t :activation :instant :do "
                   "[(vfx! {:effect-id :beam-arc-fade :operation :update :payload " (pr-str payload) "})]}"))]
     (:diagnostics (compile/compile-program
                    (surface/normalize doc)
@@ -84,7 +84,7 @@
   ;; opposite contract: that this diagnostic rode along WITH a runnable IR
   ;; in both modes. That was the whole problem -- a program that still
   ;; compiles is a program nobody goes back to fix.
-  (let [doc-text (str "{:ability :t :activation :instant :do "
+  (let [doc-text (str "{:id :t :activation :instant :do "
                       "[(vfx! {:effect-id :beam-arc-fade :operation :update "
                       ":payload {:strat 1}})]}")]
     (testing ":collect reports it and refuses the IR"
@@ -107,7 +107,7 @@
 
 (deftest unknown-effect-id-test
   (let [doc (surface/read-doc
-             "{:ability :t :activation :instant :do
+             "{:id :t :activation :instant :do
                [(vfx! {:effect-id :no/such-effect :operation :spawn :payload {}})]}")
         {:keys [diagnostics]} (compile/compile-program
                                (surface/normalize doc)
@@ -135,7 +135,7 @@
 
 (deftest required-spawn-inputs-are-reported-test
   (let [doc (surface/read-doc
-             "{:ability :t :activation :instant :do
+             "{:id :t :activation :instant :do
                [(vfx! {:effect-id :beam-arc-fade :operation :spawn
                        :payload {:start {:vec3 [0.0 0.0 0.0]}}})]}")
         {:keys [diagnostics]} (compile/compile-program
@@ -168,7 +168,7 @@
   ;; vfx-core's own compiles and most unit tests supply none; there is
   ;; nothing to check against and inventing a failure would be worse.
   (let [doc (surface/read-doc
-             "{:ability :t :activation :instant :do
+             "{:id :t :activation :instant :do
                [(vfx! {:effect-id :beam-arc-fade :operation :update :payload {:start 5.0}})]}")
         {:keys [diagnostics]} (compile/compile-program (surface/normalize doc) fx/opts :collect)]
     (is (empty? diagnostics))))
@@ -178,7 +178,7 @@
 (deftest throw-mode-refuses-to-produce-ir-test
   ;; This is what makes the skill catalog fail at startup instead of at spawn.
   (let [doc (surface/read-doc
-             "{:ability :t :activation :instant :do
+             "{:id :t :activation :instant :do
                [(vfx! {:effect-id :beam-arc-fade :operation :update :payload {:start 5.0}})]}")]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"wants :vec3"
@@ -197,7 +197,7 @@
 
 (defn- operation-diagnostics [op & {:keys [ops] :or {ops signal-ops}}]
   (let [doc (surface/read-doc
-             (str "{:ability :t :activation :instant :do "
+             (str "{:id :t :activation :instant :do "
                   "[(vfx! {:effect-id :beam-arc-fade :operation " op
                   " :instance-key [:a :b]})]}"))]
     (:diagnostics (compile/compile-program
@@ -223,7 +223,7 @@
 
 (deftest stop-operation-carries-no-payload-test
   (let [doc (surface/read-doc
-             "{:ability :t :activation :instant :do
+             "{:id :t :activation :instant :do
                [(vfx! {:effect-id :beam-arc-fade :operation :stop :instance-key [:a :b]})]}")
         {:keys [diagnostics]} (compile/compile-program
                                (surface/normalize doc)

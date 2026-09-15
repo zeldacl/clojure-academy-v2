@@ -12,10 +12,10 @@
 (use-fixtures :each (fn [f] (capabilities/reset-for-test!) (f) (capabilities/reset-for-test!)))
 
 (def ^:private test-ability-text
-  "{:ability :engine-v2-test-ability
+  "{:id :engine-v2-test-ability
     :activation :toggle
     :state {:hits {:type :long :default 0}}
-    :tunables {:range {:type :double} :damage {:type :double}}
+    :parameters {:range {:type :double} :damage {:type :double}}
     :phases
     {:start
      [(let hit (target/raycast {:origin ?caster/eye :direction ?caster/aim

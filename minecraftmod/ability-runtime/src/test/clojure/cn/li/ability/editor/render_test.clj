@@ -36,7 +36,7 @@
 
 (defn- sample-graph []
   (graph/form->graph (:do (surface/read-doc
-                            "{:ability :t :do
+                            "{:id :t :do
                                [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
                                 (when (:entity-id hit)
                                   (combat/damage {:target (:entity-id hit) :amount $damage}))

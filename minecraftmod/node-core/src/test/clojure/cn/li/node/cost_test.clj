@@ -10,7 +10,7 @@
   ;; radius/expression would have the same effect) -- static analysis must
   ;; report "unknown", not silently read as zero or as the vocab default.
   (let [doc (surface/parse
-             "{:ability :unbounded :tunables {:aoe {:type :double}}
+             "{:id :unbounded :parameters {:aoe {:type :double}}
                :do [(let xs (target/entities {:center [0.0 0.0 0.0] :radius $aoe}))
                     (each t xs (cooldown/start {:name :main :ticks 1}))
                     (finish {:outcome :performed})]}")
@@ -21,7 +21,7 @@
 
 (deftest pure-instructions-cost-nothing-test
   (let [doc (surface/parse
-             "{:ability :pure-only :tunables {:range {:type :double}}
+             "{:id :pure-only :parameters {:range {:type :double}}
                :do [(let v (vec3/add ?caster/eye (vec3/scale ?caster/aim $range)))
                     (finish {:outcome :performed})]}")
         ir (compile/compile! doc fx/opts)

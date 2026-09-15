@@ -12,7 +12,7 @@
 
 (deftest simple-call-and-let-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
                            (cooldown/start {:name :main :ticks 40})
                            (finish {:outcome :performed})]}")]
@@ -20,14 +20,14 @@
 
 (deftest nested-pure-expr-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(let end (vec3/add ?caster/eye (vec3/scale ?caster/aim $range)))
                            (finish {:outcome :performed})]}")]
     (is (= stmts back))))
 
 (deftest field-access-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
                            (when (:entity-id hit)
                              (combat/damage {:target (:entity-id hit) :amount $damage}))
@@ -36,7 +36,7 @@
 
 (deftest each-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(let targets (target/entities {:center ?caster/eye :radius $aoe :limit 24}))
                            (each t targets
                              (combat/damage {:target t :amount $damage}))
@@ -45,7 +45,7 @@
 
 (deftest each-with-index-binding-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(let targets (target/entities {:center ?caster/eye :radius $aoe :limit 24}))
                            (each [t i] targets
                              (combat/damage {:target t :amount $damage}))
@@ -54,7 +54,7 @@
 
 (deftest state-write-set-and-event-vfx-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(state! :mode :armed)
                            (let x $range)
                            (set! x (math/add x 1.0))
@@ -65,14 +65,14 @@
 
 (deftest map-and-vec-literal-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(let cfg {:a 1 :b [1 2 3]})
                            (finish {:outcome :performed})]}")]
     (is (= stmts back))))
 
 (deftest positional-pure-op-call-is-a-single-call-node-test
   (let [g (graph/form->graph (:do (surface/read-doc
-                                    "{:ability :t :do [(let x (vec3/add ?caster/eye ?caster/aim)) (finish {:outcome :performed})]}")))
+                                    "{:id :t :do [(let x (vec3/add ?caster/eye ?caster/aim)) (finish {:outcome :performed})]}")))
         let-node (get (:nodes g) (first (:order g)))
         rhs-node (get (:nodes g) (:rhs let-node))]
     (is (= :call (:expr rhs-node)))
@@ -82,7 +82,7 @@
 
 (deftest node-call-with-arg-map-is-a-single-call-node-test
   (let [g (graph/form->graph (:do (surface/read-doc
-                                    "{:ability :t :do [(cooldown/start {:name :main :ticks 40}) (finish {:outcome :performed})]}")))
+                                    "{:id :t :do [(cooldown/start {:name :main :ticks 40}) (finish {:outcome :performed})]}")))
         call-node (get (:nodes g) (first (:order g)))]
     (is (= :call (:stmt call-node)))
     (is (= :map (:arg-shape call-node)))
@@ -91,7 +91,7 @@
 
 (deftest two-armed-if-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(if (bool/not true)
                              [(finish {:outcome :performed})]
                              [(finish {:outcome :cancelled})])]}")]
@@ -101,11 +101,11 @@
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"vectors"
        (graph/form->graph (:do (surface/read-doc
-                                 "{:ability :t :do [(if (bool/not true) (finish {:outcome :performed}))]}"))))))
+                                 "{:id :t :do [(if (bool/not true) (finish {:outcome :performed}))]}"))))))
 
 (deftest nested-if-inside-when-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
                            (when (:entity-id hit)
                              (if (bool/not true)
@@ -116,7 +116,7 @@
 
 (deftest nested-when-inside-each-round-trip-test
   (let [[stmts back] (round-trip
-                       "{:ability :t :do
+                       "{:id :t :do
                           [(let targets (target/entities {:center ?caster/eye :radius $aoe :limit 24}))
                            (each t targets
                              (when (bool/not true)
@@ -126,13 +126,13 @@
 
 (deftest stmt-text-matches-what-graph-form-would-print-test
   (let [g (graph/form->graph (:do (surface/read-doc
-                                    "{:ability :t :do [(cooldown/start {:name :main :ticks 40}) (finish {:outcome :performed})]}")))
+                                    "{:id :t :do [(cooldown/start {:name :main :ticks 40}) (finish {:outcome :performed})]}")))
         first-nid (first (:order g))]
     (is (= (pr-str (first (graph/graph->form g))) (graph/stmt-text (:nodes g) first-nid)))))
 
 (deftest stmt-label-is-short-and-not-raw-dsl-test
   (let [g (graph/form->graph (:do (surface/read-doc
-                                    "{:ability :t :do
+                                    "{:id :t :do
                                        [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
                                         (when (:entity-id hit)
                                           (combat/damage {:target (:entity-id hit) :amount $damage}))
@@ -145,7 +145,7 @@
 
 (deftest exec-flatten-walks-nested-bodies-with-increasing-depth-test
   (let [g (graph/form->graph (:do (surface/read-doc
-                                    "{:ability :t :do
+                                    "{:id :t :do
                                        [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
                                         (when (:entity-id hit)
                                           (each t (target/entities {:center ?caster/eye :radius $aoe :limit 24})
@@ -157,7 +157,7 @@
 
 (deftest stamped-nid-survives-a-round-trip-test
   (let [doc (surface/read-doc
-             "{:ability :t :do [^{:nid \"n7\"} (finish {:outcome :performed})]}")
+             "{:id :t :do [^{:nid \"n7\"} (finish {:outcome :performed})]}")
         g (graph/form->graph (:do doc))
         back (graph/graph->form g)]
     (is (= "n7" (:nid (meta (first back)))))))
@@ -165,7 +165,7 @@
 (deftest graph-structural-editing-add-connect-remove-test
   (let [g (graph/form->graph
            (:do (surface/read-doc
-                 "{:ability :t :do [(let x 1) (finish {:outcome :performed})]}")))
+                 "{:id :t :do [(let x 1) (finish {:outcome :performed})]}")))
          new (graph/add-node g {:nid "n-extra" :kind :exec :stmt :let :bind 'y :rhs nil})
          source (->> (:nodes new) (keep (fn [[nid node]] (when (= :data (:kind node)) nid))) first)
         target "n-extra"
@@ -194,7 +194,7 @@
 
 (deftest palette-insertion-creates-round-trippable-call-and-literals-test
   (let [g (graph/form->graph
-           (:do (surface/read-doc "{:ability :t :do [(finish {:outcome :performed})]}")))
+           (:do (surface/read-doc "{:id :t :do [(finish {:outcome :performed})]}")))
         inserted (graph/insert-palette-node
                   g {:id :combat/damage
                      :params {:amount {:type :float :default 2.0}}}

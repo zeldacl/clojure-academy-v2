@@ -42,7 +42,7 @@
                      {:params [{:name 'length :type :double}]
                       :body '[(finish {:outcome :performed})]})
           doc (surface/parse
-               "{:ability :nil-arg :tunables {}
+               "{:id :nil-arg :parameters {}
                  :do [(test/strike nil) (finish {:outcome :performed})]}")]
       (try
         (compile/compile! doc (assoc fx/opts :fns fns))
@@ -54,7 +54,7 @@
   (testing "a nil hidden behind an :any map field is rejected before its
             generated object-to-double conversion can reach the emitter"
     (let [doc (surface/parse
-               "{:ability :nil-field :tunables {}
+               "{:id :nil-field :parameters {}
                  :do [(let payload {:amount nil})
                       (let result (math/add (:amount payload) 1.0))
                       (finish {:outcome :performed})]}")]
@@ -66,7 +66,7 @@
 
 (deftest statically-known-invalid-vec3-through-field-is-a-compile-error-test
   (let [doc (surface/parse
-             "{:ability :invalid-vec3-field :tunables {}
+             "{:id :invalid-vec3-field :parameters {}
                :do [(let payload {:position nil})
                     (let result (vec3/add (:position payload) ?caster/eye))
                     (finish {:outcome :performed})]}")]
@@ -79,7 +79,7 @@
 
 (deftest concrete-input-is-checked-against-compiled-register-types-test
   (let [doc (surface/parse
-             "{:ability :input-contract :tunables {}
+             "{:id :input-contract :parameters {}
                :do [(let result (math/add (:cp ?context/resources) 1.0))
                     (finish {:outcome :performed})]}")
         ir (compile/compile! doc (update fx/opts :capabilities assoc :context/resources :any))]
@@ -96,7 +96,7 @@
 
 (deftest concrete-input-is-checked-at-node-call-boundaries-test
   (let [doc (surface/parse
-             "{:ability :node-input-contract :tunables {}
+             "{:id :node-input-contract :parameters {}
                :do [(let hit (target/raycast
                                {:from (:eye ?context/runtime)
                                 :dir ?caster/aim
@@ -114,7 +114,7 @@
 
 (deftest type-mismatch-is-reported-at-the-source-node-test
   (let [doc (surface/parse
-             "{:ability :bad-type :tunables {:range {:type :double}}
+             "{:id :bad-type :parameters {:range {:type :double}}
                :do [(cooldown/start {:name $range :ticks 40})
                     (finish {:outcome :performed})]}")]
     (is (thrown? clojure.lang.ExceptionInfo (compile/compile! doc fx/opts)))
@@ -126,9 +126,9 @@
 
 (deftest unknown-tunable-and-capability-are-real-errors-test
   (doseq [[text code]
-          [["{:ability :bad1 :tunables {} :do [(cooldown/start {:name :main :ticks $nope}) (finish {:outcome :performed})]}"
+          [["{:id :bad1 :parameters {} :do [(cooldown/start {:name :main :ticks $nope}) (finish {:outcome :performed})]}"
             :unknown-tunable]
-           ["{:ability :bad2 :tunables {} :do [(target/raycast {:from ?nope/eye :dir ?nope/eye :distance 1}) (finish {:outcome :performed})]}"
+           ["{:id :bad2 :parameters {} :do [(target/raycast {:from ?nope/eye :dir ?nope/eye :distance 1}) (finish {:outcome :performed})]}"
             :unknown-capability]]]
     (let [doc (surface/parse text)]
       (try
@@ -139,7 +139,7 @@
 
 (deftest unreachable-code-after-finish-is-reported-test
   (let [doc (surface/parse
-             "{:ability :dead-code :tunables {} :do
+             "{:id :dead-code :parameters {} :do
                [(finish {:outcome :performed})
                 (cooldown/start {:name :main :ticks 1})]}")]
     (try
@@ -162,7 +162,7 @@
                       :returns 'doubled})
           opts (assoc fx/opts :fns fns)
           doc (surface/parse
-               "{:ability :uses-return :tunables {:range {:type :double}}
+               "{:id :uses-return :parameters {:range {:type :double}}
                  :do [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
                       (let far (ac/double-hit hit))
                       (finish {:outcome :performed})]}")
@@ -175,7 +175,7 @@
   (testing "a :defn with NO :returns stays void -- binding its call via
             `let` is still a real error, not silently allowed now"
     (let [doc (surface/parse
-               "{:ability :void-bind :tunables {:damage {:type :double} :range {:type :double}}
+               "{:id :void-bind :parameters {:damage {:type :double} :range {:type :double}}
                  :do [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
                       (let x (ac/strike (:entity-id hit) $damage))
                       (finish {:outcome :performed})]}")]
@@ -189,7 +189,7 @@
   (testing "each lowers entirely to :pure/:copy/:branch/:jump -- iterating
             an already-produced list is deterministic, not a host query"
     (let [doc (surface/parse
-               "{:ability :loop-only :tunables {}
+               "{:id :loop-only :parameters {}
                  :do [(let xs (target/entities {:center [0.0 0.0 0.0] :radius 4.0}))
                       (each t xs (cooldown/start {:name :main :ticks 1}))
                       (finish {:outcome :performed})]}")

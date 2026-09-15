@@ -17,13 +17,13 @@
   (is (thrown? clojure.lang.ExceptionInfo (surface/read-doc "#some/custom-tag {:a 1}"))))
 
 (deftest normalize-do-sugar-becomes-default-entry-test
-  (let [doc (surface/parse "{:ability :x :tunables {} :do [(finish {:outcome :performed})]}")]
+  (let [doc (surface/parse "{:id :x :parameters {} :do [(finish {:outcome :performed})]}")]
     (is (= :ability (:kind doc)))
     (is (= :x (:id doc)))
     (is (contains? (:entries doc) :default))))
 
 (deftest normalize-phases-pass-through-test
-  (let [doc (surface/parse "{:ability :x :tunables {} :phases {:start [(finish {:outcome :performed})]
+  (let [doc (surface/parse "{:id :x :parameters {} :phases {:start [(finish {:outcome :performed})]
                                                                 :pulse [(finish {:outcome :ended})]}}")]
     (is (= #{:start :pulse} (set (keys (:entries doc)))))))
 

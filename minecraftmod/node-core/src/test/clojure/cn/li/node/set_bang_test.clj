@@ -15,7 +15,7 @@
             [cn.li.node.test-fixtures :as fx]))
 
 (def ^:private budget-text
-  "{:ability :budget-test :tunables {:energy {:type :double}}
+  "{:id :budget-test :parameters {:energy {:type :double}}
     :do [(let remaining $energy)
          (let xs (target/entities {:center [0.0 0.0 0.0] :radius 4.0}))
          (each block xs
@@ -37,7 +37,7 @@
             iteration) -- there is no structural reason it should be more
             restrictive"
     (let [doc (surface/parse
-               "{:ability :reassign-from-call :tunables {}
+               "{:id :reassign-from-call :parameters {}
                  :do [(let hit (target/raycast {:from ?caster/eye :dir ?caster/eye
                                                 :distance 10.0}))
                       (set! hit (target/raycast {:from ?caster/eye :dir ?caster/eye
@@ -49,7 +49,7 @@
 
 (deftest set-target-must-already-be-bound-test
   (let [doc (surface/parse
-             "{:ability :bad :tunables {} :do [(set! nope 1.0) (finish {:outcome :performed})]}")]
+             "{:id :bad :parameters {} :do [(set! nope 1.0) (finish {:outcome :performed})]}")]
     (try
       (compile/compile! doc fx/opts)
       (is false "expected compile! to throw")

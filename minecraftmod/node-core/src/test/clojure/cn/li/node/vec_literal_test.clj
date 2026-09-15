@@ -15,7 +15,7 @@
 
 (deftest vec-literal-of-keywords-compiles-test
   (let [doc (surface/parse
-             "{:ability :tag-test :tunables {}
+             "{:id :tag-test :parameters {}
                :do [(let tags [:a :b :c])
                     (cooldown/start {:name :main :ticks 1})
                     (finish {:outcome :performed})]}")
@@ -25,7 +25,7 @@
 
 (deftest vec-literal-with-mixed-static-and-dynamic-values-compiles-test
   (let [doc (surface/parse
-             "{:ability :tag-test :tunables {:step {:type :double}}
+             "{:id :tag-test :parameters {:step {:type :double}}
                :do [(let xs [1.0 $step 3.0])
                     (cooldown/start {:name :main :ticks 1})
                     (finish {:outcome :performed})]}")
@@ -37,7 +37,7 @@
             compile-vec-literal's own docstring) -- this must NOT regress
             into treating every real vec3 as a :vec-lit"
     (let [doc (surface/parse
-               "{:ability :vec3-test :tunables {}
+               "{:id :vec3-test :parameters {}
                  :do [(let v [1.0 2.0 3.0])
                       (cooldown/start {:name :main :ticks 1})
                       (finish {:outcome :performed})]}")
@@ -47,7 +47,7 @@
       (is (not (some #(= :map-lit (:op %)) instrs))))))
 
 (deftest vec-literal-round-trips-test
-  (let [text "{:ability :tag-test :tunables {}
+  (let [text "{:id :tag-test :parameters {}
               :do [(let tags [:a :b :c])
                    (cooldown/start {:name :main :ticks 1})
                    (finish {:outcome :performed})]}"
@@ -63,7 +63,7 @@
             call's OWN argument value (e.g. electron_bomb's entity/spawn
             :add-tags [\"ac_electron_bomb\"])"
     (let [doc (surface/parse
-               "{:ability :nested :tunables {}
+               "{:id :nested :parameters {}
                  :do [(target/raycast {:from ?caster/eye :dir ?caster/eye :distance 10.0
                                        :policy [:a :b]})
                       (finish {:outcome :performed})]}")

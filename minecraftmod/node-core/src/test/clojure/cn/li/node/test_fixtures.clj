@@ -41,9 +41,9 @@
 (def opts {:vocab vocab :capabilities capabilities :fns fns})
 
 (def thunder-bolt-text
-  "{:ability :thunder-bolt
+  "{:id :thunder-bolt
     :activation :instant
-    :tunables {:range {:type :double} :damage {:type :double} :aoe {:type :double}}
+    :parameters {:range {:type :double} :damage {:type :double} :aoe {:type :double}}
     :do
     [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
      (let end (vec3/add ?caster/eye (vec3/scale ?caster/aim $range)))

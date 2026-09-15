@@ -7,7 +7,7 @@
    :id :test/state-defaults
    :skill {:name "test"}
    :activation {:type :manual}
-   :parameters {}
+   :tunables {}
    :graphs {:default {:nodes {:n/start {:nid :n/start :type :start}
                               :n/end {:nid :n/end :type :end}}
                       :links [{:id :e/start :kind :exec
@@ -36,6 +36,6 @@
 
 (deftest declared-formula-tunable-is-accepted-test
   (let [doc (-> base-skill
-                (assoc :parameters {:cost-tick-cp {:type :double :default nil}})
+                (assoc :tunables {:cost-tick-cp {:type :double :default nil}})
                 (assoc :costs {:pulse {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}}))]
     (is (map? (document/validate-document! doc)))))

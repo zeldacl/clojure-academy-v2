@@ -6,7 +6,7 @@
             [cn.li.node.test-fixtures :as fx]))
 
 (def ^:private text
-  "{:ability :t
+  "{:id :t
     :do [(cooldown/start {:name :main :ticks 40})
          (finish {:outcome :performed})]}")
 
@@ -28,7 +28,7 @@
   (let [doc (nid/stamp (surface/read-doc text))
         [s1 s2] (:do doc)
         n1 (:nid (meta s1)) n2 (:nid (meta s2))
-        inserted-form (first (:do (surface/read-doc "{:ability :t :do [(cost/spend {:budget {}})]}")))
+        inserted-form (first (:do (surface/read-doc "{:id :t :do [(cost/spend {:budget {}})]}")))
         doc-with-insert (assoc doc :do (into [inserted-form] (:do doc)))
         restamped (nid/stamp doc-with-insert)
         [n0-form n1-form n2-form] (:do restamped)]
@@ -46,7 +46,7 @@
 (deftest re-stamping-a-partial-doc-does-not-collide-with-hand-written-nids-test
   ;; A hand-authored ^{:nid "n7"} on one statement, everything else unstamped:
   ;; stamp must seed its counter above 7, never emitting a second "n7".
-  (let [text "{:ability :t
+  (let [text "{:id :t
                :do [^{:nid \"n7\"} (cooldown/start {:name :main :ticks 40})
                     (finish {:outcome :performed})]}"
         doc (nid/stamp (surface/read-doc text))

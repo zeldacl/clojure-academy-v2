@@ -16,7 +16,7 @@
 
 (deftest broken-doc-reports-a-diagnostic-with-a-code-and-no-cost-test
   (let [raw (surface/read-doc
-             "{:ability :t :do [(let x (vec3/add ?caster/eye 1.0)) (finish {:outcome :performed})]}")
+             "{:id :t :do [(let x (vec3/add ?caster/eye 1.0)) (finish {:outcome :performed})]}")
         diags (check/diagnostics raw fx/opts)]
     (is (seq diags))
     (is (= :invalid-literal-shape (:code (first diags))))
@@ -25,7 +25,7 @@
 
 (deftest collect-mode-surfaces-every-error-not-just-the-first-test
   (let [raw (surface/read-doc
-             "{:ability :t :do [(target/raycast {:from $nope :dir $also-nope :distance $range})
+             "{:id :t :do [(target/raycast {:from $nope :dir $also-nope :distance $range})
                                  (finish {:outcome :performed})]}")
         diags (check/diagnostics raw fx/opts)]
     (is (>= (count diags) 2))))

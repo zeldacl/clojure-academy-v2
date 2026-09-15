@@ -137,20 +137,51 @@
      :returns (:returns doc)
      :meta (meta doc)}
 
-    (contains? doc :ability)
+    ;; :id, not :ability. An ability document's identity key is spelled the
+    ;; same way here, in the persisted content, and in every ac reader --
+    ;; the old :ability spelling existed only because surface ability docs
+    ;; had lived in test fixtures, never on disk, so nothing forced the two
+    ;; vocabularies to agree. They do now.
+    (contains? doc :id)
     {:kind :ability
-     :id (:ability doc)
+     :id (:id doc)
      :activation (:activation doc)
-     :tunables (into {} (map (fn [[k spec]] [k {:type (:type spec)}])) (:tunables doc))
+     ;; :parameters, not :tunables. A skill declares two blocks that both
+     ;; key by parameter name and both happen to use :type, and they mean
+     ;; different things:
+     ;;
+     ;;   :parameters  the DSL type of a value the graph reads as $name --
+     ;;                what this compiler checks that read against.
+     ;;   :tunables    the CURVE that produces the value per activation,
+     ;;                plus a materialization hint also spelled :type,
+     ;;                whose values are not DSL types at all (:int, where
+     ;;                the lattice has :long).
+     ;;
+     ;; Merging them was tried and the round-trip proof rejected it: the
+     ;; key sets genuinely differ (cooldown ticks and resource costs are
+     ;; curves no graph reads, so they have no DSL type) and the shared
+     ;; :type spelling is a coincidence, not a shared concept.
+     ;;
+     ;; The OUTPUT key stays :tunables: that is what the compiler calls the
+     ;; $name namespace (surface/sigil returns [:tunable kw]) and what
+     ;; compile-program reads. Only the AUTHORED key changes.
+     :tunables (into {} (map (fn [[k spec]] [k {:type (:type spec)}])) (:parameters doc))
      ;; :default is carried through for a future session-init step (not
      ;; consumed by cn.li.node.compile itself, which only needs :type to
      ;; check %key reads/state! writes -- see :state-types in compile.clj).
      :state (into {} (map (fn [[k spec]] [k {:type (:type spec) :default (:default spec)}])) (:state doc))
      :entries (into {} (map (fn [[k stmts]] [k (vec stmts)])) (entries-of doc))
+     ;; phase-key -> the trigger that runs it. Carried through because
+     ;; cn.li.node.compile puts it straight into the IR and the ac catalog
+     ;; REQUIRES it there, rejecting a skill whose trigger keys do not match
+     ;; its entry keys. Without this the surface grammar could not express a
+     ;; multi-entry ability at all -- only the graph form could, which is
+     ;; why the two representations were not interchangeable.
+     :entry-triggers (:entry-triggers doc)
      :meta (meta doc)}
 
     :else
-    (throw (ex-info "DSL document must declare :defn or :ability" {:doc doc}))))
+    (throw (ex-info "DSL document must declare :defn or :id" {:doc doc}))))
 
 (defn parse
   "read-doc + normalize in one step."

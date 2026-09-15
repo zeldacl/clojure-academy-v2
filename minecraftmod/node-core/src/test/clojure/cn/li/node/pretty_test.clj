@@ -33,7 +33,7 @@
     (is (= (:tunables doc1) (:tunables doc2)))))
 
 (deftest round-trip-on-a-branch-only-doc-test
-  (let [text "{:ability :branch-only :tunables {:range {:type :double}}
+  (let [text "{:id :branch-only :parameters {:range {:type :double}}
                :do [(let ok (target/raycast {:from ?caster/eye :dir ?caster/eye :distance $range}))
                     (when (:entity-id ok)
                       (cooldown/start {:name :main :ticks 1}))

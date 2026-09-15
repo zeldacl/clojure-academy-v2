@@ -117,12 +117,12 @@
 
 (def ^:private scene-registry
   {:with-scene
-   {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
+   {:scene "{:id :probe :do [(finish {:outcome :performed})]}"
     :user-types {:duration-ticks :int}
     :emitters []
     :lifecycle :transient}
    :with-scene-2
-   {:scene "{:ability :probe2 :do [(finish {:outcome :performed})]}"
+   {:scene "{:id :probe2 :do [(finish {:outcome :performed})]}"
     :emitters []
     :lifecycle :transient}
    :emitter-only
@@ -167,7 +167,7 @@
 
 (def ^:private beam-scene-registry
   {:beam-effect
-   {:scene "{:ability :probe :do [(beam {:start ?start :end ?end :grow-ticks 4})
+   {:scene "{:id :probe :do [(beam {:start ?start :end ?end :grow-ticks 4})
                                   (finish {:outcome :performed})]}"
     :user-types {:start :vec3 :end :vec3}
     :emitters []
@@ -213,11 +213,11 @@
 
 (def ^:private transient-lifecycle-registry
   {:one-shot
-   {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
+   {:scene "{:id :probe :do [(finish {:outcome :performed})]}"
     :emitters []
     :lifecycle :transient}
    :life-timed
-   {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
+   {:scene "{:id :probe :do [(finish {:outcome :performed})]}"
     :emitters []
     :lifecycle :transient}})
 

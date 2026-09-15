@@ -19,7 +19,7 @@
    :id :test/skill
    :skill {:category :test :level 1}
    :activation {:mode :instant}
-   :parameters {}
+   :tunables {}
    :state {}
    :graphs {:default {:on :activation/start
                       :nodes (:nodes simple-graph)
@@ -194,7 +194,7 @@
                        (e :e/n-y :data [:n/n-y :value] [:n/n-add :arg1])
                        (e :e/out :exec [:n/n-add :out] [:n/end :in])]}
         d (assoc skill
-                 :parameters {:x {:type :double :default 0.0}
+                 :tunables {:x {:type :double :default 0.0}
                               :y {:type :double :default 0.0}}
                  :graphs {:default (assoc graph :on :activation/start)})
         stmts (get-in (graph-compile/skill->core d) [:entries :default])]
@@ -218,7 +218,7 @@
                          (e :e/length :data [:n/n-len :value] [:n/n-strike :arg1])
                          (e :e/out :exec [:n/n-strike :out] [:n/end :in])]}
           d (assoc skill
-                   :parameters {:origin {:type :vec3 :default nil}
+                   :tunables {:origin {:type :vec3 :default nil}
                                :length {:type :double :default 0.0}}
                    :graphs {:default (assoc graph :on :activation/start)})
           opts {:fns {:test/strike {:params [{:name 'origin :type :vec3}
@@ -249,7 +249,7 @@
                  :links [(e :e/start :exec [:n/start :out] [:n/n-set :in])
                          (e :e/out :exec [:n/n-set :out] [:n/end :in])]}
           d (assoc skill
-                   :parameters {:a {:type :double :default 1.0}
+                   :tunables {:a {:type :double :default 1.0}
                                :b {:type :double :default 2.0}}
                    :graphs {:default (assoc graph :on :activation/start)})
           stmts (get-in (graph-compile/skill->core d) [:entries :default])
@@ -280,7 +280,7 @@
                        (e :e/back :exec [:n/n-loop-end :continue] [:n/n-loop :loop-back])
                        (e :e/done :exec [:n/n-loop :completed] [:n/n-end :in])]}
         d (assoc skill
-                 :parameters {:items {:type :any :default nil}}
+                 :tunables {:items {:type :any :default nil}}
                  :graphs {:default (assoc graph :on :activation/start)})
         stmts (get-in (graph-compile/skill->core d) [:entries :default])]
     (is (some? (some #(and (seq? %) (= 'each (first %))
@@ -310,7 +310,7 @@
                        (e :e/n-set :exec [:n/n-set :out] [:n/n-evt :in])
                        (e :e/n-evt :exec [:n/n-evt :out] [:n/end :in])]}
         d (assoc skill
-                 :parameters {:threshold {:type :double :default 0.5}}
+                 :tunables {:threshold {:type :double :default 0.5}}
                  :graphs {:default (assoc graph :on :activation/start)})
         stmts (get-in (graph-compile/skill->core d) [:entries :default])
         forms (tree-seq coll? identity stmts)

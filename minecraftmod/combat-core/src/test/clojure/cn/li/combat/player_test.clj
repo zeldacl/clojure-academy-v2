@@ -88,7 +88,7 @@
 
 (deftest admit-rejects-a-forbidden-effect-test
   (let [ir (run/compile-doc!
-            "{:ability :bad-spell :activation :instant
+            "{:id :bad-spell :activation :instant
               :do [(inventory/consume {:source :main-hand :count 1})
                    (finish {:outcome :performed})]}")
         verdict (player/admit ir 1000)]
@@ -98,8 +98,8 @@
 
 (deftest admit-rejects-unbounded-iteration-bounds-test
   (let [ir (run/compile-doc!
-            "{:ability :bad-spell :activation :instant
-              :tunables {:aoe {:type :double} :lim {:type :long}}
+            "{:id :bad-spell :activation :instant
+              :parameters {:aoe {:type :double} :lim {:type :long}}
               :do [(let xs (target/entities {:shape {:type :sphere :center ?caster/eye :radius $aoe}
                                              :limit $lim}))
                    (each t xs (combat/damage {:target t :amount 1.0}))
@@ -135,7 +135,7 @@
   ;; against glyph-catalog's own output.
   (let [damage-entry (some #(when (= :effect/damage (:glyph %)) %) (player/glyph-catalog))
         ir (run/compile-doc!
-            "{:ability :t :activation :instant
+            "{:id :t :activation :instant
               :do [(combat/damage {:target ?caster/id :amount 1.0})
                    (finish {:outcome :performed})]}")
         summary (cost/analyze ir vocab/nodes)]

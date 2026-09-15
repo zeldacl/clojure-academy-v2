@@ -13,7 +13,7 @@
 
 (deftest map-literal-with-mixed-static-and-dynamic-values-compiles-test
   (let [doc (surface/parse
-             "{:ability :policy-test :tunables {:step {:type :double}}
+             "{:id :policy-test :parameters {:step {:type :double}}
                :do [(let policy {:type :penetration :scan-step $step :clearance-steps 3})
                     (cooldown/start {:name :main :ticks 1})
                     (finish {:outcome :performed})]}")
@@ -22,7 +22,7 @@
       (is (some #(= :map-lit (:op %)) (mapcat :instrs (:blocks ir)))))))
 
 (deftest map-literal-round-trips-test
-  (let [text "{:ability :policy-test :tunables {:step {:type :double}}
+  (let [text "{:id :policy-test :parameters {:step {:type :double}}
               :do [(let policy {:type :penetration :scan-step $step :clearance-steps 3})
                    (cooldown/start {:name :main :ticks 1})
                    (finish {:outcome :performed})]}"
@@ -37,7 +37,7 @@
   (testing "the actual real-content shape: a map literal as a node call's
             OWN argument value, not just a `let` RHS"
     (let [doc (surface/parse
-               "{:ability :nested :tunables {}
+               "{:id :nested :parameters {}
                  :do [(target/raycast {:from ?caster/eye :dir ?caster/eye :distance 10.0
                                        :policy {:type :penetration :clearance-steps 2}})
                       (finish {:outcome :performed})]}")

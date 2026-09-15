@@ -241,7 +241,7 @@
                           (str "(when " target "\n        "
                                (str/join "\n        " effect-lines) ")")
                           (str/join "\n      " effect-lines))]
-        (str "{:ability :player/spell :activation :instant\n"
+        (str "{:id :player/spell :activation :instant\n"
              " :do [" (str/join "\n      " stmts) "\n"
              "      " effect-block "\n"
              "      (finish {:outcome :performed})]}")))))

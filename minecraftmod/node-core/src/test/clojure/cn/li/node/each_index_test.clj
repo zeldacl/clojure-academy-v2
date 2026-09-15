@@ -17,7 +17,7 @@
 
 (deftest each-with-index-binding-compiles-test
   (let [doc (surface/parse
-             "{:ability :indexed :tunables {:damage {:type :double}}
+             "{:id :indexed :parameters {:damage {:type :double}}
                :do [(let xs (target/entities {:center ?caster/eye :radius 4.0 :limit 8}))
                     (each [t i] xs
                       (when (math/lt i 2)
@@ -27,7 +27,7 @@
 
 (deftest each-without-index-binding-still-compiles-test
   (let [doc (surface/parse
-             "{:ability :not-indexed :tunables {:damage {:type :double}}
+             "{:id :not-indexed :parameters {:damage {:type :double}}
                :do [(let xs (target/entities {:center ?caster/eye :radius 4.0 :limit 8}))
                     (each t xs
                       (ac/strike t $damage))

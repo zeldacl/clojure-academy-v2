@@ -46,23 +46,18 @@
 
 (deftest thunder-bolt-v4-effect-contract-matches-main-test
   (let [skill (load-thunder-bolt-skill)
-        values (tree-seq coll? identity skill)
-        lightning-nodes (filter #(and (map? %)
-                                      (= :world/lightning (:component %))) values)
-        vfx-node (some #(when (and (map? %)
-                                   (= :effect/vfx (:component %))
-                                   (= :arc-strike-transient
-                                      (get-in % [:inputs :effect-id])))
-                          %)
-                       values)]
+        values (tree-seq coll? seq skill)
+        lightning-calls (filter #(and (seq? %) (= 'world/lightning (first %))) values)
+        arc-payload (some #(when (and (seq? %) (= 'vfx! (first %)) (map? (second %))
+                                      (= :arc-strike-transient (:effect-id (second %))))
+                             (second %))
+                          values)]
     ;; Main renders the strike with the arc VFX only; it does not add a second
     ;; vanilla lightning effect at the impact point.
-    (is (empty? lightning-nodes))
-    ;; Assert the :ref, not the whole map: cn.li.node.nid stamps every node
-    ;; in a V4 graph, so this value also carries an :nid
-    ;; (:n/n--entry--default-2--source-player-id) that is graph plumbing, not
-    ;; part of the contract being pinned here. The original `(= {:ref ...}
-    ;; ...)` could never hold; it was never observed because an unmatched
-    ;; delimiter three lines up meant this namespace had never compiled.
-    (is (= [:local :caster-id]
-           (:ref (get-in vfx-node [:inputs :payload :source-player-id]))))))
+    (is (empty? lightning-calls))
+    ;; A local reference in surface DSL is the bare symbol the body bound,
+    ;; so this reads as the contract states it: the arc strike is rendered
+    ;; as coming from the caster. The graph form spelled the same thing
+    ;; {:ref [:local :caster-id]} and carried an :nid alongside it, which is
+    ;; why this assertion used to have to dig past the wrapper.
+    (is (= 'caster-id (get-in arc-payload [:payload :source-player-id])))))

@@ -16,7 +16,7 @@
 
 (deftest if-both-arms-compile-and-run-test
   (let [doc (surface/parse
-             "{:ability :branchy :tunables {:range {:type :double}}
+             "{:id :branchy :parameters {:range {:type :double}}
                :do [(let hit (target/raycast {:from ?caster/eye :dir ?caster/eye :distance $range}))
                     (if (:entity-id hit)
                       [(cooldown/start {:name :hit :ticks 1}) (finish {:outcome :performed})]
@@ -33,7 +33,7 @@
   (testing "the exact regression: a when-body whose LAST statement is
             `finish` must not have anything appended after it"
     (let [doc (surface/parse
-               "{:ability :early-exit :tunables {}
+               "{:id :early-exit :parameters {}
                  :do [(when true
                         (finish {:outcome :insufficient-resource}))
                       (cooldown/start {:name :main :ticks 1})
@@ -45,7 +45,7 @@
 
 (deftest each-body-ending-in-finish-does-not-corrupt-the-block-test
   (let [doc (surface/parse
-             "{:ability :early-exit-loop :tunables {}
+             "{:id :early-exit-loop :parameters {}
                :do [(let xs (target/entities {:center [0.0 0.0 0.0] :radius 1.0}))
                     (each t xs
                       (when (:entity-id t)
@@ -55,7 +55,7 @@
     (is (map? (ir/validate! ir)))))
 
 (deftest if-round-trips-test
-  (let [text "{:ability :branchy :tunables {:range {:type :double}}
+  (let [text "{:id :branchy :parameters {:range {:type :double}}
               :do [(let hit (target/raycast {:from ?caster/eye :dir ?caster/eye :distance $range}))
                    (if (:entity-id hit)
                      [(cooldown/start {:name :hit :ticks 1}) (finish {:outcome :performed})]
@@ -72,7 +72,7 @@
             the statement after the `if` (cooldown/start :shared) must be
             reachable from BOTH arms, appearing exactly once in the IR"
     (let [doc (surface/parse
-               "{:ability :both-continue :tunables {}
+               "{:id :both-continue :parameters {}
                  :do [(if true
                         [(cooldown/start {:name :a :ticks 1})]
                         [(cooldown/start {:name :b :ticks 1})])
