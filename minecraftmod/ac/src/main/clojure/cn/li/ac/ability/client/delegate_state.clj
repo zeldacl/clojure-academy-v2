@@ -19,14 +19,17 @@
   (get state-visual-params state-kw))
 
 (defn- context-to-delegate-state
-  "Derive delegate state keyword from a context's input-state."
+  "Derive delegate state from an active-session digest entry.
+
+  The legacy Context carried an explicit :input-state that the skill set;
+  a v4 session does not, so the distinction is read off the session itself.
+  A session only exists while the skill runs, so an entry is never :idle --
+  it is :charge while its hold counter is running up (the golden glow) and
+  :active otherwise (the blue one)."
   [ctx]
-  (case (:input-state ctx)
-    :idle    :idle
-    :active  :active
-    :charge  :charge
-    ;; fallback
-    :idle))
+  (if (pos? (long (or (:hold-ticks ctx) 0)))
+    :charge
+    :active))
 
 (defn delegate-state-for-context
   "Given a context map (or nil), return the full visual state map."
@@ -49,8 +52,7 @@
   ([active-contexts slot-skill-id player-uuid now-ms]
    (if (nil? slot-skill-id)
      (delegate-state-for-context nil)
-     (let [matched (first (filter #(and (= (:skill-id %) slot-skill-id)
-                                        (not= (:status %) :terminated))
+     (let [matched (first (filter #(= (:skill-id %) slot-skill-id)
                                   active-contexts))]
        ;; Check for skill-specific override via client-visual-state hook
        (if-let [override-kw (when player-uuid

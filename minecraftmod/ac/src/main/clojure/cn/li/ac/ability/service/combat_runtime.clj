@@ -1867,7 +1867,63 @@
                       :context (:context session)
                       :activation-seed (:activation-seed session)})]
                 (when (= :accepted (:status release-result))
-                  (finalize-result! owner release-result))))))))))(defn tick!
+                  (finalize-result! owner release-result))))))))))
+
+;; owner -> the digest last pushed to that owner, so a tick that changes
+;; nothing sends nothing. While a skill charges its :hold-ticks moves every
+;; tick, so this suppresses the idle case, not the charging one.
+(defonce ^:private pushed-session-digests* (atom {}))
+
+(defn session-digest-for-owner
+  "One owner's active sessions, in the shape the HUD renders.
+
+   The client cannot derive any of this: :hold-ticks and the phase behind
+   :mode are written by the compiled program on the server, and elapsed
+   ticks come from the session's own start-tick. Sorted by skill so an
+   unchanged tick compares equal and pushes nothing."
+  [owner tick]
+  (->> (combat-sessions/sessions-for-owner content-id owner)
+       (mapv (fn [[ability-id session]]
+               (let [state (:state session)]
+                 {:skill-id ability-id
+                  :mode (:mode state)
+                  :hold-ticks (long (or (:hold-ticks state) 0))
+                  :elapsed-ticks (max 0 (- (long tick)
+                                           (long (or (:start-tick session) tick))))
+                  :exp (double (or (:skill-exp (:context session)) 0.0))})))
+       (sort-by :skill-id)
+       vec))
+
+(defn- push-session-digests!
+  "Push each changed digest to its own owner.
+
+   Owners that HAD a digest last tick are included even once their last
+   session ends: they are exactly the ones who need the empty digest that
+   clears the charge bar and slot glow."
+  [tick]
+  (let [active (set (map first (keys (combat-sessions/snapshot-all content-id))))]
+    (doseq [owner (into active (keys @pushed-session-digests*))]
+      (let [digest (session-digest-for-owner owner tick)]
+        (when-not (= digest (get @pushed-session-digests* owner))
+          (if (seq digest)
+            (swap! pushed-session-digests* assoc owner digest)
+            (swap! pushed-session-digests* dissoc owner))
+          (try
+            (server-bridge/send-to-client!
+             owner ability-messages/MSG-SESSION-STATE
+             {:wire (fixed-channel/encode-session-state {:sessions digest})})
+            (catch Throwable e
+              (log/warn "Failed to push session digest"
+                        {:owner owner :error (.getMessage e)}))))))))
+
+(defn clear-session-digest-for-owner!
+  "Drop an owner's pushed-digest memo on logout/stop, so a later login
+   re-pushes rather than comparing equal against a dead session's value."
+  [owner]
+  (swap! pushed-session-digests* dissoc owner)
+  nil)
+
+(defn tick!
   "Advance session/mark bookkeeping and return its neutral result.
 
    Post-deletion cleanup: previously nested pulse-active-sessions! (the
@@ -1884,7 +1940,10 @@
   (reset! last-known-tick* (long tick))
   (expire-marks! (long tick))
   (pulse-active-sessions! (long tick))
+  ;; After the pulse, so the digest reflects the state this tick produced.
+  (push-session-digests! (long tick))
   {:status :accepted :tick tick})
+
 (defn abort-owner! [owner]
   (doseq [[[session-owner ability-id] session] (combat-sessions/snapshot-all content-id)
           :when (= (str session-owner) (str owner))]
@@ -1916,6 +1975,9 @@
   ;; dedup slate, matching reset-for-test!'s own purpose.
   (reset! reflection-claims* {})
   (reset! finalized-damage-claims* {})
+  ;; Same reasoning: a digest left over from an earlier test makes the next
+  ;; one's first push compare equal and send nothing.
+  (reset! pushed-session-digests* {})
   nil)
 
 (defn reset-final-runtime-v2-for-test!

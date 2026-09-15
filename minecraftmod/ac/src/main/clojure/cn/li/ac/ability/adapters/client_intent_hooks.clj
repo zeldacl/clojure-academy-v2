@@ -235,6 +235,16 @@
             (catch Throwable error
               (log/warn "Rejected malformed fixed VFX packet"
                         {:error (.getMessage error)}))))))
+    (net-client/register-push-handler! messages/MSG-SESSION-STATE
+      (fn [{:keys [wire]}]
+        (when (bytes? wire)
+          (try
+            (let [digest (fixed-channel/decode-session-state wire)]
+              (when-let [uuid (some-> (client-bridge/local-player-uuid) str)]
+                (read-model/apply-session-digest! uuid (:sessions digest))))
+            (catch Throwable error
+              (log/warn "Rejected malformed session digest packet"
+                        {:error (.getMessage error)}))))))
     (net-client/register-push-handler! messages/MSG-SYNC-V2 apply-client-runtime-v2!)
     (log/info "CombatIntent push handlers registered")))
 
@@ -313,6 +323,7 @@
     (reactive-hud/clear-charging-arcs-for-owner! [(current-session) :client-ui-hooks uuid])
     (reactive-hud/clear-combat-notices!)
     (reactive-hud/clear-coin-qte-for-owner! uuid)
+    (read-model/clear-session-digest! uuid)
     (keybinds/clear-client-keybind-state! uuid)
     (combat-vfx/clear-owner! uuid)
     (toast/cleanup-expired!)

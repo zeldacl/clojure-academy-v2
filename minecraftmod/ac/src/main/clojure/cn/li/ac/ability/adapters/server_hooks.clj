@@ -254,6 +254,12 @@
    :on-player-logout!
    (fn [player-uuid]
      (combat-runtime/abort-owner! player-uuid)
+     ;; Only on logout/stop. Death and dimension change also abort every
+     ;; session, but the player is still connected, so the memo must stay:
+     ;; the next tick compares the now-empty digest against it and pushes
+     ;; the empty one that clears the HUD. Dropping it there would leave a
+     ;; stale charge bar with nothing to correct it.
+     (combat-runtime/clear-session-digest-for-owner! player-uuid)
      (network/clear-catalog-handshake! player-uuid)
      (network/clear-input-admission! player-uuid)
      (ability-combat/cancel-installed-owner! player-uuid)
@@ -264,7 +270,8 @@
    :on-server-stop!
    (fn [session-id]
     (doseq [player-uuid (runtime-list-player-uuids)]
-      (combat-runtime/abort-owner! player-uuid))
+      (combat-runtime/abort-owner! player-uuid)
+      (combat-runtime/clear-session-digest-for-owner! player-uuid))
      (store/remove-session! session-id)
      (world-registry/clear-session-world-data! session-id)
      (ability-combat/cancel-installed-all!)

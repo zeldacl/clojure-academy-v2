@@ -5,19 +5,17 @@
   (:require [cn.li.mcmod.hooks.messages :as message-registry]))
 
 (def message-ids
-  {:ctx-begin-link "ability:ctx/begin-link"
-   :ctx-establish "ability:ctx/establish"
-   :ctx-keepalive "ability:ctx/keepalive"
-   :ctx-terminate "ability:ctx/terminate"
-   :ctx-terminated "ability:ctx/terminated"
-   :ctx-channel "ability:ctx/channel"
-   :combat-intent "ability:combat/intent"
+  {:combat-intent "ability:combat/intent"
    :combat-result "ability:combat/result"
    :combat-vfx "ability:combat/vfx"
    :catalog-hello "ability:catalog/hello"
    :catalog-ack "ability:catalog/ack"
 
    :sync-v2 "ability:sync/runtime-v2"
+   ;; Server -> one player: the digest of that player's active skill
+   ;; sessions. Separate from :sync-v2 because it changes every tick while
+   ;; a skill charges, and :sync-v2 carries five persisted domains.
+   :session-state "ability:session/state"
 
    :req-learn-node "ability:req/learn-skill"
    :req-level-up "ability:req/level-up"
@@ -31,12 +29,6 @@
    :req-saved-pos-perform "ability:req/location-teleport/perform"
    :req-spell-submit "ability:req/spell-submit"})
 
-(def MSG-CTX-BEGIN-LINK (:ctx-begin-link message-ids))
-(def MSG-CTX-ESTABLISH (:ctx-establish message-ids))
-(def MSG-CTX-KEEPALIVE (:ctx-keepalive message-ids))
-(def MSG-CTX-TERMINATE (:ctx-terminate message-ids))
-(def MSG-CTX-TERMINATED (:ctx-terminated message-ids))
-(def MSG-CTX-CHANNEL (:ctx-channel message-ids))
 (def MSG-COMBAT-INTENT (:combat-intent message-ids))
 (def MSG-COMBAT-RESULT (:combat-result message-ids))
 (def MSG-COMBAT-VFX (:combat-vfx message-ids))
@@ -44,6 +36,7 @@
 (def MSG-CATALOG-ACK (:catalog-ack message-ids))
 
 (def MSG-SYNC-V2 (:sync-v2 message-ids))
+(def MSG-SESSION-STATE (:session-state message-ids))
 
 (def MSG-REQ-LEARN-NODE (:req-learn-node message-ids))
 (def MSG-REQ-LEVEL-UP (:req-level-up message-ids))

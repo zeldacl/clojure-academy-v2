@@ -33,16 +33,13 @@
           {:now-ms-fn #(bridge/game-time-ms)})))
 
 (defn- active-context-for [player-uuid skill-id]
-  (some (fn [ctx]
-          (when (and (= skill-id (:skill-id ctx))
-                     (not= :terminated (:status ctx)))
-            ctx))
+  ;; A digest entry exists only while its session runs, so presence IS
+  ;; liveness -- there is no terminated state left to filter out.
+  (some (fn [ctx] (when (= skill-id (:skill-id ctx)) ctx))
         (read-model/get-player-contexts-for-player player-uuid)))
 
 (defn- hold-ticks-from-context [ctx]
-  (max 0 (long (or (get-in ctx [:skill-state :hold-ticks])
-                   (:hold-ticks ctx)
-                   0))))
+  (max 0 (long (or (:hold-ticks ctx) 0))))
 
 (defn- body-intensify-charge-state [player-uuid]
   (let [ctx (active-context-for player-uuid :body-intensify)
@@ -264,10 +261,11 @@
 
 (defn- coin-qte-visual-state [player-uuid now-ms]
   (let [ctx (active-context-for player-uuid :railgun)
-        mode (get-in ctx [:skill-state :mode])]
+        mode (:mode ctx)]
     (if (= mode :item-charge)
-      (let [charge-ticks (max 0 (long (or (get-in ctx [:skill-state :charge-ticks])
-                                          (:charge-ticks ctx) 0)))
+      ;; railgun.edn's :item-charge arm counts up in :hold-ticks against the
+      ;; $item-charge-ticks tunable -- there is no separate charge counter.
+      (let [charge-ticks (hold-ticks-from-context ctx)
             max-ticks (max 1 (long (skill-config/tunable-int :railgun :charge.item-charge-ticks)))]
         {:active? true :charge-ticks charge-ticks :coin-active? false
          :coin-progress 0.0 :charge-start-ms nil
@@ -584,25 +582,24 @@
   (.remove snapshot-cache-by-owner owner-key)
   nil)
 
-(defn- toggle-active? [ctx-data skill-id]
-  (let [toggle-state (get-in ctx-data [:skill-state :toggle skill-id])]
-    (and toggle-state (:active toggle-state))))
-
 (defn- scan-vm-state
   "Reduce over an already-fetched contexts list (see cached-frame-inputs) —
   callers must not re-fetch via read-model here, since build-snapshot's caller
   already pays for that fetch once per underlying player-state change."
   [contexts]
   (reduce
-    (fn [acc ctx-data]
-      (cond-> acc
-        (toggle-active? ctx-data :vec-reflection)
-        (-> (assoc :reflection-active? true)
-            (assoc :reflection-intensity
-                   (let [ticks (long (or (get-in ctx-data [:skill-state :toggle :vec-reflection :total-ticks]) 0))]
-                     (double (min 1.0 (/ ticks 20.0))))))
-        (toggle-active? ctx-data :vec-deviation)
-        (assoc :deviation-active? true)))
+    (fn [acc {:keys [skill-id elapsed-ticks]}]
+      (case skill-id
+        ;; A v4 session has no toggle sub-map: these two skills run for as
+        ;; long as they are held, so "the session exists" IS "the toggle is
+        ;; on", and the session's own elapsed ticks are what the legacy
+        ;; :total-ticks counter used to accumulate. Same 20-tick ramp.
+        :vec-reflection (-> acc
+                            (assoc :reflection-active? true)
+                            (assoc :reflection-intensity
+                                   (min 1.0 (/ (double (or elapsed-ticks 0)) 20.0))))
+        :vec-deviation (assoc acc :deviation-active? true)
+        acc))
     {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
     contexts))
 

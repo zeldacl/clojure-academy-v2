@@ -12,9 +12,13 @@
 (use-fixtures :each clean-messages-fixture)
 
 (deftest wire-ids-remain-stable-test
-  (is (= "ability:ctx/begin-link" ability-messages/MSG-CTX-BEGIN-LINK))
-  (is (= "ability:ctx/channel" ability-messages/MSG-CTX-CHANNEL))
   (is (= "ability:sync/runtime-v2" ability-messages/MSG-SYNC-V2))
+  (is (= "ability:session/state" ability-messages/MSG-SESSION-STATE))
+  ;; The six ability:ctx/* ids went with the legacy Context transport that
+  ;; 5be38fe57 deleted -- neither side had registered a handler for any of
+  ;; them since. Asserting their absence keeps them from drifting back in.
+  (is (empty? (filter #(.startsWith ^String % "ability:ctx/")
+                      ability-messages/all-messages)))
   (is (= "ability:req/location-teleport/query" ability-messages/MSG-REQ-SAVED-POS-QUERY))
   (is (= (set (vals ability-messages/message-ids)) ability-messages/all-messages))
   (is (ability-messages/valid-msg-id? ability-messages/MSG-REQ-LEVEL-UP))
@@ -22,8 +26,8 @@
 
 (deftest install-registers-ac-messages-test
   (ability-messages/install!)
-  (is (= ability-messages/MSG-CTX-CHANNEL
-         (message-registry/msg-id :ctx-channel)))
+  (is (= ability-messages/MSG-SESSION-STATE
+         (message-registry/msg-id :session-state)))
   (is (= ability-messages/MSG-SYNC-V2
          (message-registry/msg-id :sync-v2)))
   (is (= ability-messages/MSG-REQ-SAVED-POS-PERFORM

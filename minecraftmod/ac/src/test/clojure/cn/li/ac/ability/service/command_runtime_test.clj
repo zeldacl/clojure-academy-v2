@@ -12,7 +12,6 @@
    :resource-data {}
    :cooldown-data {}
    :preset-data {}
-   :context-registry {}
    :dirty? false})
 
 (deftest run-command-in-session-injects-session-id-test

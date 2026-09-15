@@ -18,7 +18,11 @@
 ;; project-dependency Clojure module, same as node-core itself), so the
 ;; number is duplicated here with this comment as the cross-reference.
 (def ^:const max-player-spell-bytes 4096)
-(def packet-types {:catalog-hello 1 :catalog-ack 2 :input-edge 3 :input-ack 4 :combat-feedback 5 :vfx-trigger 6 :vfx-spawn 7 :vfx-update 8 :vfx-destroy 9 :vfx-clear-owner 10 :vfx-snapshot 11 :vfx-release 12 :spell-submit 13})
+(def packet-types {:catalog-hello 1 :catalog-ack 2 :input-edge 3 :input-ack 4 :combat-feedback 5 :vfx-trigger 6 :vfx-spawn 7 :vfx-update 8 :vfx-destroy 9 :vfx-clear-owner 10 :vfx-snapshot 11 :vfx-release 12 :spell-submit 13 :session-state 14})
+;; One digest entry per active session, and a player can only hold a few at
+;; once (one per bound slot). The bound exists so a malformed or hostile
+;; packet cannot make the client allocate without limit.
+(def ^:const max-session-digest-entries 16)
 (def reverse-packet-types (into {} (map (fn [[k v]] [v k]) packet-types)))
 (def ^:private vfx-ops #{:trigger :spawn :update :destroy :release :clear-owner :snapshot})
 (def ^:private vfx-op->packet-type
@@ -269,6 +273,63 @@
         (throw (ex-info "decoded combat feedback has invalid feedback list"
                         {:feedback (:feedback value)})))
       (assoc value :type :combat-feedback))))
+
+(defn- session-digest-entry
+  "Keep only the final ABI fields of one active-session digest entry.
+
+  Deliberately flat and deliberately NOT the session's whole :state map.
+  A program's state can hold unbounded values (vec-reflection's
+  :visited-projectiles grows with every projectile it touches), and none of
+  them are things a HUD reads -- so the projection names the four fields the
+  client actually renders instead of shipping state wholesale."
+  [entry]
+  (when-not (map? entry)
+    (throw (ex-info "session digest entry must be a map" {:entry entry})))
+  (when-not (keyword? (:skill-id entry))
+    (throw (ex-info "session digest entry needs a keyword :skill-id" {:entry entry})))
+  {:skill-id (:skill-id entry)
+   :mode (:mode entry)
+   :hold-ticks (long (or (:hold-ticks entry) 0))
+   :elapsed-ticks (long (or (:elapsed-ticks entry) 0))
+   :exp (double (or (:exp entry) 0.0))})
+
+(defn encode-session-state
+  "Encode one player's active-session digest.
+
+  Server -> that player only. Sent whenever the digest changes, which while
+  a skill is charging means every tick -- hence the flat, bounded entry
+  shape above rather than a player-state sync domain, which would push a
+  full five-domain packet per tick to carry one changed counter."
+  ^bytes [{:keys [sessions] :as digest}]
+  (when-not (map? digest)
+    (throw (ex-info "session digest must be a map" {:digest digest})))
+  (when-not (sequential? sessions)
+    (throw (ex-info "session digest needs a :sessions list" {:sessions sessions})))
+  (when (> (count sessions) max-session-digest-entries)
+    (throw (ex-info "session digest exceeds bound"
+                    {:max max-session-digest-entries :count (count sessions)})))
+  (frame :session-state
+         (binary-codec/encode {:sessions (mapv session-digest-entry sessions)})))
+
+(defn decode-session-state
+  "Decode and validate one active-session digest packet."
+  [^bytes packet]
+  (let [{:keys [packet-type payload]} (decode-frame packet)]
+    (when-not (= :session-state packet-type)
+      (throw (ex-info "packet is not a session digest" {:packet-type packet-type})))
+    (let [value (binary-codec/decode payload)]
+      (when-not (map? value)
+        (throw (ex-info "decoded session digest is not a map" {:value value})))
+      (when-not (vector? (:sessions value))
+        (throw (ex-info "decoded session digest has invalid session list"
+                        {:sessions (:sessions value)})))
+      (when (> (count (:sessions value)) max-session-digest-entries)
+        (throw (ex-info "decoded session digest exceeds bound"
+                        {:max max-session-digest-entries
+                         :count (count (:sessions value))})))
+      (assoc value
+             :type :session-state
+             :sessions (mapv session-digest-entry (:sessions value))))))
 
 (defn encode-player-spell-submit
   "Encode a player's raw glyph vector ([{:glyph kw :params {...}} ...],

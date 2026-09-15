@@ -484,82 +484,8 @@
          (or (nil? dd) (not (ddata/developing? dd))))))
 
 ;; ============================================================================
-;; Sub-Reducer: context lifecycle
+;; Sub-Reducer: cooldown maintenance
 ;; ============================================================================
-
-(defn- cmd-register-context
-  "Register a new context in the player's context-registry.
-  
-  Command fields:
-    :ctx-id    keyword/uuid
-    :skill-id  keyword
-    :status    keyword (default :constructed)"
-  [player-state {:keys [ctx-id skill-id status] :or {status :constructed}}]
-    (let [ctx {:id ctx-id :skill-id skill-id :status status}
-      new-state (assoc-in player-state [:context-registry ctx-id] ctx)
-      uuid (:player-uuid player-state)]
-    (ok new-state
-      [(evt/make-context-registered-event uuid ctx-id skill-id status)]
-      [])))
-
-(defn- cmd-update-context-status
-  "Update status of a context in the context-registry.
-  
-  Command fields:
-    :ctx-id  keyword/uuid
-    :status  keyword :constructed|:alive|:terminated
-    :reason  keyword (termination reason)"
-  [player-state {:keys [ctx-id status reason]}]
-  (if-not (get-in player-state [:context-registry ctx-id])
-    (rejected player-state :context-not-found)
-    (let [old-status (get-in player-state [:context-registry ctx-id :status])
-          new-state (update-in player-state [:context-registry ctx-id]
-                               merge {:status status :terminated-reason reason})
-          uuid (:player-uuid player-state)]
-      (ok new-state
-          [(evt/make-context-status-changed-event uuid ctx-id old-status status reason)]
-          []))))
-
-(defn- cmd-touch-context-keepalive
-  "Update keepalive timestamp of a context in the context-registry.
-
-  Command fields:
-    :ctx-id      keyword/uuid
-    :timestamp-ms long (optional, default now)"
-  [player-state {:keys [ctx-id timestamp-ms]}]
-  (if-not (get-in player-state [:context-registry ctx-id])
-    (rejected player-state :context-not-found)
-    (let [ts (long (or timestamp-ms (System/currentTimeMillis)))
-          new-state (assoc-in player-state [:context-registry ctx-id :last-keepalive-ms] ts)]
-      (ok new-state))))
-
-(defn- cmd-purge-terminated-contexts
-  "Remove :terminated contexts from the context-registry."
-  [player-state _command]
-  (let [registry (:context-registry player-state)
-        live (into {}
-                   (filter (fn [[_ ctx]]
-                             (not= :terminated (:status ctx)))
-                           registry))]
-    (if (= (count registry) (count live))
-      (ok (assoc player-state :context-registry live))
-      (ok (assoc player-state :context-registry live)
-          [(evt/make-context-purged-event (:player-uuid player-state)
-                                          (- (count registry) (count live)))]
-          []))))
-
-;; ============================================================================
-;; Sub-Reducer: resource recovery override
-;; ============================================================================
-
-(defn- cmd-restore-resource
-  "Fully restore a player's resources (e.g. on death/respawn).
-  
-  No command fields required."
-  [player-state _command]
-  (let [res-data (:resource-data player-state)
-        restored (rdata/recover-all res-data)]
-    (ok (assoc player-state :resource-data restored))))
 
 (defn- cmd-clear-all-cooldowns
   "Remove all cooldowns (e.g. on admin request)."
@@ -762,20 +688,16 @@
     Only keys present on the command are applied. Intended for adapters and
     server hooks — not arbitrary gameplay callers."
     [player-state cmd]
-    (if (and (contains? cmd :context-registry)
-             (not (map? (:context-registry cmd))))
-      (rejected player-state :invalid-context-registry-sync)
-      (let [hydrated (cond-> player-state
-                       (contains? cmd :ability-data) (assoc :ability-data (:ability-data cmd))
-                       (contains? cmd :resource-data) (assoc :resource-data (:resource-data cmd))
-                       (contains? cmd :cooldown-data) (assoc :cooldown-data (:cooldown-data cmd))
-                       (contains? cmd :preset-data) (assoc :preset-data (:preset-data cmd))
-                       (contains? cmd :develop-data) (assoc :develop-data (:develop-data cmd))
-                       (contains? cmd :combat-data) (assoc :combat-data (:combat-data cmd))
-                       (contains? cmd :sync-revision) (assoc :sync-revision (:sync-revision cmd))
-                       (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
-                       (contains? cmd :dirty?) (assoc :dirty-domains (if (:dirty? cmd) sync-domains #{})))]
-        (ok hydrated))))
+    (let [hydrated (cond-> player-state
+                     (contains? cmd :ability-data) (assoc :ability-data (:ability-data cmd))
+                     (contains? cmd :resource-data) (assoc :resource-data (:resource-data cmd))
+                     (contains? cmd :cooldown-data) (assoc :cooldown-data (:cooldown-data cmd))
+                     (contains? cmd :preset-data) (assoc :preset-data (:preset-data cmd))
+                     (contains? cmd :develop-data) (assoc :develop-data (:develop-data cmd))
+                     (contains? cmd :combat-data) (assoc :combat-data (:combat-data cmd))
+                     (contains? cmd :sync-revision) (assoc :sync-revision (:sync-revision cmd))
+                     (contains? cmd :dirty?) (assoc :dirty-domains (if (:dirty? cmd) sync-domains #{})))]
+      (ok hydrated)))
 
   (defn- cmd-set-dirty-flag
     [player-state {:keys [dirty?] :or {dirty? false}}]
@@ -785,59 +707,6 @@
     [player-state {:keys [enabled?]}]
     (ok (assoc-in player-state [:cheats-data :enabled?] (boolean enabled?))))
 
-  (defn- cmd-context-assoc-skill-state
-    [player-state {:keys [ctx-id k v]}]
-    (if-not (get-in player-state [:context-registry ctx-id])
-      (rejected player-state :context-not-found)
-      (let [key-path (if (vector? k) k [k])]
-        (ok (assoc-in player-state (into [:context-registry ctx-id :skill-state] key-path) v)))))
-
-  (defn- cmd-context-increment-skill-state
-    [player-state {:keys [ctx-id k max]}]
-    (if-not (get-in player-state [:context-registry ctx-id])
-      (rejected player-state :context-not-found)
-    (let [state-key (or k :charge-ticks)
-      key-path (if (vector? state-key) state-key [state-key])
-            max-v (long (or max Long/MAX_VALUE))
-      current (long (or (get-in player-state (into [:context-registry ctx-id :skill-state] key-path)) 0))
-            next-v (min max-v (inc current))]
-      (ok (assoc-in player-state (into [:context-registry ctx-id :skill-state] key-path) next-v)))))
-
-  (defn- cmd-context-set-toggle-state
-    [player-state {:keys [ctx-id skill-id toggle-state]}]
-    (if-not (get-in player-state [:context-registry ctx-id])
-      (rejected player-state :context-not-found)
-      (ok (assoc-in player-state [:context-registry ctx-id :skill-state :toggle skill-id]
-                    toggle-state))))
-
-  (defn- cmd-context-set-toggle-active
-    [player-state {:keys [ctx-id skill-id active]}]
-    (if-not (get-in player-state [:context-registry ctx-id])
-      (rejected player-state :context-not-found)
-      (ok (assoc-in player-state [:context-registry ctx-id :skill-state :toggle skill-id :active]
-                    (boolean active)))))
-
-  (defn- cmd-context-remove-toggle-state
-    [player-state {:keys [ctx-id skill-id]}]
-    (if-not (get-in player-state [:context-registry ctx-id])
-      (rejected player-state :context-not-found)
-      (ok (update-in player-state [:context-registry ctx-id :skill-state :toggle]
-                     (fn [toggle-map]
-                       (if (map? toggle-map)
-                         (dissoc toggle-map skill-id)
-                         toggle-map))))))
-
-  (defn- cmd-context-clear-skill-state
-    [player-state {:keys [ctx-id]}]
-    (if-not (get-in player-state [:context-registry ctx-id])
-      (rejected player-state :context-not-found)
-      (ok (update-in player-state [:context-registry ctx-id] dissoc :skill-state))))
-
-  (defn- cmd-context-set-input-state
-    [player-state {:keys [ctx-id input-state]}]
-    (if-not (get-in player-state [:context-registry ctx-id])
-      (rejected player-state :context-not-found)
-      (ok (assoc-in player-state [:context-registry ctx-id :input-state] input-state))))
 
 ;; ============================================================================
 ;; Public Dispatcher
@@ -864,11 +733,6 @@
     :server-tick (cmd-server-tick player-state command)
     :develop-start (cmd-develop-start player-state command)
     :develop-fail (cmd-develop-fail player-state command)
-    :register-context (cmd-register-context player-state command)
-    :update-context-status (cmd-update-context-status player-state command)
-    :touch-context-keepalive (cmd-touch-context-keepalive player-state command)
-    :purge-terminated-contexts (cmd-purge-terminated-contexts player-state command)
-    :restore-resource (cmd-restore-resource player-state command)
     :clear-all-cooldowns (cmd-clear-all-cooldowns player-state command)
     :set-level (cmd-set-level player-state command)
     :set-skill-exp (cmd-set-skill-exp player-state command)
@@ -882,13 +746,6 @@
     :hydrate-player-state (cmd-hydrate-player-state player-state command)
     :set-dirty-flag (cmd-set-dirty-flag player-state command)
     :set-cheats-enabled (cmd-set-cheats-enabled player-state command)
-    :context-assoc-skill-state (cmd-context-assoc-skill-state player-state command)
-    :context-increment-skill-state (cmd-context-increment-skill-state player-state command)
-    :context-set-toggle-state (cmd-context-set-toggle-state player-state command)
-    :context-set-toggle-active (cmd-context-set-toggle-active player-state command)
-    :context-remove-toggle-state (cmd-context-remove-toggle-state player-state command)
-    :context-clear-skill-state (cmd-context-clear-skill-state player-state command)
-    :context-set-input-state (cmd-context-set-input-state player-state command)
     (do
       (log/warn "Unknown ability command" (:command command))
       (ok player-state))))

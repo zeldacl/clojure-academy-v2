@@ -98,28 +98,41 @@
     (fn [session-id player-uuid]
       (store/get-or-create-player-state! session-id player-uuid))))
 
-(defn get-player-contexts
-  "Read client-visible contexts from projected player-state context-registry."
-  [owner-key]
-  (let [[_session-id _screen-id player-uuid] owner-key
-        player-state (or (get-player-state owner-key) {})]
-    (->> (or (:context-registry player-state) {})
-         vals
-         (filter map?)
-         (filter #(or (nil? (:player-uuid %))
-                      (= (str player-uuid)
-                         (some-> (:player-uuid %) str))))
-         (filter #(or (nil? (:logical-side %))
-                      (= :client (:logical-side %))))
-         vec)))
+;; player-uuid -> that player's last received active-session digest.
+;;
+;; Not a player-state domain. The digest is per-tick server truth about
+;; sessions in flight, not persisted progression, and it is delivered by its
+;; own ability:session/state push rather than the five-domain :sync-v2
+;; packet -- see combat-runtime/push-session-digests!.
+(defonce ^:private session-digests* (atom {}))
+
+(defn apply-session-digest!
+  "Install one player's freshly pushed digest. An empty digest is stored as
+   absence, so a player with no active session reads as []."
+  [player-uuid sessions]
+  (let [uuid (str player-uuid)]
+    (if (seq sessions)
+      (swap! session-digests* assoc uuid (vec sessions))
+      (swap! session-digests* dissoc uuid)))
+  nil)
+
+(defn clear-session-digest!
+  [player-uuid]
+  (swap! session-digests* dissoc (str player-uuid))
+  nil)
+
+(defn clear-all-session-digests!
+  []
+  (reset! session-digests* {})
+  nil)
 
 (defn get-player-contexts-for-player
-  "Read contexts for one player from projected player-state only."
+  "One player's active skill sessions, as last pushed by the server.
+
+   Each entry is flat -- :skill-id, :mode, :hold-ticks, :elapsed-ticks,
+   :exp -- and only sessions that are actually running are present, so
+   there is no terminated/logical-side filtering left to do here."
   ([player-uuid]
-   (if-let [session-id (runtime-hooks/client-session-id)]
-     (get-player-contexts-for-player player-uuid session-id nil)
-     []))
-  ([player-uuid session-id screen-id]
-   (if session-id
-     (get-player-contexts [session-id screen-id (str player-uuid)])
-     [])))
+   (get @session-digests* (str player-uuid) []))
+  ([player-uuid _session-id _screen-id]
+   (get-player-contexts-for-player player-uuid)))

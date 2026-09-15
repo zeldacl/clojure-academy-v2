@@ -45,7 +45,6 @@
     (is (map? (:preset-data s)))
     (is (map? (:develop-data s)))
     (is (= 0 (:max-stim (:develop-data s))))
-    (is (map? (:context-registry s)))
     (is (false? (contains? s :dirty-domains)))
     (is (false? (contains? s :terminal-data)))))
 
@@ -131,7 +130,7 @@
     (is (= persisted decoded))
     (is (false? (contains? decoded :dirty-domains)))
     (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data
-             :cheats-data :context-registry :combat-data}
+             :cheats-data :combat-data}
            (set (keys decoded))))
     (is (false? (get-in decoded [:cheats-data :enabled?]))
         "the /aim cheat switch round-trips like any other persisted domain")
