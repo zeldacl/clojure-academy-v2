@@ -774,14 +774,8 @@
                        (contains? cmd :combat-data) (assoc :combat-data (:combat-data cmd))
                        (contains? cmd :sync-revision) (assoc :sync-revision (:sync-revision cmd))
                        (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
-                       (contains? cmd :runtime-data) (assoc :runtime (:runtime-data cmd))
                        (contains? cmd :dirty?) (assoc :dirty-domains (if (:dirty? cmd) sync-domains #{})))]
-        ;; :runtime-data can replace [:runtime] wholesale.
-        (ok hydrated
-            []
-            (if (contains? cmd :runtime-data)
-              []
-              [])))))
+        (ok hydrated))))
 
   (defn- cmd-set-dirty-flag
     [player-state {:keys [dirty?] :or {dirty? false}}]
