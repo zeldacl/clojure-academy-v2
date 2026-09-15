@@ -1,7 +1,14 @@
 ;; Port of the old :target/raycast-destination composite: raycast, then
-;; resolve the neutral landing point from the hit. Both :hit and
-;; :destination are exposed (the old composite's two-output shape) bundled
-;; into one map-literal, since a :defn has exactly one return local.
+;; resolve the neutral landing point from the hit.
+;;
+;; Returns the destination itself. It used to return {:hit :destination}
+;; bundled into a map literal, carrying the old composite's two-output
+;; shape forward -- but nothing ever read the :hit half, and the wrapper
+;; cost the whole chain its type: a map literal compiles to an untyped
+;; :objects register, so every caller got :any back, unwrapped it with a
+;; (:destination x) that was also :any, and any field read after that was
+;; :any too. One unused key was erasing :destination all the way down to
+;; the reads. A :defn returning one value should return that value.
 {:defn :target/raycast-destination
  :params [{:name origin :type :vec3} {:name direction :type :vec3} {:name distance :type :double}
           {:name policy :type :any} {:name include-entities? :type :boolean}
@@ -9,6 +16,5 @@
  :do [(let hit (target/raycast {:origin origin :direction direction :distance distance
                                 :include-entities? include-entities? :include-blocks? include-blocks?}))
       (let destination (target/resolve-destination {:hit hit :origin origin :direction direction
-                                                     :distance distance :policy policy}))
-      (let result {:hit hit :destination destination})]
- :returns result}
+                                                     :distance distance :policy policy}))]
+ :returns destination}

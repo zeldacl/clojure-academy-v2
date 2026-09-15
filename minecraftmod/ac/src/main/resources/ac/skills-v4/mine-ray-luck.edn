@@ -44,8 +44,6 @@
   :description-key "ability.skill.meltdowner.mine_ray_luck.desc"},
  :presentation
  {:variant :luck,
-  :tool-tier-capped? false,
-  :fortune-level 3,
   :startup-sound-id "academy:md.mine_luck_startup",
   :loop-sound-id "academy:md.mine_loop",
   :progress-color [255 215 0 220],
@@ -461,11 +459,6 @@
         :component :state/set,
         :inputs {:key :target, :value nil},
         :nid :n/n--entry--pulse-10-e-832e0591},
-       :n084
-       {:type :component,
-        :component :value/field,
-        :nid :n/n084,
-        :inputs {:field :tool-tier-capped?}},
        :n--entry--pulse-10-e-b32ab4e5
        {:type :component,
         :component :state/set,
@@ -503,7 +496,7 @@
         :nid :n/n064,
         :inputs {:field :block-id}},
        :n030 {:type :local-get, :key :tick-budget, :nid :n/n030},
-       :n083 {:type :component, :component :bool/and, :nid :n/n083},
+       :n083 {:type :component, :component :bool/and, :nid :n/n083, :inputs {:arg0 false}},
        :n036
        {:type :component, :component :collection/first, :nid :n/n036},
        :n035
@@ -716,7 +709,6 @@
        :n058 {:type :local-get, :key :starting-hardness, :nid :n/n058},
        :n048 {:type :local-get, :key :matches-target?, :nid :n/n048},
        :n--entry--pulse-10 {:type :branch, :nid :n/n--entry--pulse-10},
-       :n085 {:type :local-get, :key :runtime, :nid :n/n085},
        :n074 {:type :merge, :nid :n/n074},
        :n100 {:type :merge, :nid :n/n100},
        :n081 {:type :local-get, :key :block, :nid :n/n081},
@@ -731,7 +723,6 @@
         :key :sufficient?,
         :nid :n/n--entry--pulse-9},
        :n079 {:type :component, :component :bool/and, :nid :n/n079},
-       :n069 {:type :local-get, :key :runtime, :nid :n/n069},
        :n--entry--pulse-10-e-fc87659b
        {:type :component,
         :component :state/set,
@@ -747,11 +738,6 @@
         :inputs {:key :target, :value nil},
         :nid :n/n--entry--pulse-10-e-5190fa69},
        :n034 {:type :local-get, :key :main-cooldown, :nid :n/n034},
-       :n066
-       {:type :component,
-        :component :value/field,
-        :nid :n/n066,
-        :inputs {:field :fortune-level}},
        :n094
        {:type :component,
         :component :value/field,
@@ -790,7 +776,7 @@
        {:type :component,
         :component :block/break,
         :nid :n/n061,
-        :inputs {:drop? true, :barrier? true}},
+        :inputs {:fortune-level 3, :drop? true, :barrier? true}},
        :n--entry--pulse-10-e-b945dfa5
        {:type :local-set,
         :operation :define,
@@ -899,7 +885,6 @@
         :nid :n/n--entry--pulse-10-e-c915f39a},
        :n027 {:type :local-get, :key :overload-floor, :nid :n/n027},
        :n095 {:type :local-get, :key :block, :nid :n/n095},
-       :n067 {:type :local-get, :key :runtime, :nid :n/n067},
        :n--entry--pulse-10-then-5
        {:type :end,
         :result {},
@@ -1262,22 +1247,6 @@
      :kind :data,
      :from [:n/n064 :value],
      :to [:n/n061 :expected-block-id]}
-    {:id :e/link110,
-     :kind :data,
-     :from [:n/n067 :value],
-     :to [:n/n066 :value]}
-    {:id :e/link111,
-     :kind :data,
-     :from [:n/n066 :value],
-     :to [:n/n061 :fortune-level]}
-    {:id :e/link112,
-     :kind :data,
-     :from [:n/n069 :value],
-     :to [:n/n068 :value]}
-    {:id :e/link113,
-     :kind :data,
-     :from [:n/n068 :value],
-     :to [:n/n061 :tool-tier-capped?]}
     {:id :e/link114,
      :kind :data,
      :from [:n/n061 :value],
@@ -1378,14 +1347,6 @@
      :kind :data,
      :from [:n/n080 :value],
      :to [:n/n079 :arg0]}
-    {:id :e/link139,
-     :kind :data,
-     :from [:n/n085 :value],
-     :to [:n/n084 :value]}
-    {:id :e/link140,
-     :kind :data,
-     :from [:n/n084 :value],
-     :to [:n/n083 :arg0]}
     {:id :e/link141,
      :kind :data,
      :from [:n/n087 :value],

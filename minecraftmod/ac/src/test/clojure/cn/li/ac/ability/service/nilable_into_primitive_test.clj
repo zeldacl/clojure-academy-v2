@@ -104,94 +104,59 @@
                          (pr-str target) (pr-str nid) form)))
       (println)
 
-      ;; A ratchet, not a clean bill of health. These are pre-existing and
-      ;; unverified: proving any single one throws needs the producing
-      ;; expression traced by hand, and proving it does NOT needs the same.
-      ;; What the number buys is the NEXT one -- adding a field read into a
-      ;; numeric parameter now fails here and has to be justified.
+      ;; ZERO, and it is an invariant now rather than a ratchet: no field
+      ;; read in shipped content reaches a :double/:long parameter carrying
+      ;; :any. The next one that does fails this test, which is the point --
+      ;; each such read compiles a :convert that throws on nil, so the check
+      ;; is worth more at 0 than any backlog number it passed through.
       ;;
-      ;; 83 -> 50 when :context/resources stopped being :any. That one
-      ;; capability was 33 of the 83 on its own, which is the shape of this
-      ;; whole problem: the sites are not scattered, they cluster behind a
-      ;; handful of untyped SOURCES, and typing a source retires a whole
-      ;; group at once.
+      ;; It started at 83. What the descent taught, worth keeping because
+      ;; it decides how to attack the next class of these:
       ;;
-      ;; 28 -> 19 finished the :hardness cluster, and took three steps to
-      ;; find because the reads were not in any skill. combat-core's
-      ;; break-budget LIBRARY function does (:hardness candidate) in an
-      ;; `each` body; it is inlined into railgun and meltdowner, which is
-      ;; why their EDN does not contain the word. Typing the list retires
-      ;; all of them at once, since compile-each already binds the item
-      ;; with the collection's element type -- what was missing was a
-      ;; collection with one.
+      ;; The sites were never scattered. They clustered behind a handful of
+      ;; untyped SOURCES, and typing one source retired a whole group:
+      ;; ?context/resources alone was 33, the block selection 9, the beam
+      ;; hit record 4. Chasing individual reads would have been the wrong
+      ;; unit of work throughout.
       ;;
-      ;; 50 -> 28 with no production change at all: the attribution below
-      ;; was keyed by bare register, and slots are numbered per PROGRAM
-      ;; while the atom lives for the whole 50-skill assemble, so every
-      ;; skill's [:reg :objects 5] collided with every other's.
+      ;; Twenty-two of the 83 never existed. This census keyed its
+      ;; register-origin map by bare register, then by [skill register],
+      ;; and both collide -- alloc-reg! numbers slots per PROGRAM while the
+      ;; atom lives for a whole 50-skill assemble, and a document compiles
+      ;; one program per entry point. It invented exactly the alarming kind
+      ;; of row, claiming :owner-snapshot's :velocity (a {:x :y :z} map)
+      ;; reached a :double six times. It cannot: that field is declared
+      ;; :vec3. Reading the schema is what disproved it -- a typed field
+      ;; makes a false claim about itself checkable.
       ;;
-      ;; That bug invented rows, and invented exactly the alarming kind.
-      ;; It had claimed :owner-snapshot's :velocity -- a {:x :y :z} map --
-      ;; reached a :double parameter six times, which would throw on every
-      ;; execution rather than on an unlucky world state. It cannot: that
-      ;; field is declared :vec3, so the coercion it was attributed to
-      ;; could never have been FROM :any. The same goes for the seven
-      ;; :position reads, :entity-id, :damage-type and :available?. All 22
-      ;; were collisions. Reading the schemas is what settled it, which is
-      ;; the argument for declaring them: a typed field makes a false claim
-      ;; about itself checkable.
+      ;; The last 8 were not type gaps at all, and none was fixed by adding
+      ;; a type:
       ;;
-      ;; 19 -> 9 -> 8 typed the last three records whose producers DO guarantee
-      ;; their numeric fields: :entity-ref (project-entity, every numeric
-      ;; field written (double (or ... d))), :beam-hit (beam-trace!'s hit
-      ;; record, which had been mistaken for an :entity-ref), and the
-      ;; block selection before them.
+      ;;   raycast! normalizes ten neutral fields onto whatever a loader
+      ;;     bridge returned, and :distance was not among them, so the miss
+      ;;     branch had none. It is computed there now, from the hit point
+      ;;     and the ray origin, for hits and misses alike.
+      ;;   the three mine-rays read :fortune-level and :tool-tier-capped?
+      ;;     out of :presentation, a blob of sounds and colours, via a
+      ;;     capability. They are per-variant gameplay constants, and are
+      ;;     now literal inputs on the nodes that consume them.
+      ;;   mark-teleport read :distance off session state because
+      ;;     target/raycast-destination returned {:hit :destination} as a
+      ;;     map literal -- an untyped register -- to carry a :hit half
+      ;;     nothing read. The wrapper is gone and the state slot names its
+      ;;     real type.
+      ;;   vec-deviation's (:explosion-power projectile) had a working
+      ;;     fallback that was unreachable: the guard choosing it was
+      ;;     (math/gt power 0.0), whose :double params coerce, so the test
+      ;;     threw before the select it guarded could run.
       ;;
-      ;; The 8 that remain are NOT untyped for lack of effort. Every one is
-      ;; a read of a field whose producer can legitimately omit it, so
-      ;; declaring a type would be a false claim and defaulting the value
-      ;; host-side would invent data to hide a defect. They are left
-      ;; visible on purpose, in four groups:
-      ;;
-      ;;   :hit-result :distance x4 (penetrate-teleport). raycast!'s miss
-      ;;     branch returns {:hit-type :miss :hit? false :world-id :owner}
-      ;;     with no :distance at all, and on a hit the key comes straight
-      ;;     from the loader bridge -- platform.clj's own block-vs-entity
-      ;;     comparison defends with (or (:distance x) INFINITY), which is
-      ;;     the producer admitting it does not guarantee the key.
-      ;;   :context/ability-runtime :fortune-level x3 (the three mine-rays).
-      ;;     That capability is AC's (:presentation registration) -- open
-      ;;     registration metadata whose keys are content-defined. Note
-      ;;     :block/break's own :fortune-level param is (opt :long 0), so
-      ;;     content is passing an explicitly-read value where the node's
-      ;;     default would already have been correct.
-      ;;   a state read x1 (mark-teleport saves a destination to session
-      ;;     state and reads :distance back out). Persisted session state
-      ;;     has no static shape by construction.
-      ;; A fifth group was here and is now FIXED rather than documented:
-      ;; vec-deviation's (:explosion-power projectile). The host builds that
-      ;; field as (when (instance? LargeFireball entity) ...), so nil is the
-      ;; normal case for every other projectile.
-      ;;
-      ;; The skill's fallback was not missing -- (math/select is-fireball
-      ;; power radius) was wired, with :fireball-explosion-radius already
-      ;; declared and mapped to main's own config key, and math/select's
-      ;; :any params let nil pass through it harmlessly. What defeated it
-      ;; was the GUARD: the condition was (math/gt power 0.0), whose
-      ;; :double params coerce, so the test that would have chosen the
-      ;; fallback threw before the select could run. The fallback was
-      ;; unreachable, not absent.
-      ;;
-      ;; It now reads the skill's own :is-large-fireball? local -- the
-      ;; large-fireball-ids membership test it already computes -- which is
-      ;; both nil-safe and closer to main than the comparison was: main
-      ;; used `or`, falling back only on nil, while (> power 0.0) also fell
-      ;; back for a fireball whose power really is zero.
-      ;;
-      ;; Each is the same explicit decision :resource-pool went through: say
-      ;; whether the producing expression can return nil, then either
-      ;; declare it and whitelist it with the reason, or fix the producer.
-      (is (= 8 (count @sites))
+      ;; The pattern in all four: an :any-typed read into a numeric
+      ;; parameter is a symptom. The cause was an incomplete normalizer,
+      ;; gameplay data in a presentation map, a wrapper carrying a dead
+      ;; key, and a guard that could not be asked. Adding types would have
+      ;; hidden every one of them.
+      (is (= 0 (count @sites))
           (str "field reads reaching a numeric parameter changed. Each is a"
-               " potential :convert throw; justify a new one or remove it: "
+               " :convert that throws on nil. Type its source, or fix the"
+               " producer -- do not add a default to hide it: "
                (pr-str (sort-by (juxt :skill :field) @sites)))))))

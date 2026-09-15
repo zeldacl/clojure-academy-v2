@@ -534,12 +534,41 @@
                                [])]
           (assoc state :mastery-breaks mastery-breaks))))))
 
+(defn- raycast-hit-point
+  "The world point a raycast bridge reported, as [x y z].
+
+   Bridges disagree about how to spell it -- block traces expose
+   :hit-x/:hit-y/:hit-z, entity traces :x/:y/:z, some hand back a ready
+   :position map -- and this is the single place that knows that. It used
+   to be known in two: basic-raycast's normalizer spelled it out, and the
+   block-vs-entity comparison right above trusted a :distance the bridge
+   may not have set, defending with POSITIVE_INFINITY when it had not.
+
+   `endpoint` is what a result that names no point means: the ray reached
+   its full length without hitting anything, so its point is where it
+   stopped. That is geometry, not a default standing in for missing data."
+  [result endpoint]
+  (if-let [p (:position result)]
+    [(double (:x p)) (double (:y p)) (double (:z p))]
+    (let [[ex ey ez] endpoint]
+      [(double (or (:hit-x result) (:x result) ex))
+       (double (or (:hit-y result) (:y result) ey))
+       (double (or (:hit-z result) (:z result) ez))])))
+
+(defn- point-distance [[ax ay az] [bx by bz]]
+  (let [dx (- (double bx) (double ax))
+        dy (- (double by) (double ay))
+        dz (- (double bz) (double az))]
+    (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+
 (defn- basic-raycast [request]
   (let [{:keys [world-id owner origin direction distance include-entities?
                 include-blocks? block-policy policy]} request
         [sx sy sz] (point origin)
         [dx dy dz] (point direction)
         distance (max 0.0 (min 128.0 (double (or distance 0.0))))
+        ray-origin [sx sy sz]
+        endpoint [(+ sx (* dx distance)) (+ sy (* dy distance)) (+ sz (* dz distance))]
         block-hit-fn (if (= :collidable-or-water (or block-policy (:block-policy policy)))
                        raycast/raycast-collidable-blocks-or-water
                        raycast/raycast-blocks)
@@ -555,8 +584,15 @@
                 (cond
                   (nil? block-hit) entity-hit
                   (nil? entity-hit) block-hit
-                  (<= (double (or (:distance block-hit) Double/POSITIVE_INFINITY))
-                      (double (or (:distance entity-hit) Double/POSITIVE_INFINITY))) block-hit
+                  ;; Nearer wins, measured from the two hits' own points
+                  ;; rather than from a :distance the bridge may never have
+                  ;; set. The old form read that key and fell back to
+                  ;; POSITIVE_INFINITY, which silently ranked an unlabelled
+                  ;; hit as infinitely far -- so whichever bridge omitted
+                  ;; :distance always lost the comparison.
+                  (<= (point-distance ray-origin (raycast-hit-point block-hit endpoint))
+                      (point-distance ray-origin (raycast-hit-point entity-hit endpoint)))
+                  block-hit
                   :else entity-hit))
               (not= false include-entities?)
               (raycast/raycast-entities world-id sx sy sz dx dy dz distance)
@@ -566,16 +602,11 @@
     (let [result (or hit {:hit-type :miss :hit? false
                           :world-id world-id
                           :owner owner})]
-      ;; Keep one neutral hit-position shape for all platform raycast
-      ;; adapters.  Some bridges expose :hit-x/:hit-y/:hit-z while entity
-      ;; traces expose :x/:y/:z; ability EDN should not know either ABI.
-      (let [position (or (:position result)
-                         {:x (double (or (:hit-x result) (:x result)
-                                         (+ sx (* dx distance))))
-                          :y (double (or (:hit-y result) (:y result)
-                                         (+ sy (* dy distance))))
-                          :z (double (or (:hit-z result) (:z result)
-                                         (+ sz (* dz distance))))})
+      ;; Keep one neutral hit shape for all platform raycast adapters.
+      ;; Some bridges expose :hit-x/:hit-y/:hit-z while entity traces
+      ;; expose :x/:y/:z; ability EDN should not know either ABI.
+      (let [[px py pz :as hit-point] (raycast-hit-point result endpoint)
+            position {:x px :y py :z pz}
             attacked? (= :entity (:hit-type result))
             target-id (or (:target-id result) (:entity-id result)
                           (:entity-uuid result) (:uuid result))
@@ -590,6 +621,13 @@
                            (update position :y + target-height)
                            position)]
         (assoc result :position position
+               ;; Computed here, never taken from the bridge. It is the
+               ;; one neutral field this normalizer used to leave out, and
+               ;; leaving it out is what made (:distance hit) a read that
+               ;; could return nil -- the miss branch above sets no
+               ;; :distance at all, so four reads of it in shipped content
+               ;; were one missed shot away from throwing.
+               :distance (point-distance ray-origin hit-point)
                :block-position block-position
                :water? (boolean (and (= :block (:hit-type result))
                                      (= "minecraft:water" block-id)))

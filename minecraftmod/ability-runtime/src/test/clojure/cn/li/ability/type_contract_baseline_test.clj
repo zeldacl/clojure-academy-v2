@@ -173,7 +173,15 @@
                             [:beam-hit :damage] [:beam-hit :eye-height]
                             [:beam-hit :living?]
                             [:beam-hit :reflection-accepted?]
-                            [:beam-hit :reflection-damage]}
+                            [:beam-hit :reflection-damage]
+                            ;; Both computed rather than reported: one
+                            ;; unconditional (Math/sqrt ...) each, in
+                            ;; resolve-destination and in raycast!'s
+                            ;; normalizer. Neither reads a bridge's own
+                            ;; :distance, so there is no branch on which
+                            ;; the key can be missing -- including the
+                            ;; miss, whose distance is the full ray length.
+                            [:destination :distance] [:hit-result :distance]}
         declared (for [[type-tag schema] combat-vocab/field-types
                        [field-key field-type] (if (map? schema)
                                                 schema

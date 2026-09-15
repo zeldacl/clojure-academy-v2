@@ -491,7 +491,11 @@
   {;; cn.li.combat.targeting/directional-destination and platform's
    ;; resolve-destination, intersected.
    :destination {:position :vec3
-                 :distance :any   ; :double -- see note 2
+                 ;; resolve-destination computes this as an unconditional
+                 ;; (Math/sqrt ...) over the origin/destination delta, with
+                 ;; no branch that can skip it, so :double is a statement
+                 ;; about the producer rather than an assumption about it.
+                 :distance :double
                  :hit? :boolean
                  :valid? :boolean}
    ;; platform/break! -> {:status :block-id :position}
@@ -529,6 +533,13 @@
    ;; and those stay :any, which open schemas allow.
    :hit-result {:position :vec3
                 :drop-position :vec3
+                ;; Computed by raycast!'s normalizer from the hit point and
+                ;; the ray origin, for hits and misses alike -- never taken
+                ;; from a loader bridge. It was the one neutral field that
+                ;; normalizer left out, which is why this was :any: the
+                ;; miss branch sets no :distance, so the key really could
+                ;; be absent. It cannot now.
+                :distance :double
                 :hit-type :keyword
                 :attacked? :boolean
                 :water? :boolean

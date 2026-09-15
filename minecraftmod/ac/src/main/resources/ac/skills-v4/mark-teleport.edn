@@ -9,7 +9,7 @@
   :cp-per-block {:type :double, :default nil},
   :release-overload {:type :double, :default nil},
   :entity-eye-height {:type :double, :default nil}},
- :state {:destination {:type :any, :default nil}},
+ :state {:destination {:type :destination, :default nil}},
  :description-key "ability.skill.teleporter.mark_teleport.desc",
  :name-key "ability.skill.teleporter.mark_teleport",
  :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
@@ -112,11 +112,6 @@
         :operation :define,
         :key :destination,
         :nid :n/n--entry--start-7},
-       :n016
-       {:type :component,
-        :component :value/field,
-        :nid :n/n016,
-        :inputs {:field :destination}},
        :n017 {:type :local-get, :key :hold-result, :nid :n/n017},
        :n--entry--start-8
        {:type :component,
@@ -248,10 +243,6 @@
     {:id :e/link022,
      :kind :data,
      :from [:n/n017 :value],
-     :to [:n/n016 :value]}
-    {:id :e/link023,
-     :kind :data,
-     :from [:n/n016 :value],
      :to [:n/n--entry--start-7 :value]}
     {:id :e/link024,
      :kind :exec,
@@ -373,11 +364,6 @@
         :operation :define,
         :key :destination,
         :nid :n/n--entry--pulse-6},
-       :n036
-       {:type :component,
-        :component :value/field,
-        :nid :n/n036,
-        :inputs {:field :destination}},
        :n037 {:type :local-get, :key :hold-result, :nid :n/n037},
        :n--entry--pulse-7
        {:type :component,
@@ -498,10 +484,6 @@
     {:id :e/link054,
      :kind :data,
      :from [:n/n037 :value],
-     :to [:n/n036 :value]}
-    {:id :e/link055,
-     :kind :data,
-     :from [:n/n036 :value],
      :to [:n/n--entry--pulse-6 :value]}
     {:id :e/link056,
      :kind :exec,
