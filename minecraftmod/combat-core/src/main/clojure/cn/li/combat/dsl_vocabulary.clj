@@ -258,6 +258,18 @@
     :energy/target
     (node {:hit (p)} :energy-target #{:world-read} :energy/target 1)
 
+    ;; The held-item counterpart of :energy/target's :chargeable?. No params:
+    ;; the owner comes from the dispatch frame, the same way :owner/snapshot
+    ;; takes none. Returns a plain :boolean rather than a record, so it needs
+    ;; no field schema and drops straight into a branch condition.
+    ;;
+    ;; Host side is AC's, not combat-core's, and deliberately: deciding
+    ;; whether a stack is an AC energy item reads its batteryType NBT, which
+    ;; needs the live ItemStack that the neutral inventory relay never hands
+    ;; out. See cn.li.ac.ability.service.combat-runtime.
+    :energy/held-item-supported?
+    (node {} :boolean #{:owner-read} :energy/held-item-supported? 1)
+
     ;; current_charging.edn's (S6) counterpart to :energy/target: push
     ;; :amount energy units into either a held item (:mode :item, :target
     ;; the item-held snapshot) or a targeted block's energy store

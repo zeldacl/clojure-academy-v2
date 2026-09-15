@@ -87,22 +87,11 @@
   "Found by this check, not yet fixed, each needing a decision this test
    cannot make. Entries are [skill source field].
 
-   [:current-charging :item-snapshot :supported?]
-     item-held! emits no :supported?, so the read is nil. Upstream's
-     equivalent is real: main's current_charging.clj computes
-     `(energy/is-energy-item-supported? stack)` and uses it to decide
-     whether to charge at all, which EXP tier to award, and the :good?
-     state. In the V4 graph the value reaches a branch that controls
-     :audio-loop-session's :destroy, so the charging audio's lifetime is
-     currently decided by a constant nil.
-
-     Not repaired here because the capability lives on the wrong side of a
-     module boundary: is-energy-item-supported? is AC's
-     (cn.li.ac.energy.operations), while item-held! is combat-core, which
-     must not depend on AC. Exposing it needs either a neutral inventory
-     relay field or an AC-provided host query alongside :cost/spend and
-     :energy/target -- a design choice, not a typing one."
-  #{[:current-charging :item-snapshot :supported?]})
+   EMPTY. The one entry it held -- current-charging reading (:supported? x)
+   off an :item-snapshot that item-held! never puts it on -- is fixed: AC
+   now registers an :energy/held-item-supported? query, so the skill asks
+   the module that owns the fact instead of a record that never carried it."
+  #{})
 
 (deftest every-field-read-names-a-key-its-producer-emits
   (let [sites (atom [])

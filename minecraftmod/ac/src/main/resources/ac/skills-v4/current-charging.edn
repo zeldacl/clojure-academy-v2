@@ -977,9 +977,9 @@
         :nid :n/n--entry--pulse-13-else-1},
        :n051
        {:type :component,
-        :component :value/field,
+        :component :energy/held-item-supported?,
         :nid :n/n051,
-        :inputs {:field :supported?}},
+        :inputs {}},
        :n--entry--pulse-13-e-7d04829f
        {:type :end,
         :result {},
@@ -1221,10 +1221,6 @@
      :kind :exec,
      :from [:n/n--entry--pulse-13-t-601bd803 :out],
      :to [:n/n--entry--pulse-13-t-27dd081e :in]}
-    {:id :e/link090,
-     :kind :data,
-     :from [:n/n052 :value],
-     :to [:n/n051 :value]}
     {:id :e/link091,
      :kind :data,
      :from [:n/n051 :value],

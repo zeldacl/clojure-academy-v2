@@ -22,7 +22,7 @@
 ;; not combat-core/platform. Listed here so the parity gate can treat them
 ;; as intentionally host-provided without pulling ac into combat-core tests.
 (def ac-query-capabilities
-  #{:cost/spend :energy/target})
+  #{:cost/spend :energy/target :energy/held-item-supported?})
 
 (def ac-action-capabilities
   #{:entity/mark :energy/charge :resource/enforce-floor :resource/add

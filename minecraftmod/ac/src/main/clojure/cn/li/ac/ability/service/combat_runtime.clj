@@ -821,6 +821,31 @@
          :energy/target
          (fn [{:keys [world-id hit]} _frame]
            (energy-target-result world-id hit))))
+      ;; The held-item counterpart of :energy/target's :chargeable?.
+      ;;
+      ;; It has to live here rather than on :target/item-held, and the
+      ;; reason is a layering one: "is this an item AC can charge" is an
+      ;; AC-domain fact, decided by item-energy-base from the stack's
+      ;; batteryType NBT with a registry-name fallback. Answering it needs
+      ;; the live ItemStack, which the neutral inventory relay deliberately
+      ;; never hands out ("callers on the neutral side must not see a
+      ;; Minecraft object"), and combat-core must not depend on AC anyway.
+      ;; Pushing it into that relay would make every loader's interop answer
+      ;; an AC question.
+      ;;
+      ;; So: resolve the stack inside this composition root, exactly as
+      ;; energy-target-result resolves a tile, and return a plain boolean.
+      ;; No Minecraft object crosses the Combat Core contract.
+      ;;
+      ;; A boolean rather than a {:supported? ...} map on purpose -- it
+      ;; needs no field schema, introduces no :any, and drops straight into
+      ;; a branch condition.
+      (when-not (contains? (:queries (capabilities/snapshot)) :energy/held-item-supported?)
+        (capabilities/register-query!
+         :energy/held-item-supported?
+         (fn [{:keys [owner]} _frame]
+           (boolean (when-let [stack (held-item-at owner)]
+                      (energy/is-energy-item-supported? stack))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/mark)
         (capabilities/register-action!
          :entity/mark

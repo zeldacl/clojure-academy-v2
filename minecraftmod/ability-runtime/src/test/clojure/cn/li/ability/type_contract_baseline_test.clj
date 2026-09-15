@@ -150,7 +150,11 @@
                                                   (not= :objects (types/bank (:returns spec))))
                                          node-id))
                                      combat-vocab/nodes))]
-    (is (= #{:random/chance :random/int :random/uniform :cost/spend}
+    (is (= #{:random/chance :random/int :random/uniform :cost/spend
+             ;; (boolean (when-let [stack ...] ...)) in combat-runtime, so
+             ;; never nil -- and it is a :boolean precisely to avoid needing
+             ;; a record and a field schema for one flag.
+             :energy/held-item-supported?}
            primitive-returns)
         (str "a vocab node's :returns moved into a primitive register bank. "
              "Confirm the host can never return nil for it, then list it here: "
