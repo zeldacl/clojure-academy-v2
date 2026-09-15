@@ -16,8 +16,6 @@
   (:require [cn.li.combat.damage :as damage]
             [cn.li.combat.platform :as platform]
             [cn.li.combat.beam-settlement :as beam-settlement]
-            [cn.li.combat.vocabulary :as vocabulary]
-            [cn.li.combat.kernels :as kernels]
             [cn.li.combat.dsl-vocabulary :as dsl-vocabulary]
             [cn.li.combat.run :as run]
             [cn.li.combat.lib :as lib]
@@ -49,9 +47,6 @@
 (defn settle! [payload] (beam-settlement/settle! payload))
 (defn schedule-action! [schedule! request] (beam-settlement/schedule-action! schedule! request))
 
-;; ---- vocabulary (for a content module's own schema-export/editor tooling) ----
-(def descriptor-specs vocabulary/descriptor-specs)
-(def kernel-descriptors kernels/kernel-specs)
 
 ;; ---- surface-DSL vocabulary + fn library (for the node editor's palette,
 ;; ability-runtime/editor/palette.clj -- these are the :vocab/:fns/

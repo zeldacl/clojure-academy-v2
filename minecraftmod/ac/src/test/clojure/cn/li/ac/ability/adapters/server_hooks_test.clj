@@ -8,7 +8,6 @@
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.server.network :as network]
@@ -203,10 +202,6 @@
 (deftest server-stop-clears-session-state-test
   (let [called (atom [])
         stop! (:on-server-stop! (server-hooks/runtime-server-hooks))]
-    (platform-hooks/register-platform-fn! :ability/reset-server-runtimes!
-                                          (fn []
-                                            (swap! called conj [:reset-runtimes])
-                                            nil))
     (with-redefs [store/remove-session! (fn [session-id]
                                           (swap! called conj [:player-states session-id])
                                           nil)
@@ -219,19 +214,16 @@
       (stop! :server-session))
     (is (= [[:player-states :server-session]
             [:wireless :server-session]
-            [:reset-runtimes]
             [:projectiles]]
            @called))))
 
-(deftest register-platform-functions-registers-network-reset-and-energy-pull-test
+(deftest register-platform-functions-registers-network-and-energy-pull-test
   (let [energy-calls (atom [])]
-    (with-redefs [player-runtime-cmd/reset-all-content-runtimes! (fn [] :reset-ok)
-                  network/register-handlers! (fn [] :network-ok)
+    (with-redefs [network/register-handlers! (fn [] :network-ok)
                   developer-logic/try-pull-energy! (fn [tile amount]
                                                      (swap! energy-calls conj [tile amount])
                                                      true)]
       (server-hooks/register-platform-functions!)
-      (is (= :reset-ok ((platform-hooks/get-platform-fn :ability/reset-server-runtimes!))))
       (is (= :network-ok ((platform-hooks/get-platform-fn :ability/register-network-handlers!))))
       (is (true? ((platform-hooks/get-platform-fn :ability/try-pull-developer-energy!) :tile 12.5)))
       (is (= [[:tile 12.5]] @energy-calls)))))

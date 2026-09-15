@@ -50,7 +50,7 @@
 
 ;; --- new surface-DSL vocabulary export --------------------------------------
 ;;
-;; vocab shape (cn.li.node.compile's :vocab opt / cn.li.combat.vocabulary /
+;; vocab shape (cn.li.node.compile's :vocab opt /
 ;; cn.li.vfx.vocabulary once those are rewritten):
 ;;   {node-id {:params {k {:type t :default v?}} :returns t-or-nil
 ;;             :effects #{...} :capability kw :barrier? bool :cost n

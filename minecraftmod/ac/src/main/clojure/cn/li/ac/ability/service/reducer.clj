@@ -845,52 +845,6 @@
       (rejected player-state :context-not-found)
       (ok (assoc-in player-state [:context-registry ctx-id :input-state] input-state))))
 
-(defn- projectile-claims-path
-  []
-  [:runtime :vecmanip :projectile-claims])
-
-(defn- cmd-claim-projectile
-  [player-state {:keys [player-uuid skill-id projectile-id tick]}]
-  (if (and player-uuid projectile-id skill-id)
-    (let [now-tick (long tick)
-          lock-key [(str player-uuid) (str projectile-id)]
-          claims (or (get-in player-state (projectile-claims-path))
-                     {:tick -1 :owners {}})
-          current (if (= (:tick claims) now-tick)
-                    claims
-                    {:tick now-tick :owners {}})
-          owner (get-in current [:owners lock-key])
-          next-claims
-          (cond
-            (nil? owner)
-            (assoc-in current [:owners lock-key] skill-id)
-
-            (= owner skill-id)
-            current
-
-            :else
-            current)
-          granted? (= (get-in next-claims [:owners lock-key]) skill-id)
-          next-state (assoc-in player-state (projectile-claims-path) next-claims)]
-      (assoc (ok next-state) :granted? granted?))
-    (assoc (ok player-state) :granted? false)))
-
-(defn- cmd-replace-projectile-claims
-  [player-state {:keys [claims]}]
-  (ok (assoc-in player-state (projectile-claims-path) (or claims {:tick -1 :owners {}}))))
-
-(defn- cmd-clear-player-projectile-claims
-  [player-state {:keys [player-uuid]}]
-  (let [claims (or (get-in player-state (projectile-claims-path))
-                   {:tick -1 :owners {}})
-        next-owners
-        (into {}
-              (remove (fn [[[owner-player-id _] _]]
-                        (= (str owner-player-id) (str player-uuid))))
-              (or (:owners claims) {}))]
-    (ok (assoc-in player-state (projectile-claims-path)
-                (assoc claims :owners next-owners)))))
-
 ;; ============================================================================
 ;; Public Dispatcher
 ;; ============================================================================
@@ -941,9 +895,6 @@
     :context-remove-toggle-state (cmd-context-remove-toggle-state player-state command)
     :context-clear-skill-state (cmd-context-clear-skill-state player-state command)
     :context-set-input-state (cmd-context-set-input-state player-state command)
-    :claim-projectile (cmd-claim-projectile player-state command)
-    :replace-projectile-claims (cmd-replace-projectile-claims player-state command)
-    :clear-player-projectile-claims (cmd-clear-player-projectile-claims player-state command)
     (do
       (log/warn "Unknown ability command" (:command command))
       (ok player-state))))

@@ -7,7 +7,6 @@
    behaviour."
   (:require [clojure.set :as set]
             [clojure.string :as str]
-            [cn.li.combat.actions :as combat-actions]
             [cn.li.combat.beam-settlement :as beam]
             [cn.li.combat.targeting :as targeting]
             [cn.li.mcmod.platform.block-manipulation :as blocks]
@@ -1009,13 +1008,6 @@
     {:status (if (not= false applied?) :applied :failed)
      :position {:x x :y y :z z} :block-id block-id}))
 
-(defn break-budget!
-  "Bounded, energy-metered break of a beam/aoe's discovered block list.
-   Delegates each individual block to break! so both paths share the same
-   permission/collision checks and internal-break flag."
-  [request]
-  (combat-actions/commit-block-break-budget! request break!))
-
 (defn sound!
   [{:keys [world-id position sound-id source volume pitch]}]
   (let [p (point position)]
@@ -1893,7 +1885,6 @@
    ;; compiler emit :query, not :action.
    :kernel/terrain-break-area area-break!
    :kernel/terrain-random-break random-break!
-   :kernel/terrain-apply-break-budget break-budget!
    :kernel/motion-radial-impulse radial-impulse!})
 
 (defn install!

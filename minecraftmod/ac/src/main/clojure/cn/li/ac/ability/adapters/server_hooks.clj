@@ -20,14 +20,12 @@
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.session :as dev-session]
             [cn.li.ac.item.developer-portable-energy :as portable-energy]
-            [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private fn-reset-server-runtimes :ability/reset-server-runtimes!)
 (def ^:private fn-register-network-handlers :ability/register-network-handlers!)
 (def ^:private fn-try-pull-developer-energy :ability/try-pull-developer-energy!)
 (def ^:private fn-held-portable-dev-energy :ability/held-portable-dev-energy)
@@ -181,8 +179,6 @@
 (defn register-platform-functions!
   "Register platform-facing callbacks used by reducer/effects/network shells."
   []
-  (platform-hooks/register-platform-fn! fn-reset-server-runtimes
-                                       player-runtime-cmd/reset-all-content-runtimes!)
   (platform-hooks/register-platform-fn! fn-register-network-handlers
                                        network/register-handlers!)
   (platform-hooks/register-platform-fn! fn-try-pull-developer-energy
@@ -272,8 +268,6 @@
       (combat-runtime/abort-owner! player-uuid))
      (store/remove-session! session-id)
      (world-registry/clear-session-world-data! session-id)
-     (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
-       ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
      (ability-combat/cancel-installed-all!)
      (combat-runtime/dispatch-domain-event!
       {:type :entity-marks-clear-all
