@@ -25,24 +25,57 @@
    rare and left unsupported in a first draft of this namespace; a grep
    of the real corpus before writing graph_test.clj's round-trip test
    found it in 31 of 39 ac/skills-v4/*.edn files, so it is implemented, not
-   documented as a gap -- see ac's editor_corpus_test.clj for the
-   round-trip assertion over the full real corpus, which is what actually
-   proves this namespace's coverage claims rather than a hand-picked
-   fixture set."
+   documented as a gap -- see ac's editor-corpus-test for the round-trip
+   assertion over the full real corpus (212 phases, 1238 statements), which
+   is what actually proves this namespace's coverage claims rather than a
+   hand-picked fixture set. That namespace was cited here before it
+   existed; writing it found a real defect on its first run."
   (:require [clojure.string :as str]
             [cn.li.ability.editor.label :as label]))
 
 ;; --- nid allocation ------------------------------------------------------
 
-(defn- fresh-nid! [counter*] (str "n" (swap! counter* inc)))
+(defn- fresh-nid! [counter*] (str "n" (:n (swap! counter* update :n inc))))
+
+(def ^:private dup-separator
+  "Separates a stamp from the occurrence counter that disambiguates a
+   repeated one. \"#\" cannot appear in a stamp: cn.li.node.nid builds them
+   from node keys, which are EDN keyword names."
+  "#")
+
+(defn- stamp-of
+  "A node key -> the stamp to write back, i.e. without the disambiguating
+   suffix nid-of! may have added."
+  [nid]
+  (let [i (str/index-of nid dup-separator)]
+    (if i (subs nid 0 i) nid)))
 
 (defn- nid-of!
   "form's own :nid metadata if present (stamped, or hand-written), else a
    freshly allocated one -- same fallback cn.li.node.compile/nid-for!
    uses, so a graph built from an unstamped form still gets real
-   (if unstable-across-rebuilds) node ids to render and select by."
+   (if unstable-across-rebuilds) node ids to render and select by.
+
+   A stamp is NOT unique within a phase. Lowering inlines a shared
+   expression node at every use site, so the same :nid legitimately appears
+   on several statements -- mag-manip's :start phase reads one block
+   position three times. The node map is keyed by whatever this returns, so
+   returning the raw stamp let the later occurrence overwrite the earlier
+   one and graph->form rebuilt the first as a copy of the second: a bare
+   (block/break ...) came back wrapped in the `let` that belonged to its
+   twin. Found by the corpus round-trip, on exactly one phase of fifty
+   skills.
+
+   So the FIRST occurrence keeps the stamp verbatim -- diagnostics and
+   jump-to-node match on it and must keep working -- and later ones get a
+   suffixed key. node->stmt-form strips the suffix when it re-stamps, so
+   what goes back to disk is unchanged."
   [counter* form]
-  (or (:nid (meta form)) (fresh-nid! counter*)))
+  (if-let [stamp (:nid (meta form))]
+    (let [n (get-in @counter* [:seen stamp] 0)]
+      (swap! counter* update-in [:seen stamp] (fnil inc 0))
+      (if (zero? n) stamp (str stamp dup-separator n)))
+    (fresh-nid! counter*)))
 
 ;; --- form -> graph ---------------------------------------------------------
 
@@ -196,7 +229,10 @@
    :nid metadata (if present) is reused verbatim -- see this namespace's
    own docstring for the fallback when it is absent."
   [stmts]
-  (let [nodes* (atom {}) counter* (atom 0)
+  ;; counter* carries both the fresh-id sequence and the per-stamp
+  ;; occurrence counts nid-of! needs; see its docstring for why a stamp is
+  ;; not unique within a phase.
+  (let [nodes* (atom {}) counter* (atom {:n 0 :seen {}})
         order (mapv #(form->stmt-node! nodes* counter* %) stmts)]
     {:nodes @nodes* :order order}))
 
@@ -204,7 +240,7 @@
 
 (declare node->expr-form node->stmt-form)
 
-(defn- with-nid [form nid] (vary-meta form assoc :nid nid))
+(defn- with-nid [form nid] (vary-meta form assoc :nid (stamp-of nid)))
 
 (defn- node->expr-form [nodes nid]
   (let [{:keys [expr] :as node} (get nodes nid)]
