@@ -487,17 +487,29 @@
    the win here is that a read yields a TYPE, which is what
    assignable? needs.
 
-   The destination register still allocates in the :objects bank
-   regardless. A field whose real type is :double would otherwise land in a
-   primitive bank, where effect-emit throws :nil-primitive-write on the
-   host's first nil -- the deferred one-way-:any round's problem, not this
-   one. Schemas therefore declare numeric fields as :any for now (see the
-   combat-core table), which keeps the bank correct while still pinning
-   which field names exist."
+   A schema is either a {field-key field-type} map, or a single type
+   keyword meaning EVERY field of that record has that type. The uniform
+   form exists for records whose key set is open but whose value type is
+   not -- a resource pool is resource-key -> amount, and which resource
+   names exist is a content module's business, while `amount is a number`
+   is the engine's. Enumerating the keys would force the neutral layer to
+   name content it must not know (verifyCombatResourceAgnostic), so the
+   uniform form is what keeps the type available without the names.
+
+   A field type that is not :objects-banked lands the read in a primitive
+   register, where effect-emit throws :nil-primitive-write on the host's
+   first nil. That is a real commitment, so numeric fields stay :any unless
+   someone has checked the producer applies the default itself; the
+   ability-runtime baseline test holds the list of those that have been
+   checked and fails on any that have not."
   [env locals block-id depth form k sub-form]
   (let [{:keys [reg block-id]} (compile-form env locals block-id depth sub-form false)
         src-type (types/canonical-type (type-of env reg))
-        field-type (or (get-in (:field-types env) [src-type k]) :any)
+        schema (get (:field-types env) src-type)
+        field-type (cond
+                     (map? schema) (or (get schema k) :any)
+                     (some? schema) schema
+                     :else :any)
         dst (alloc-reg! env (types/bank field-type) field-type)]
     (append! env block-id {:op :get :nid (nid-for! env form) :dst dst :src reg :key k})
     {:reg dst :block-id block-id}))

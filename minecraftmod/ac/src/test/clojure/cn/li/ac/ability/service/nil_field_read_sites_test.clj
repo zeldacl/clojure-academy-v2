@@ -78,6 +78,13 @@
    ;; cn.li.ac.ability.service.combat-runtime/energy-target-result, an
    ;; AC-registered host query rather than a combat-core one.
    :energy-target #{:chargeable? :block-pos :block-bounds}
+   ;; combat-runtime/activation-context, the ?context/resources value.
+   ;; :max-cp is deliberately NOT here: a different host path (a state
+   ;; projection at combat-runtime:242) emits a three-key pool, but the
+   ;; activation context emits two, and this is the one content reads.
+   ;; Adding :max-cp to make both producers fit would turn a read that is
+   ;; nil today into one this check calls fine.
+   :resource-pool #{:cp :overload}
    ;; platform/terrain-propagate!: the seed state map plus the
    ;; :mastery-breaks it assoc's on at the end.
    :terrain-plan #{:affected-blocks :transforms :broken-blocks :entities

@@ -459,11 +459,15 @@
 (def nodes (attach-presentation raw-nodes))
 
 (def field-types
-  "type-tag -> {field-key field-type}, for cn.li.node.compile's :field-types
-   option. Lets a field read off a typed value produce a typed register
-   instead of :any -- :value/field is the second most common component in
-   shipped content, so this is where most of the graph's values get their
-   type or fail to.
+  "type-tag -> schema, for cn.li.node.compile's :field-types option. Lets a
+   field read off a typed value produce a typed register instead of :any --
+   :value/field is the second most common component in shipped content, so
+   this is where most of the graph's values get their type or fail to.
+
+   A schema is either {field-key field-type} or a bare field-type meaning
+   every field of that record has it. The uniform form is for records whose
+   KEY set belongs to a content module but whose VALUE type belongs to the
+   engine -- see :resource-pool at the bottom, the only one so far.
 
    OPEN, not complete: a field listed here is typed, one that is not stays
    :any, and neither is an error. Two reasons, both real:
@@ -572,4 +576,27 @@
                   :transforms [:list-of :any]
                   :broken-blocks [:list-of :any]
                   :entities [:list-of :any]
-                  :mastery-breaks [:list-of :any]}})
+                  :mastery-breaks [:list-of :any]}
+
+   ;; The UNIFORM form (a bare type, not a {key type} map): every field of
+   ;; a resource pool is an amount, whatever the resource is called.
+   ;;
+   ;; Which resource names exist is a content module's business and this
+   ;; module is forbidden to know them (verifyCombatResourceAgnostic), so
+   ;; enumerating keys here is not available even in a comment. It is also
+   ;; not needed: the fact the compiler wants is the VALUE type, and that
+   ;; is the same for every key.
+   ;;
+   ;; This is the one entry that deliberately lands reads in a PRIMITIVE
+   ;; bank, where a nil write throws. Every other numeric field stays :any
+   ;; because its producer might return nil. A pool's cannot: the host
+   ;; materializes it in one place and applies the zero default there, at
+   ;; the producer rather than hoped for at the reader. The content module
+   ;; owns that guarantee, so its own test is what pins the key set and
+   ;; re-checks the producing expression.
+   ;;
+   ;; Typing this retired the largest single group of unchecked numeric
+   ;; reads in shipped content -- 33 of 83. While the pool was :any, every
+   ;; amount read off it reached a :math/* parameter as a :convert that was
+   ;; trusted and never verified.
+   :resource-pool :double})

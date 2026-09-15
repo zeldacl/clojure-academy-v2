@@ -25,6 +25,12 @@
     ;; spelling and are referenced by nothing -- see the collection-type
     ;; phase.)
     :break-result
+    ;; A materialized resource pool: resource-key -> amount. The one handle
+    ;; here whose fields are NUMBERS rather than further handles, which is
+    ;; why it is worth a tag at all -- while it was :any, every read off it
+    ;; reached a numeric parameter as an unchecked :convert, and those were
+    ;; the single largest group of such reads in shipped content.
+    :resource-pool
     ;; :any is the one deliberate escape hatch, for genuinely generic
     ;; plumbing like :data/bind's :value field, which by design forwards
     ;; whatever type the caller's expression produces.

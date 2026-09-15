@@ -80,15 +80,51 @@
     (is (= [] (vec diagnostics)) "an unlisted field is not an error yet")
     (is (some? ir))))
 
+(deftest a-uniform-schema-types-every-field-test
+  ;; The second schema form: a bare type instead of a {key type} map,
+  ;; meaning every field of that record has it.
+  ;;
+  ;; It exists for records whose KEY set belongs to a content module but
+  ;; whose VALUE type belongs to the engine. A resource pool is the real
+  ;; case: which resources exist is AcademyCraft's business and the neutral
+  ;; combat layer is forbidden to name them (verifyCombatResourceAgnostic
+  ;; enforces that, and did in fact reject the enumerated version of this),
+  ;; but "an amount is a number" is the engine's own fact and is the part
+  ;; the compiler needs. So the type is available without the names.
+  (let [uniform {:hit-result :double}
+        {:keys [ir diagnostics]}
+        (compile-do (str "[(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim"
+                         " :distance 10.0}))"
+                         " (let n (math/add (:anything-at-all hit) 1.0))"
+                         " (finish {:outcome :performed})]")
+                    {:field-types uniform})
+        get-instrs (for [b (:blocks ir) i (:instrs b) :when (= :get (:op i))] i)]
+    (is (= [] (vec diagnostics)))
+    (is (seq get-instrs))
+    (is (every? #(= :doubles (second (:dst %))) get-instrs)
+        "a uniform :double schema must bank the read as a double, whatever the key")
+    (testing "and a key the map form does not list still falls back to :any"
+      ;; The two forms must not be confusable: the map form's fallback is
+      ;; :any, and only the bare form applies to unlisted keys.
+      (let [{:keys [ir]}
+            (compile-do (str "[(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim"
+                             " :distance 10.0}))"
+                             " (let e (:anything-at-all hit))"
+                             " (finish {:outcome :performed})]")
+                        {:field-types field-types})
+            gets (for [b (:blocks ir) i (:instrs b) :when (= :get (:op i))] i)]
+        (is (every? #(= :objects (second (:dst %))) gets))))))
+
 (deftest a-field-register-never-lands-in-a-primitive-bank-test
   ;; Guardrail for the deferred one-way-:any round, mirroring
   ;; returning-a-primitive-is-an-explicit-decision-test on the :returns
   ;; side. compile banks a field register by its declared type, so a
-  ;; :double field would move it into a primitive array and
-  ;; effect-emit's compile-writer would throw :nil-primitive-write the
-  ;; first time the host returned nil for it. Numeric fields are therefore
-  ;; declared :any in the combat-core table for now; this pins the
-  ;; consequence rather than the convention.
+  ;; :double field moves it into a primitive array where effect-emit's
+  ;; compile-writer throws :nil-primitive-write the first time the host
+  ;; returns nil for it. That is a real commitment about the producer, so
+  ;; numeric fields stay :any unless someone has checked it -- the
+  ;; ability-runtime baseline test holds the list of those that have been,
+  ;; and this pins the consequence for everything else.
   (let [{:keys [ir]}
         (compile-do (str "[(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim"
                          " :distance 10.0}))"

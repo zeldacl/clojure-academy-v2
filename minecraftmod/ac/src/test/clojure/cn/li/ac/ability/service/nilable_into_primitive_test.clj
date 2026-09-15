@@ -73,31 +73,40 @@
       (println "skills involved:" (pr-str (sort (distinct (map :skill @sites)))))
       (println)
 
-      ;; A ratchet, not a clean bill of health. These 83 are pre-existing and
+      ;; A ratchet, not a clean bill of health. These are pre-existing and
       ;; unverified: proving any single one throws needs the producing
       ;; expression traced by hand, and proving it does NOT needs the same.
-      ;; What the number buys is the 84th -- adding a new field read into a
+      ;; What the number buys is the NEXT one -- adding a field read into a
       ;; numeric parameter now fails here and has to be justified.
       ;;
-      ;; Worth triaging by eye, because several pairs are not nilability at
+      ;; 83 -> 50 when :context/resources stopped being :any. That one
+      ;; capability was 33 of the 83 on its own, which is the shape of this
+      ;; whole problem: the sites are not scattered, they cluster behind a
+      ;; handful of untyped SOURCES, and typing a source retires a whole
+      ;; group at once. The remaining clusters are a field read off another
+      ;; :any (:hardness, 9) and fields nobody has declared yet.
+      ;;
+      ;; Worth triaging by eye, because several rows are not nilability at
       ;; all but a type confusion that throws on EVERY execution rather than
       ;; on an unlucky world state -- effect-emit's :convert rejects a
       ;; non-number as hard as it rejects nil:
       ;;
-      ;;   :hit-result :entity-id -> :double     an id, never numeric
-      ;;   :hit-result :entity-type -> :double   a type string
-      ;;   :any :damage-type -> :double          a keyword
-      ;;   :any :tool-tier-capped? -> :double    a boolean
       ;;   :owner-snapshot :velocity -> :double  a {:x :y :z} map
-      ;;   :hit-result/:owner-snapshot/:block-placement :position -> :double
+      ;;   :*/:position -> :double               likewise, 7 across 4 types
+      ;;   :energy-target :block-pos -> :double  likewise
+      ;;   :hit-result :entity-id / :entity-ref :id -> :double   ids
+      ;;   :any :damage-type -> :double          a keyword
+      ;;   :hit-result :available? -> :double    a boolean
       ;;
-      ;; The register-origin attribution has one known limit: cn.li.node.ir
+      ;; The register-origin attribution has one known limit, and it has now
+      ;; been demonstrated rather than merely suspected: cn.li.node.ir
       ;; registers are reused across `set!` (a :reassign? copy into the
       ;; existing slot), so a slot recorded as a field read can later hold
-      ;; something else. 17 :assign nodes exist across 5 skills, so the
-      ;; contamination is bounded but not zero -- treat an individual row as
-      ;; a lead, not a verdict.
-      (is (= 83 (count @sites))
+      ;; something else. Typing :hit-result's :entity-type :string -- which
+      ;; this list had accused of feeding a :double -- changed the count by
+      ;; zero, so that row was contamination. Treat an individual row as a
+      ;; lead; only the total is trustworthy.
+      (is (= 50 (count @sites))
           (str "field reads reaching a numeric parameter changed. Each is a"
                " potential :convert throw; justify a new one or remove it: "
                (pr-str (sort-by (juxt :skill :field) @sites)))))))

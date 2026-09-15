@@ -60,7 +60,16 @@
    ;; :caster/eye's full world-space vec3) -- flashing.edn (S6) is the
    ;; first real content to read it, feeding
    ;; target/directional-destination's own :eye-y param.
-   :caster/eye-y :double})
+   :caster/eye-y :double
+   ;; The ONE ?context/* name with a known shape, so it is pinned here
+   ;; rather than left to capability-type's per-namespace "context" :any.
+   ;; It is a materialized pool of resource amounts; which resources a
+   ;; content module defines is not this module's business, but the fact
+   ;; that every amount is a number is -- see dsl-vocabulary's field-types
+   ;; entry, which types the pool's fields uniformly for that reason. The
+   ;; other ?context/* names are forwarded from the client intent and have
+   ;; no shape worth pinning, so they stay :any.
+   :context/resources :resource-pool})
 
 (defn capability-type [key]
   (or (get fixed-capabilities key)

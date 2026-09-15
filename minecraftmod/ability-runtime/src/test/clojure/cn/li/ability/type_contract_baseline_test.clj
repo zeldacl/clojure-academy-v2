@@ -102,13 +102,32 @@
   ;; returns nil for it. Numeric fields are declared :any for now and the
   ;; table says so field by field; this makes that a build failure rather
   ;; than a convention someone has to notice.
-  ;; Named exemptions, same discipline as the :returns side below. These
-  ;; four are genuinely :boolean and their producers always set them
-  ;; explicitly -- (some? hit), (not miss?), (= :entity (:hit-type result)),
-  ;; (boolean (and ...)) -- so the key is never absent and the nil -> false
-  ;; conversion cannot fire. Declaring them :any to dodge the rule would
-  ;; lose a real type for no safety gained; listing them records that
-  ;; someone checked the producer.
+  ;; Named exemptions, same discipline as the :returns side below, in two
+  ;; groups with genuinely different stakes.
+  ;;
+  ;; The :boolean ones are the mild case -- a missing key silently becomes
+  ;; false rather than throwing. Each producer sets them explicitly anyway:
+  ;; (some? hit), (not miss?), (= :entity (:hit-type result)),
+  ;; (boolean (and ...)), so the nil -> false conversion cannot fire.
+  ;;
+  ;; :resource-pool is the sharp case: a :doubles register write THROWS on
+  ;; nil, so exempting it is a claim that the value is never nil, not
+  ;; merely that it is usually set. The claim holds because the host
+  ;; materializes the pool in one place and applies the zero default at the
+  ;; producer. If that ever stops being true this exemption becomes wrong
+  ;; and nothing else will catch it, so it is listed here with the reason
+  ;; rather than left to be inferred from the table.
+  ;;
+  ;; It is also the one entry in the UNIFORM form -- a bare type rather
+  ;; than a {key type} map, meaning every field of that record has this
+  ;; type. It is spelled that way because the neutral engine is not allowed
+  ;; to name the content module's resources; the key set is pinned by that
+  ;; module's own test instead. The :* below is this test's spelling for
+  ;; "whatever key is read", not a real field name.
+  ;;
+  ;; Declaring any of them :any to dodge the rule would lose a real type
+  ;; for no safety gained; listing them records that someone checked the
+  ;; producer.
   (let [allowed-primitive #{[:destination :hit?] [:destination :valid?]
                             [:hit-result :attacked?] [:hit-result :water?]
                             ;; (boolean on-ground?) in owner-snapshot!
@@ -120,9 +139,14 @@
                             [:item-snapshot :present?] [:item-snapshot :placeable?]
                             ;; (boolean (and tile ...)) in
                             ;; combat-runtime/energy-target-result.
-                            [:energy-target :chargeable?]}
-        declared (for [[type-tag fields] combat-vocab/field-types
-                       [field-key field-type] fields]
+                            [:energy-target :chargeable?]
+                            ;; the host applies (double (or ... 0.0)) when
+                            ;; it materializes the pool.
+                            [:resource-pool :*]}
+        declared (for [[type-tag schema] combat-vocab/field-types
+                       [field-key field-type] (if (map? schema)
+                                                schema
+                                                {:* schema})]
                    {:type type-tag :field field-key :field-type field-type})
         offenders (remove #(or (= :objects (types/bank (:field-type %)))
                                (contains? allowed-primitive [(:type %) (:field %)]))
