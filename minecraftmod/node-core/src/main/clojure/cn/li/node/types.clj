@@ -30,6 +30,12 @@
     ;; GO) and :break-result (what breaking one did): this is a block that
     ;; is already there, described.
     :block-info
+    ;; One entity a beam passed through, with the strike's own outcome on
+    ;; top of the entity projection. NOT an :entity-ref: it carries the
+    ;; damage that will be applied and, when a reflection policy was
+    ;; supplied, where the reflection goes. Declaring it :entity-ref was
+    ;; tried and the producer-key check rejected it in one run.
+    :beam-hit
     ;; A materialized resource pool: resource-key -> amount. The one handle
     ;; here whose fields are NUMBERS rather than further handles, which is
     ;; why it is worth a tag at all -- while it was :any, every read off it

@@ -78,6 +78,13 @@
    ;; cn.li.ac.ability.service.combat-runtime/energy-target-result, an
    ;; AC-registered host query rather than a combat-core one.
    :energy-target #{:chargeable? :block-pos :block-bounds}
+   ;; platform/beam-trace!: the five-key select-keys projection, the two
+   ;; keys it assoc's on, and interaction-resolve!'s four -- which are
+   ;; present only when a reflection policy resolved, so naming one here
+   ;; says the key EXISTS, not that it is always populated.
+   :beam-hit #{:id :type :position :eye-height :living? :damage :damage-type
+               :reflection-accepted? :reflection-damage :reflection-target
+               :reflection-start :reflection-end}
    ;; platform/block-select!, one mapv with a closed key set -- the one
    ;; entry here that is genuinely complete rather than a union.
    :block-info #{:position :hardness :block-id :breakable?

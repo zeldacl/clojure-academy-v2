@@ -141,13 +141,45 @@
       ;; the argument for declaring them: a typed field makes a false claim
       ;; about itself checkable.
       ;;
-      ;; What is left is coherent -- every row is a genuinely numeric field
-      ;; whose producer has simply not been checked yet, so each is an
-      ;; honest nil-safety question rather than noise. Typing one is the
-      ;; same explicit decision :resource-pool already went through: say
+      ;; 19 -> 9 typed the last three records whose producers DO guarantee
+      ;; their numeric fields: :entity-ref (project-entity, every numeric
+      ;; field written (double (or ... d))), :beam-hit (beam-trace!'s hit
+      ;; record, which had been mistaken for an :entity-ref), and the
+      ;; block selection before them.
+      ;;
+      ;; The 9 that remain are NOT untyped for lack of effort. Every one is
+      ;; a read of a field whose producer can legitimately omit it, so
+      ;; declaring a type would be a false claim and defaulting the value
+      ;; host-side would invent data to hide a defect. They are left
+      ;; visible on purpose, in four groups:
+      ;;
+      ;;   :hit-result :distance x4 (penetrate-teleport). raycast!'s miss
+      ;;     branch returns {:hit-type :miss :hit? false :world-id :owner}
+      ;;     with no :distance at all, and on a hit the key comes straight
+      ;;     from the loader bridge -- platform.clj's own block-vs-entity
+      ;;     comparison defends with (or (:distance x) INFINITY), which is
+      ;;     the producer admitting it does not guarantee the key.
+      ;;   :context/ability-runtime :fortune-level x3 (the three mine-rays).
+      ;;     That capability is AC's (:presentation registration) -- open
+      ;;     registration metadata whose keys are content-defined. Note
+      ;;     :block/break's own :fortune-level param is (opt :long 0), so
+      ;;     content is passing an explicitly-read value where the node's
+      ;;     default would already have been correct.
+      ;;   a state read x1 (mark-teleport saves a destination to session
+      ;;     state and reads :distance back out). Persisted session state
+      ;;     has no static shape by construction.
+      ;;   :entity-ref :explosion-power x1 (vec-deviation). The host builds
+      ;;     it as (when (instance? LargeFireball entity) ...), so nil is
+      ;;     the normal case for every other projectile. main applied
+      ;;     (or ... (cfg-double :combat.fireball-explosion-radius)) at the
+      ;;     read site; the V4 port dropped that fallback, so this throws
+      ;;     on any non-fireball. combat-core cannot supply a content
+      ;;     config value, so the fix belongs in the skill, not here.
+      ;;
+      ;; Each is the same explicit decision :resource-pool went through: say
       ;; whether the producing expression can return nil, then either
       ;; declare it and whitelist it with the reason, or fix the producer.
-      (is (= 19 (count @sites))
+      (is (= 9 (count @sites))
           (str "field reads reaching a numeric parameter changed. Each is a"
                " potential :convert throw; justify a new one or remove it: "
                (pr-str (sort-by (juxt :skill :field) @sites)))))))

@@ -1,15 +1,18 @@
 ;; Port of the old :combat/beam-strike composite (rev 2): trace a bounded
 ;; beam via the kernel/trace-beam host primitive, then apply direct or
 ;; reflection damage per hit entity depending on that entity's own
-;; :reflection-accepted? field. The reads below are off an :any-typed loop
-;; element and so are unchecked -- NOT because field access cannot be
-;; checked, which this comment used to claim and which stopped being true
-;; when compile-field-access grew a schema, but because :beam-result's
-;; :entities is still [:list-of :any]. Its elements are strike outcomes
-;; rather than entity references (they carry :damage, :damage-type and the
-;; four :reflection-* keys on top of the projection), and typing it needs a
-;; tag for that shape -- see dsl-vocabulary's field-types entry, which
-;; records the attempt that the producer-key check rejected. Uses two-armed
+;; :reflection-accepted? field. The reads below are CHECKED: :entities is
+;; [:list-of :beam-hit] and `each` binds its item with the element type, so
+;; a typo'd field name here is a compile error and (:reflection-damage
+;; target) is a typed double. This comment used to assert that field access
+;; can never type-check its source; that stopped being true when
+;; compile-field-access grew a schema.
+;;
+;; Note the asymmetry the schema deliberately builds in: the two reads in
+;; the THEN arm are of keys that exist only when a reflection resolved, and
+;; :reflection-damage is banked as a primitive precisely so that moving
+;; either of them out from under this guard fails immediately rather than
+;; silently reading zero. Uses two-armed
 ;; if/else, not two separate whens, since the two branches are mutually
 ;; exclusive by construction (matching the old :flow/branch :then/:else).
 ;;

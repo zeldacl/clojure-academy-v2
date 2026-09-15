@@ -562,19 +562,13 @@
    :beam-result {:start :vec3
                  :end :vec3
                  :visual-end :vec3
-                 ;; :entities is NOT [:list-of :entity-ref], though it was
-                 ;; declared that way for one run on the reasoning that
-                 ;; beam-trace! delegates to the same entity-select! the
-                 ;; :target/* nodes use. The producer-key check rejected
-                 ;; it immediately: the beam's hit records carry :damage,
-                 ;; :damage-type, :reflection-accepted?, :reflection-damage,
-                 ;; :reflection-start and :reflection-end on top of the
-                 ;; projection, and the beam-strike lib reads every one of
-                 ;; them. They are strike OUTCOMES, not entity references,
-                 ;; and they need a tag of their own before this can be
-                 ;; typed -- one this pass did not trace far enough to
-                 ;; write down honestly. Left :any deliberately.
-                 :entities [:list-of :any]
+                 ;; :entities is NOT [:list-of :entity-ref], which was
+                 ;; tried on the reasoning that beam-trace! delegates to
+                 ;; the same entity-select! the :target/* nodes use. The
+                 ;; producer-key check rejected it in one run: the hit
+                 ;; records carry the strike's own outcome on top of the
+                 ;; projection. Hence :beam-hit, below.
+                 :entities [:list-of :beam-hit]
                  ;; :blocks is different and is verified: beam-trace! fills
                  ;; it by calling block-select! and passing the result
                  ;; through untouched, so it is exactly that node's own
@@ -593,6 +587,81 @@
                   :broken-blocks [:list-of :any]
                   :entities [:list-of :any]
                   :mastery-breaks [:list-of :any]}
+
+   ;; beam-trace!'s per-entity hit record, built in one place as
+   ;;   (merge (assoc <projection> :damage ... :damage-type ...)
+   ;;          (or <interaction-resolve! result> {}))
+   ;; The projection is select-keys'd to exactly five fields, so this
+   ;; schema is complete.
+   ;;
+   ;; Two groups with genuinely different guarantees, and the difference is
+   ;; the point rather than a detail:
+   ;;
+   ;;   :damage / :damage-type are ALWAYS set, as (double (or damage 0.0))
+   ;;     and (or damage-type :generic). Ordinary safe declarations.
+   ;;
+   ;;   the :reflection-* four exist only when a reflection policy was
+   ;;     supplied AND the interaction resolved. So :reflection-damage is
+   ;;     declared :double knowing the key can be ABSENT -- not because it
+   ;;     never is. That is deliberate: content may only read it under
+   ;;     (if (:reflection-accepted? hit) ...), and the primitive bank
+   ;;     makes an unguarded read fail loudly at the read site instead of
+   ;;     quietly becoming 0.0 somewhere downstream. Correct content never
+   ;;     trips it; incorrect content finds out immediately.
+   ;;
+   ;;   :reflection-accepted? is :boolean for the same reason read the
+   ;;     other way: absent means no reflection, and nil -> false is the
+   ;;     intended reading of absent here, not a coercion being tolerated.
+   ;;
+   ;; :reflection-target stays :any: it is (or (:uuid hit) (:entity-id
+   ;; hit)), two bare passthroughs, so it can be nil even when present.
+   :beam-hit {:id :any
+              :type :string
+              :position :vec3
+              :eye-height :double
+              :living? :boolean
+              :damage :double
+              :damage-type :keyword
+              :reflection-accepted? :boolean
+              :reflection-damage :double
+              :reflection-target :any
+              :reflection-start :vec3
+              :reflection-end :vec3}
+
+   ;; platform/project-entity. A union of two producers (spawn-entity! keys
+   ;; its result :entity-id, this one :id), so the schema is OPEN and only
+   ;; the fields this one materializes are listed.
+   ;;
+   ;; Every numeric field here is written (double (or ... d)) or
+   ;; (long (or ... n)) -- the default lands at the producer -- which is
+   ;; what makes the primitive bank safe and is recorded field by field in
+   ;; the ability-runtime whitelist.
+   ;;
+   ;; Three fields are DELIBERATELY absent, and the reason differs:
+   ;;
+   ;;   :explosion-power  a bare (:explosion-power entity) passthrough with
+   ;;     no default, and nil is the NORMAL case -- the host computes it as
+   ;;     (when (instance? LargeFireball entity) ...), so every other
+   ;;     projectile has none. Declaring it :double would be a false claim
+   ;;     and defaulting it here would be worse: it would silently invent a
+   ;;     number for entities that have no explosion, hiding a real defect.
+   ;;     Content feeds this straight into a :double parameter today and
+   ;;     therefore throws on any non-fireball; that is a content/host bug
+   ;;     to fix where the fallback belongs, not something a type can paper
+   ;;     over. Left untyped so the census keeps reporting it.
+   ;;   :velocity / :owner-id  bare passthroughs too, same reasoning, but
+   ;;     neither reaches a numeric parameter so neither is urgent.
+   :entity-ref {:position :vec3
+                :width :double
+                :height :double
+                :eye-height :double
+                :age-ms :long
+                :motion-progress :double
+                :difficulty :double
+                :invulnerable-time :long
+                :item? :boolean
+                :projectile? :boolean
+                :arrow? :boolean}
 
    ;; platform/block-select!, which builds every member of the selection in
    ;; one mapv with a closed key set -- so unlike :destination, this schema

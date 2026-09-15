@@ -148,7 +148,32 @@
                             ;; builds every member in one mapv.
                             [:block-info :hardness]
                             [:block-info :breakable?]
-                            [:block-info :requires-high-tier-tool?]}
+                            [:block-info :requires-high-tier-tool?]
+                            ;; project-entity, all (double (or ... d)) /
+                            ;; (long (or ... n)) / (boolean ...). Its three
+                            ;; BARE passthroughs -- :explosion-power,
+                            ;; :velocity, :owner-id -- are deliberately not
+                            ;; typed at all rather than listed here, since
+                            ;; nil is their normal value.
+                            [:entity-ref :width] [:entity-ref :height]
+                            [:entity-ref :eye-height] [:entity-ref :age-ms]
+                            [:entity-ref :motion-progress]
+                            [:entity-ref :difficulty]
+                            [:entity-ref :invulnerable-time]
+                            [:entity-ref :item?] [:entity-ref :projectile?]
+                            [:entity-ref :arrow?]
+                            ;; beam-trace!: :damage/:eye-height/:living?
+                            ;; are always set. The two :reflection-* here
+                            ;; are the deliberate exception to this list's
+                            ;; usual rule -- their key CAN be absent, and
+                            ;; the primitive bank is chosen so that reading
+                            ;; one outside its :reflection-accepted? guard
+                            ;; fails at the read rather than turning into a
+                            ;; quiet 0.0. See the schema's own comment.
+                            [:beam-hit :damage] [:beam-hit :eye-height]
+                            [:beam-hit :living?]
+                            [:beam-hit :reflection-accepted?]
+                            [:beam-hit :reflection-damage]}
         declared (for [[type-tag schema] combat-vocab/field-types
                        [field-key field-type] (if (map? schema)
                                                 schema
