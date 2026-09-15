@@ -63,14 +63,17 @@
   (let [rows (param-rows combat-vocab/nodes)
         anys (any-typed rows)]
     (testing "every :any parameter is a declaration assignable? is forced to accept"
-      (is (= 58 (count anys))
+      ;; 58 -> 57 when :combat/damage's :damage-pipeline was removed: it was
+      ;; declared, set by five skills, and read by nothing in the host or
+      ;; upstream.
+      (is (= 57 (count anys))
           (str "combat vocab :any-typed params changed. Offenders:\n"
                (str/join "\n" (map #(str "  " (:node %) " / " (:param %))
                                    (sort-by (juxt :node :param) anys))))))
     (testing "optional parameters are why a missing wire cannot raise :missing-param"
-      (is (= 116 (count (filter :optional? rows)))
+      (is (= 115 (count (filter :optional? rows)))
           "combat vocab optional param count changed")
-      (is (= 232 (count rows))
+      (is (= 231 (count rows))
           "combat vocab total param count changed"))))
 
 (deftest combat-vocabulary-return-type-count-test
@@ -114,7 +117,10 @@
                             ;; item-held! -- both wrap, so neither is nil.
                             ;; :can-fly? is NOT here: it is a bare `and` and
                             ;; can be nil, so it stays :any.
-                            [:item-snapshot :present?] [:item-snapshot :placeable?]}
+                            [:item-snapshot :present?] [:item-snapshot :placeable?]
+                            ;; (boolean (and tile ...)) in
+                            ;; combat-runtime/energy-target-result.
+                            [:energy-target :chargeable?]}
         declared (for [[type-tag fields] combat-vocab/field-types
                        [field-key field-type] fields]
                    {:type type-tag :field field-key :field-type field-type})

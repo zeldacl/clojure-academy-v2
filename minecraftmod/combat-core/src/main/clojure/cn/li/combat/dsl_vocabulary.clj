@@ -528,6 +528,12 @@
                 :hit-type :keyword
                 :attacked? :boolean
                 :water? :boolean
+                ;; (when attacked? (:type result)) -- a description-id
+                ;; string, or nil when the hit was not an entity. NOT a
+                ;; number, which is the point: a read of it reaching a
+                ;; :double parameter is now a compile error rather than a
+                ;; :convert that throws the first time the path runs.
+                :entity-type :string
                 :block-id :string     ; (some-> ... str), so a string or nil
                 ;; :vec3, even though it is literally [x y z] longs rather
                 ;; than an {:x :y :z} map. In this lattice :vec3 denotes the
@@ -544,6 +550,26 @@
                 ;; a UUID object. Declaring :string would be a guess.
                 :entity-id :any
                 :target-id :any
-                :entity-type :any
                 :target-width :any    ; :double -- see note 2
-                :target-height :any}})
+                :target-height :any}
+
+   ;; platform/beam-trace!. :start/:end/:visual-end are [x y z] vectors,
+   ;; which is one of the three encodings :vec3 covers (see :block-position).
+   :beam-result {:start :vec3
+                 :end :vec3
+                 :visual-end :vec3
+                 :entities [:list-of :any]
+                 :blocks [:list-of :any]
+                 :reflection-policy :any}   ; the caller's own policy, echoed
+
+   ;; combat-runtime/energy-target-result.
+   :energy-target {:chargeable? :boolean    ; (boolean (and tile ...)), never nil
+                   :block-pos :vec3         ; [x y z] longs or nil
+                   :block-bounds :any}
+
+   ;; platform/terrain-propagate!'s accumulated plan.
+   :terrain-plan {:affected-blocks [:list-of :any]
+                  :transforms [:list-of :any]
+                  :broken-blocks [:list-of :any]
+                  :entities [:list-of :any]
+                  :mastery-breaks [:list-of :any]}})
