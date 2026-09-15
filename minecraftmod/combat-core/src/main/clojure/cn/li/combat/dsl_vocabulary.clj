@@ -293,7 +293,13 @@
    ;; --- combat/entity/world/block/motion/projectile/inventory : action --
    {:combat/damage
     (node {:target (p* :entity-ref) :amount (p* :double) :damage-type (opt :keyword :generic)
-           :world-id (opt :string nil) :damage-pipeline (opt :any nil)
+           :world-id (opt :string nil)
+           ;; :damage-pipeline was declared here, set by five skills, and read
+           ;; by nothing -- it does not appear anywhere in the host, and the
+           ;; upstream implementation has no counterpart to it either. Every
+           ;; call site passed the constant :skill, alongside :damage-type
+           ;; :skill, so it carried no information the damage type did not
+           ;; already carry. Removed rather than implemented.
            :reset-invulnerable-time? (opt :boolean false)}
           nil #{:world-write} :entity/damage 3)
 

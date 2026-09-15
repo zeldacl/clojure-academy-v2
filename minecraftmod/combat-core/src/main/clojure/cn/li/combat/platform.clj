@@ -849,14 +849,27 @@
                   (double (or (:reflection-base-damage policy) 0.0)))}))))))))
 
 (defn damage!
-  [{:keys [world-id target amount damage-type owner]}]
+  [{:keys [world-id target amount damage-type owner reset-invulnerable-time?]}]
   (let [amount (double (or amount 0.0))]
     (when (and world-id target (pos? amount) (Double/isFinite amount)
                (damage/available?))
+      ;; :reset-invulnerable-time? was declared by the vocabulary and
+      ;; dropped here. The platform implements it (mcbase's entity-damage
+      ;; adapter clears hurtResistantTime before the hurt() call) and
+      ;; cn.li.combat.beam-settlement already passes it, so the only thing
+      ;; missing was forwarding it from a skill's :combat/damage.
+      ;;
+      ;; It matters for multi-projectile abilities: the upstream
+      ;; implementation sets it so several projectiles can all connect on
+      ;; the same target in one tick. Content asks for it here; without the
+      ;; forward, every hit after the first was swallowed by vanilla
+      ;; invulnerability.
       (let [applied (damage/apply-direct-damage!
                      (str world-id) (str target) amount
                      (or damage-type :generic)
-                     {:attacker-uuid owner})]
+                     (cond-> {:attacker-uuid owner}
+                       reset-invulnerable-time?
+                       (assoc :reset-invulnerable-time? true)))]
         {:status (if (not= false applied) :applied :failed)}))))
 
 (defn charged-area-damage!
@@ -928,10 +941,22 @@
      :position {:x x :y y :z z}}))
 
 (defn set-block!
-  [{:keys [world-id position block-id]}]
+  [{:keys [world-id position block-id expected-block-ids]}]
   (let [p (point position)
         [x y z] (mapv #(long (Math/floor (double %))) (or p [0.0 0.0 0.0]))
-        applied? (and world-id p block-id (blocks/available?)
+        ;; :expected-block-ids was declared by the vocabulary and read by
+        ;; nobody, so the guard it exists for silently did not apply.
+        ;; terrain-propagate! is what puts it on a transform -- it records
+        ;; the block it SAW while planning -- and content passes that
+        ;; transform straight through here. Between planning and applying
+        ;; the world can have moved on; without the check the transform
+        ;; overwrites whatever is there now.
+        expected (seq (remove nil? (map str (or expected-block-ids []))))
+        current (when (and expected world-id (blocks/available?))
+                  (some-> (blocks/get-block (str world-id) x y z) str))
+        expected-ok? (or (nil? expected)
+                         (and current (some #(= current %) expected)))
+        applied? (and world-id p block-id expected-ok? (blocks/available?)
                       (blocks/set-block! (str world-id) x y z (str block-id)))]
     {:status (if (not= false applied?) :applied :failed)
      :position {:x x :y y :z z} :block-id block-id}))
@@ -1156,7 +1181,8 @@
    separate from the generic motion configuration. Keep that mutation in
    the same neutral operation so a skill cannot consume a block and then
    spawn an entity that still renders its registry default."
-  [{:keys [world-id entity velocity block-id add-tags projectile-damage]}]
+  [{:keys [world-id entity velocity block-id add-tags projectile-damage
+           place-when-collide?]}]
   (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
         velocity (or velocity [0.0 0.0 0.0])
         velocity (if (and (map? velocity) (vector? (:vec3 velocity)))
@@ -1179,7 +1205,19 @@
       (let [block-configured? (or (nil? block-id)
                                   (entity-motion/set-block-body-block-id!
                                    (str world-id) (str entity-id) block-id))
-            configured? (and block-configured?
+            ;; :place-when-collide? was declared and dropped. It has a
+            ;; dedicated relay (entity-motion/set-place-when-collide!) and
+            ;; the upstream implementation calls that same relay, so the only
+            ;; missing piece was forwarding it. Content that asks for it
+            ;; wants its block-body entity to place itself on impact, and
+            ;; without this it never did.
+            ;;
+            ;; Sent only when the skill actually asked, so an ability that
+            ;; omits it does not start overwriting a body's default.
+            place-configured? (or (not place-when-collide?)
+                                  (entity-motion/set-block-body-place-when-collide!
+                                   (str world-id) (str entity-id) true))
+            configured? (and block-configured? place-configured?
                              (world-effects/configure-entity!
                               (str world-id) (str entity-id)
                               (mapv double velocity) (vec add-tags)

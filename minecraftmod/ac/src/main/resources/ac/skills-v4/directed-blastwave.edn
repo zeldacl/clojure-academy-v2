@@ -520,7 +520,7 @@
        {:type :component,
         :component :combat/damage,
         :nid :n/n--entry--release-2--4a0df08e,
-        :inputs {:damage-type :skill, :damage-pipeline :skill}},
+        :inputs {:damage-type :skill}},
        :n--entry--release-2--d1ce9a1
        {:type :local-set,
         :operation :define,

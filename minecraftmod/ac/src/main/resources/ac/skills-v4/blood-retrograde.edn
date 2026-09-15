@@ -277,7 +277,7 @@
        {:type :component,
         :component :combat/damage,
         :nid :n/n--entry--pulse-6-th-4131b49c,
-        :inputs {:damage-type :skill, :damage-pipeline :skill}},
+        :inputs {:damage-type :skill}},
        :n--entry--pulse-6-then-5-then-1
        {:type :local-set,
         :operation :define,
@@ -863,7 +863,7 @@
        {:type :component,
         :component :combat/damage,
         :nid :n/n--entry--release-5--2e096d99,
-        :inputs {:damage-type :skill, :damage-pipeline :skill}},
+        :inputs {:damage-type :skill}},
        :n071 {:type :local-get, :key :target-entity-id, :nid :n/n071},
        :n072 {:type :parameter-ref, :key :damage, :nid :n/n072},
        :n--entry--release-5--5c69c11d

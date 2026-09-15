@@ -893,7 +893,7 @@
        {:type :component,
         :component :combat/damage,
         :nid :n/n--entry--release-3--872430ca,
-        :inputs {:damage-type :skill, :damage-pipeline :skill}},
+        :inputs {:damage-type :skill}},
        :n--entry--release-3--3d500c34
        {:type :component,
         :component :effect/vfx,
