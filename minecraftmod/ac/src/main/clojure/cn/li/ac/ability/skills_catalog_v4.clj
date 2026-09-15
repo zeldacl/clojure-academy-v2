@@ -37,7 +37,8 @@
                               (into {}
                                     (map (fn [[k spec]]
                                           [k (cond-> spec
-                                               (contains? used k)
+                                               (and (contains? used k)
+                                                    (not (contains? spec :default)))
                                                (assoc :required? true))]))
                                     declared))])))
           (:by-id (fx-catalog/assemble)))))
