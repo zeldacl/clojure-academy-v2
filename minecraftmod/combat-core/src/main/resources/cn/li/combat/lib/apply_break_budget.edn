@@ -18,7 +18,13 @@
 ;; expressions in this grammar, never a further call -- so it is bound via
 ;; `let` first, same as the hardness-check condition below.
 {:defn :terrain/apply-break-budget
- :params [{:name blocks :type :any} {:name energy :type :double} {:name drop-chance :type :double}]
+ ;; blocks is [:list-of :block-info], not :any: `each` binds its item with
+ ;; the collection's ELEMENT type, so this one declaration is what gives
+ ;; `candidate` a type and makes the three (:hardness candidate) reads below
+ ;; typed rather than three unchecked coercions into a :double parameter.
+ ;; Both call sites pass a beam-result's :blocks, which is block-select!'s
+ ;; own output, so the element type is the producer's and not a guess.
+ :params [{:name blocks :type [:list-of :block-info]} {:name energy :type :double} {:name drop-chance :type :double}]
  :do [(let remaining energy)
       (each candidate blocks
         (let hardness-ok (bool/and (math/gte (:hardness candidate) 0.0)

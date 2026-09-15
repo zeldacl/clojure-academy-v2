@@ -80,6 +80,23 @@
     (is (= [] (vec diagnostics)) "an unlisted field is not an error yet")
     (is (some? ir))))
 
+(deftest a-defn-param-may-be-a-structural-type-test
+  ;; surface/normalize used to require a :defn param's :type to satisfy
+  ;; `keyword?`, which silently excluded [:list-of t] -- a library function
+  ;; taking a typed list could not be WRITTEN, so every one of them said
+  ;; :any and every field read inside its body was untyped as a result.
+  ;; The check now asks the type lattice instead of the reader's own
+  ;; narrower guess.
+  (let [doc "{:defn :t/f :params [{:name xs :type [:list-of :hit-result]}] :do []}"]
+    (is (= [:list-of :hit-result]
+           (:type (first (:params (surface/normalize (surface/read-doc doc))))))))
+  (testing "and a type outside the lattice is still rejected"
+    ;; The half that keeps it a check rather than a rubber stamp.
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (surface/normalize
+                  (surface/read-doc
+                   "{:defn :t/f :params [{:name xs :type :not-a-type}] :do []}"))))))
+
 (deftest a-uniform-schema-types-every-field-test
   ;; The second schema form: a bare type instead of a {key type} map,
   ;; meaning every field of that record has it.

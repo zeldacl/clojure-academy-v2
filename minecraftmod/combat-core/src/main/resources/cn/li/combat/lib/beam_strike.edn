@@ -1,11 +1,15 @@
 ;; Port of the old :combat/beam-strike composite (rev 2): trace a bounded
 ;; beam via the kernel/trace-beam host primitive, then apply direct or
 ;; reflection damage per hit entity depending on that entity's own
-;; :reflection-accepted? field. Field access never type-checks its source
-;; (cn.li.node.compile/compile-get has no per-field schema -- see
-;; cn.li.node.types' :any docstring), so reading :reflection-accepted? /
-;; :reflection-target / etc off each :any-typed loop element is fine even
-;; though kernel/trace-beam's own :returns is untyped :any. Uses two-armed
+;; :reflection-accepted? field. The reads below are off an :any-typed loop
+;; element and so are unchecked -- NOT because field access cannot be
+;; checked, which this comment used to claim and which stopped being true
+;; when compile-field-access grew a schema, but because :beam-result's
+;; :entities is still [:list-of :any]. Its elements are strike outcomes
+;; rather than entity references (they carry :damage, :damage-type and the
+;; four :reflection-* keys on top of the projection), and typing it needs a
+;; tag for that shape -- see dsl-vocabulary's field-types entry, which
+;; records the attempt that the producer-key check rejected. Uses two-armed
 ;; if/else, not two separate whens, since the two branches are mutually
 ;; exclusive by construction (matching the old :flow/branch :then/:else).
 ;;

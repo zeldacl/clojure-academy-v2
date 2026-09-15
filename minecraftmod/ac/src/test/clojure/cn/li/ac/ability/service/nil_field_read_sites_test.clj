@@ -78,6 +78,10 @@
    ;; cn.li.ac.ability.service.combat-runtime/energy-target-result, an
    ;; AC-registered host query rather than a combat-core one.
    :energy-target #{:chargeable? :block-pos :block-bounds}
+   ;; platform/block-select!, one mapv with a closed key set -- the one
+   ;; entry here that is genuinely complete rather than a union.
+   :block-info #{:position :hardness :block-id :breakable?
+                 :requires-high-tier-tool?}
    ;; combat-runtime/activation-context, the ?context/resources value.
    ;; :max-cp is deliberately NOT here: a different host path (a state
    ;; projection at combat-runtime:242) emits a three-key pool, but the

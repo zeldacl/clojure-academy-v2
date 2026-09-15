@@ -45,16 +45,24 @@
                instrs (some-> (get @(:block-registry env) (:block-id result)) deref)
                g (last (filter #(= :get (:op %)) instrs))]
            (when g
-             ;; Keyed by [skill register], not by register alone. A bare
-             ;; register key is wrong across a catalog: alloc-reg! numbers
-             ;; slots per PROGRAM, so [:reg :objects 5] names a different
-             ;; value in each of the 50 skills while this atom lives for
-             ;; the whole assemble. That collision is what made the
-             ;; per-field breakdown claim reads that the schemas prove
-             ;; cannot exist -- :owner-snapshot's :velocity is declared
-             ;; :vec3, so a :velocity read can never coerce FROM :any.
-             (swap! origin assoc [*skill* (:dst g)]
-                    [(types/canonical-type (get @(:reg-types env) (:src g))) k]))
+             ;; Keyed by the compile env's own identity, not by register
+             ;; and not by [skill register]. alloc-reg! numbers slots per
+             ;; PROGRAM while this atom lives for the whole assemble, so a
+             ;; bare register key collides across all 50 skills -- and a
+             ;; [skill register] key still collides within one skill,
+             ;; because a document compiles a separate program per entry
+             ;; point and each restarts numbering. Both versions of that
+             ;; bug invented rows: the first attributed reads to fields
+             ;; whose declared types prove they cannot coerce from :any,
+             ;; the second reported :hardness in two skills whose EDN does
+             ;; not contain the word.
+             ;;
+             ;; :reg-types is an atom created once per env, so it is a
+             ;; cheap exact identity for "this program" without the
+             ;; compiler having to expose one.
+             (swap! origin assoc [(:reg-types env) (:dst g)]
+                    [(types/canonical-type (get @(:reg-types env) (:src g)))
+                     k (:nid g) *skill* (pr-str sub-form)]))
            result))
 
        coerce!-var
@@ -62,9 +70,14 @@
          (let [to* (types/canonical-type to)]
            (when (and (= :any (types/canonical-type from))
                       (contains? #{:doubles :longs} (types/bank to*))
-                      (contains? @origin [*skill* reg]))
-             (let [[src field] (get @origin [*skill* reg])]
-               (swap! sites conj {:skill *skill* :source src :field field :target to*}))))
+                      (contains? @origin [(:reg-types env) reg]))
+             ;; the skill recorded at READ time, not the one bound now: it
+             ;; is the read being attributed, and the two are only the same
+             ;; if nothing about the binding has gone wrong. Storing it
+             ;; removes the assumption instead of relying on it.
+             (let [[src field nid skill form] (get @origin [(:reg-types env) reg])]
+               (swap! sites conj {:skill skill :source src :field field
+                                  :nid nid :target to* :form form}))))
          (co-orig env block-id reg from to))}
       #(skills-catalog/assemble {:mode :collect}))
 
@@ -80,6 +93,16 @@
       (println)
       (println "skills involved:" (pr-str (sort (distinct (map :skill @sites)))))
       (println)
+      ;; Per-site nids, because the aggregate above cannot say WHICH read a
+      ;; row is when a skill reads the same field twice -- and a count that
+      ;; moves by less than the group size is exactly when that matters.
+      (println "=== by site ===")
+      (doseq [{:keys [skill source field nid target form]}
+              (sort-by (juxt :skill :field (comp str :nid)) @sites)]
+        (println (format "  %-22s %-16s %-24s -> %-8s %-8s %s"
+                         (pr-str skill) (pr-str source) (pr-str field)
+                         (pr-str target) (pr-str nid) form)))
+      (println)
 
       ;; A ratchet, not a clean bill of health. These are pre-existing and
       ;; unverified: proving any single one throws needs the producing
@@ -91,8 +114,16 @@
       ;; capability was 33 of the 83 on its own, which is the shape of this
       ;; whole problem: the sites are not scattered, they cluster behind a
       ;; handful of untyped SOURCES, and typing a source retires a whole
-      ;; group at once. The largest cluster left is :hardness (9), still
-      ;; read off an :any for the same reason the pool's amounts were.
+      ;; group at once.
+      ;;
+      ;; 28 -> 19 finished the :hardness cluster, and took three steps to
+      ;; find because the reads were not in any skill. combat-core's
+      ;; break-budget LIBRARY function does (:hardness candidate) in an
+      ;; `each` body; it is inlined into railgun and meltdowner, which is
+      ;; why their EDN does not contain the word. Typing the list retires
+      ;; all of them at once, since compile-each already binds the item
+      ;; with the collection's element type -- what was missing was a
+      ;; collection with one.
       ;;
       ;; 50 -> 28 with no production change at all: the attribution below
       ;; was keyed by bare register, and slots are numbered per PROGRAM
@@ -116,7 +147,7 @@
       ;; same explicit decision :resource-pool already went through: say
       ;; whether the producing expression can return nil, then either
       ;; declare it and whitelist it with the reason, or fix the producer.
-      (is (= 28 (count @sites))
+      (is (= 19 (count @sites))
           (str "field reads reaching a numeric parameter changed. Each is a"
                " potential :convert throw; justify a new one or remove it: "
                (pr-str (sort-by (juxt :skill :field) @sites)))))))

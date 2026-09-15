@@ -521,7 +521,7 @@
     (when (not= (count args) (count (:params sig)))
       (report! env {:code :arity-mismatch :form form
                    :message (str (first form) " expects " (count (:params sig)) " args, got " (count args))}))
-    (let [arg-regs (mapv (fn [want a]
+    (let [compiled (mapv (fn [want a]
                            (reject-nil-literal! env a want)
                            (reject-invalid-literal! env a want)
                            (let [{:keys [reg]} (compile-form env locals block-id depth a false)
@@ -529,9 +529,18 @@
                              (when-not (types/assignable? got want)
                                (report! env {:code :type-mismatch :form a :want want
                                             :message (str (first form) " arg wants " want " got " got)}))
-                             (coerce! env block-id reg got want)))
+                             ;; both halves are kept: the coerced register is
+                             ;; what the instruction reads, the PRE-coercion
+                             ;; type is what decides the result type. Reading
+                             ;; the type back off the coerced register would
+                             ;; always answer `want`, which for the collection
+                             ;; ops is :any -- the very information being
+                             ;; recovered here.
+                             {:reg (coerce! env block-id reg got want) :got got}))
                          (:params sig) args)
-          dst (alloc-reg! env (types/bank (:returns sig)) (:returns sig))]
+          arg-regs (mapv :reg compiled)
+          returns (ops/result-type op (mapv :got compiled))
+          dst (alloc-reg! env (types/bank returns) returns)]
       (append! env block-id {:op :pure :nid (nid-for! env form) :dst dst :fn op :args arg-regs})
       {:reg dst :block-id block-id})))
 

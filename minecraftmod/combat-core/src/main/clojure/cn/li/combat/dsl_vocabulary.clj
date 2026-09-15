@@ -204,7 +204,7 @@
 
     :target/blocks
     (node {:shape (p) :limit (opt :long 128) :projection (opt :any nil)}
-          [:list-of :any] #{:world-read} :block/select 2)
+          [:list-of :block-info] #{:world-read} :block/select 2)
 
     :target/entity-snapshot
     (node {:entity-id (p* :entity-ref) :projection (opt :any nil)}
@@ -562,8 +562,24 @@
    :beam-result {:start :vec3
                  :end :vec3
                  :visual-end :vec3
+                 ;; :entities is NOT [:list-of :entity-ref], though it was
+                 ;; declared that way for one run on the reasoning that
+                 ;; beam-trace! delegates to the same entity-select! the
+                 ;; :target/* nodes use. The producer-key check rejected
+                 ;; it immediately: the beam's hit records carry :damage,
+                 ;; :damage-type, :reflection-accepted?, :reflection-damage,
+                 ;; :reflection-start and :reflection-end on top of the
+                 ;; projection, and the beam-strike lib reads every one of
+                 ;; them. They are strike OUTCOMES, not entity references,
+                 ;; and they need a tag of their own before this can be
+                 ;; typed -- one this pass did not trace far enough to
+                 ;; write down honestly. Left :any deliberately.
                  :entities [:list-of :any]
-                 :blocks [:list-of :any]
+                 ;; :blocks is different and is verified: beam-trace! fills
+                 ;; it by calling block-select! and passing the result
+                 ;; through untouched, so it is exactly that node's own
+                 ;; element type.
+                 :blocks [:list-of :block-info]
                  :reflection-policy :any}   ; the caller's own policy, echoed
 
    ;; combat-runtime/energy-target-result.
@@ -577,6 +593,29 @@
                   :broken-blocks [:list-of :any]
                   :entities [:list-of :any]
                   :mastery-breaks [:list-of :any]}
+
+   ;; platform/block-select!, which builds every member of the selection in
+   ;; one mapv with a closed key set -- so unlike :destination, this schema
+   ;; really is complete and the producer-key check can be strict about it.
+   ;;
+   ;; :hardness is the second entry to land reads in a primitive bank, and
+   ;; for the same reason as the resource pool rather than a weaker one:
+   ;; the producer writes (double (or (:hardness block) 0.0)), applying the
+   ;; default itself. Nine reads of it in shipped content used to reach a
+   ;; :double parameter as an unchecked coercion -- not because anyone
+   ;; decided the field was risky, but because the LIST it came out of was
+   ;; [:list-of :any], so collection/first handed back an untyped value and
+   ;; the field read off it could not be typed either.
+   ;;
+   ;; :block-id is the one field here that stays :any, and it is the
+   ;; interesting one: it is a bare (:block-id block) passthrough from the
+   ;; loader bridge with no default applied, so it genuinely can be nil.
+   ;; Typing it :string would be a claim the producer does not support.
+   :block-info {:position :vec3
+                :hardness :double
+                :block-id :any
+                :breakable? :boolean
+                :requires-high-tier-tool? :boolean}
 
    ;; The UNIFORM form (a bare type, not a {key type} map): every field of
    ;; a resource pool is an amount, whatever the resource is called.

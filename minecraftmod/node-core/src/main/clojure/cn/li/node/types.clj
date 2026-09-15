@@ -25,6 +25,11 @@
     ;; spelling and are referenced by nothing -- see the collection-type
     ;; phase.)
     :break-result
+    ;; One member of a block selection -- position, hardness, id and two
+    ;; policy booleans. Distinct from :block-placement (where a block would
+    ;; GO) and :break-result (what breaking one did): this is a block that
+    ;; is already there, described.
+    :block-info
     ;; A materialized resource pool: resource-key -> amount. The one handle
     ;; here whose fields are NUMBERS rather than further handles, which is
     ;; why it is worth a tag at all -- while it was :any, every read off it

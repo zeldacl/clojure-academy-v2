@@ -30,7 +30,8 @@
    time it is read, which is the practical fix for this gap (see the
    node-editor plan's Phase 1)."
   (:require [clojure.edn :as edn]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [cn.li.node.types :as types])
   (:import [java.io StringReader]
            [clojure.lang LineNumberingPushbackReader]))
 
@@ -109,8 +110,19 @@
                      ;; every other local binding form -- let/each), so it
                      ;; must be the exact value cn.li.node.compile's locals
                      ;; map is keyed by.
-                     (when-not (and (symbol? name) (keyword? type))
-                       (throw (ex-info ":defn :params entries need a :name symbol and a :type keyword" {:doc doc})))
+                     ;; :type is checked against the type lattice, not
+                     ;; against `keyword?`. The narrower test silently
+                     ;; excluded the structural forms -- a [:list-of t]
+                     ;; param was rejected at READ time, so a library
+                     ;; function taking a typed list could not be written
+                     ;; at all and every one of them had to say :any. That
+                     ;; is how three (:hardness candidate) reads in the
+                     ;; break-budget lib became untyped coercions: not a
+                     ;; decision about the field, just a grammar check that
+                     ;; was stricter than the type system it guards.
+                     (when-not (and (symbol? name) (types/known-type? type))
+                       (throw (ex-info ":defn :params entries need a :name symbol and a known :type"
+                                       {:doc doc :name name :type type})))
                      {:name name :type type})
                    (:params doc))
      :body (vec (:do doc))

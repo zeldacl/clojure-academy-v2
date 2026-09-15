@@ -15,7 +15,8 @@
    treat these instructions as zero (host-)cost. Seeded ops (:random/*) read
    the ExecutionFrame's RNG cursor at runtime and are registered on the
    emitter side (cn.li.mcmod.runtime.effect.emit), not here."
-  (:require [cn.li.node.expr :as expr]))
+  (:require [cn.li.node.expr :as expr]
+            [cn.li.node.types :as types]))
 
 (def table
   "op-name -> {:params [type...] :returns type}. :params is positional and
@@ -115,6 +116,46 @@
   "{:params [...] :returns t} for op-name, or nil if unknown."
   [op-name]
   (get table op-name))
+
+(defn result-type
+  "The op's result type given the types of the arguments actually passed.
+
+   For every op but the collection ones this is just the signature's
+   :returns -- the table is monomorphic and stays that way. The exception
+   is the handful whose result is an ELEMENT of a list argument, or the
+   same list again. Those cannot be written as a fixed :returns at all:
+   collection/first applied to a [:list-of :hit-result] yields a
+   :hit-result, and applied to a [:list-of :entity-ref] an :entity-ref.
+
+   Declaring them :any was not a neutral choice, it was a leak. The result
+   of a collection/first is what content then reads fields off, so the
+   type was lost at exactly the point the graph starts using the value:
+   nine reads of a block's :hardness reached a :double parameter as an
+   unchecked coercion purely because the list they came from had been
+   flattened to :any one step earlier.
+
+   This is a rule about four named ops, NOT a generic signature system.
+   Type variables in the table were considered and rejected as far more
+   machinery than four cases justify; if a fifth op ever needs it the
+   comparison is worth redoing, but four is not the number that pays for
+   an inference engine."
+  [op-name arg-types]
+  (let [declared (:returns (signature op-name))
+        elem (fn [t] (when (types/list-of? t) (second t)))]
+    (case op-name
+      ;; the element
+      :collection/first (or (elem (first arg-types)) declared)
+      ;; the same list, minus some members
+      :collection/remove (if (types/list-of? (first arg-types))
+                           (first arg-types)
+                           declared)
+      ;; the same list only if BOTH sides agree; concatenating a
+      ;; [:list-of :entity-ref] onto a [:list-of :hit-result] has no
+      ;; element type more precise than :any, and guessing either side
+      ;; would be worse than admitting that.
+      :collection/concat (let [[a b] arg-types]
+                           (if (and (types/list-of? a) (= a b)) a declared))
+      declared)))
 
 ;; --- editor palette presentation (:category), attached in schema-export ---
 ;;

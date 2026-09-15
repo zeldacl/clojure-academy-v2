@@ -142,7 +142,13 @@
                             [:energy-target :chargeable?]
                             ;; the host applies (double (or ... 0.0)) when
                             ;; it materializes the pool.
-                            [:resource-pool :*]}
+                            [:resource-pool :*]
+                            ;; (double (or (:hardness block) 0.0)) and two
+                            ;; (boolean (and ...)) in block-select!, which
+                            ;; builds every member in one mapv.
+                            [:block-info :hardness]
+                            [:block-info :breakable?]
+                            [:block-info :requires-high-tier-tool?]}
         declared (for [[type-tag schema] combat-vocab/field-types
                        [field-key field-type] (if (map? schema)
                                                 schema
@@ -236,15 +242,22 @@
   (let [rows (for [[fn-id doc] combat-lib/fns
                    p (:params doc)]
                {:fn fn-id :param (:name p) :type (:type p)})]
-    ;; Today's 8 are all genuinely structured values the type lattice has no
-    ;; name for yet -- a `policy` map (:target/hold-destination,
-    ;; :target/raycast-destination, :target/directional-destination,
-    ;; :combat/beam-strike's reflection-policy), a block list
-    ;; (:terrain/apply-break-budget), and :terrain/wave-plan's spread /
-    ;; energy-cost / block-transforms. They are T2/T5 material: each needs
-    ;; either an opaque tag or a :map-keys schema before it can stop being
-    ;; :any, which is exactly the work this ratchet is here to track.
-    (is (= 8 (count (any-typed rows)))
+    ;; 8 -> 7: :terrain/apply-break-budget's `blocks` is now
+    ;; [:list-of :block-info]. It had been counted with the others as
+    ;; "structured values the lattice has no name for", but that was only
+    ;; half true -- the lattice could say it, surface/normalize could not
+    ;; READ it, because the :defn param grammar demanded a keyword and so
+    ;; excluded every structural type. Worth separating the two reasons: a
+    ;; missing type is work, a grammar that cannot express an existing type
+    ;; is a bug, and this row had been filed under the wrong one.
+    ;;
+    ;; The remaining 7 are the genuine kind. Four are a `policy` map
+    ;; (:target/hold-destination, :target/raycast-destination,
+    ;; :target/directional-destination, :combat/beam-strike's
+    ;; reflection-policy) and three are :terrain/wave-plan's spread /
+    ;; energy-cost / block-transforms. Each needs an opaque tag or a field
+    ;; schema before it can stop being :any.
+    (is (= 7 (count (any-typed rows)))
         (str ":defn library :any-typed param count changed. Offenders: "
              (pr-str (map (juxt :fn :param) (any-typed rows)))))
     (is (= 0 (count (filter #(= :any (types/canonical-type (:returns %)))
