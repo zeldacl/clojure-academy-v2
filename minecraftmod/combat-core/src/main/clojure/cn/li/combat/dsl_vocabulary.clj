@@ -439,3 +439,54 @@
           nil #{:damage-context-write})}))
 
 (def nodes (attach-presentation raw-nodes))
+
+(def field-types
+  "type-tag -> {field-key field-type}, for cn.li.node.compile's :field-types
+   option. Lets a field read off a typed value produce a typed register
+   instead of :any -- :value/field is the second most common component in
+   shipped content, so this is where most of the graph's values get their
+   type or fail to.
+
+   OPEN, not complete: a field listed here is typed, one that is not stays
+   :any, and neither is an error. Two reasons, both real:
+
+   1. :destination is currently two different records. targeting/
+      directional-destination returns {:position :from :distance :hit?
+      :valid? :direction}; platform's resolve-destination returns thirteen
+      keys including :face, :place-position and :can-place?. Only what they
+      genuinely share is declared. Splitting the tag per producer is the
+      prerequisite for claiming completeness, and for catching a typo'd
+      field name at all.
+   2. Fields whose runtime type is numeric are declared :any rather than
+      :double/:long. cn.li.node.compile banks a field register by its
+      declared type, so :double would move it into a primitive array where
+      cn.li.mcmod.runtime.effect-emit throws :nil-primitive-write the first
+      time the host returns nil -- exactly the deferred one-way-:any work.
+      Naming them :any still records that the field exists.
+
+   Every entry below was read off the producing function, not inferred from
+   a field name."
+  {;; cn.li.combat.targeting/directional-destination and platform's
+   ;; resolve-destination, intersected.
+   :destination {:position :vec3
+                 :distance :any   ; :double -- see note 2
+                 :hit? :boolean
+                 :valid? :boolean}
+   ;; platform/break! -> {:status :block-id :position}
+   :break-result {:status :keyword
+                  :position :vec3
+                  :block-id :any}  ; a resource-location string or nil
+   ;; platform/raycast!'s normalizing assoc. Only the keys it sets itself
+   ;; are listed; a raw hit from the bridge carries more (:eye-height, :face)
+   ;; and those stay :any, which open schemas allow.
+   :hit-result {:position :vec3
+                :drop-position :vec3
+                :hit-type :keyword
+                :attacked? :boolean
+                :water? :boolean
+                :entity-id :any       ; uuid string or nil
+                :target-id :any
+                :entity-type :any
+                :block-position :any  ; [x y z] longs, not a vec3 map
+                :target-width :any    ; :double -- see note 2
+                :target-height :any}})

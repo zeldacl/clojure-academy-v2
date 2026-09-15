@@ -47,6 +47,11 @@
   {:vocab combat-api/skill-vocab
    :capabilities combat-api/skill-capability-type
    :fns combat-api/skill-lib-fns
+   ;; Gives a (:field query-result) read a real type instead of :any. Must
+   ;; stay in step with the editor's own opts (node_editor_reactive/
+   ;; mode-opts) -- a field typed one way here and another way there would
+   ;; mean the editor's diagnostics panel disagrees with the build.
+   :field-types combat-api/skill-field-types
    ;; The VFX signal ABI's own operation set, so a typo'd vfx! :operation
    ;; is a compile error instead of vfx-contract/signal throwing "unknown
    ;; VFX signal operation" at spawn time. Passed in rather than duplicated:

@@ -91,6 +91,39 @@
       (is (= [] (vec (remove types/known-type? value-returning)))
           "a :returns naming something outside the type lattice checks nothing"))))
 
+(deftest field-schemas-never-put-a-read-in-a-primitive-bank-test
+  ;; The :value/field half of the guardrail below. compile banks a field
+  ;; register by its declared type, so a field declared :double/:long moves
+  ;; that register into a primitive array where effect-emit's
+  ;; compile-writer throws :nil-primitive-write the first time the host
+  ;; returns nil for it. Numeric fields are declared :any for now and the
+  ;; table says so field by field; this makes that a build failure rather
+  ;; than a convention someone has to notice.
+  ;; Named exemptions, same discipline as the :returns side below. These
+  ;; four are genuinely :boolean and their producers always set them
+  ;; explicitly -- (some? hit), (not miss?), (= :entity (:hit-type result)),
+  ;; (boolean (and ...)) -- so the key is never absent and the nil -> false
+  ;; conversion cannot fire. Declaring them :any to dodge the rule would
+  ;; lose a real type for no safety gained; listing them records that
+  ;; someone checked the producer.
+  (let [allowed-primitive #{[:destination :hit?] [:destination :valid?]
+                            [:hit-result :attacked?] [:hit-result :water?]}
+        declared (for [[type-tag fields] combat-vocab/field-types
+                       [field-key field-type] fields]
+                   {:type type-tag :field field-key :field-type field-type})
+        offenders (remove #(or (= :objects (types/bank (:field-type %)))
+                               (contains? allowed-primitive [(:type %) (:field %)]))
+                          declared)]
+    (is (seq declared) "the field-type table must not be empty -- see T3")
+    (is (= [] (vec offenders))
+        (str "a field schema moved a read into a primitive bank. Confirm the"
+             " producer can never omit the key, then list it above: "
+             (pr-str (vec offenders))))
+    (testing "and every declared field type is one the checker knows"
+      (is (= [] (vec (remove #(types/known-type? (:field-type %)) declared)))))
+    (testing "schemas only describe types the lattice actually has"
+      (is (= [] (vec (remove types/known-type? (keys combat-vocab/field-types))))))))
+
 (deftest returning-a-primitive-is-an-explicit-decision-test
   ;; The guardrail for the deferred one-way-:any work, and the reason the
   ;; return-typing pass above used only :objects-bank types.
@@ -120,11 +153,11 @@
 
 (deftest vfx-vocabulary-untyped-parameter-count-test
   (let [rows (param-rows vfx-vocab/nodes)]
-    (is (= 34 (count (any-typed rows)))
+    (is (= 35 (count (any-typed rows)))
         "vfx vocab :any-typed param count changed")
-    (is (= 57 (count (filter :optional? rows)))
+    (is (= 60 (count (filter :optional? rows)))
         "vfx vocab optional param count changed")
-    (is (= 127 (count rows))
+    (is (= 132 (count rows))
         "vfx vocab total param count changed")
     (testing "vfx nodes are all scene actions -- nothing here returns a value"
       (is (every? nil? (map :returns (vals vfx-vocab/nodes)))

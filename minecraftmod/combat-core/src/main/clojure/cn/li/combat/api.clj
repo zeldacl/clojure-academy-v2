@@ -58,6 +58,10 @@
 ;; category-for the editor's "skill mode" is configured with; see the
 ;; node-editor plan's §2.2 injection table) ----
 (def skill-vocab dsl-vocabulary/nodes)
+;; Both the catalog's compile opts and the node editor's must pass this, or
+;; the two disagree about what a field read yields and the editor's
+;; diagnostics stop matching the build's.
+(def skill-field-types dsl-vocabulary/field-types)
 (def skill-vocab-category-for dsl-vocabulary/category-for)
 ;; capability-type is a FUNCTION (?budget/*, ?cooldown/* etc are typed by
 ;; NAMESPACE, not enumerated one name at a time -- see run.clj's own

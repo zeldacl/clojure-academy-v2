@@ -145,6 +145,11 @@
     :skill {:vocab combat-api/skill-vocab
             :capabilities combat-api/skill-capability-type
             :fns combat-api/skill-lib-fns
+            ;; Same table skills-catalog-v4's default-compile-opts passes.
+            ;; Omitting it here would not make the editor permissive in a
+            ;; harmless way -- it would make the diagnostics panel report a
+            ;; different set of errors than the build does for the same file.
+            :field-types combat-api/skill-field-types
             :category-for combat-api/skill-vocab-category-for}
     :scene {:vocab vfx-api/scene-vocab
             :capabilities

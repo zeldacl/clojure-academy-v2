@@ -68,7 +68,7 @@
 ;; function arguments/return values instead (see compile-stmt).
 
 (defn- new-env [{:keys [vocab capabilities tunable-types state-types state-specs fns mode
-                        effect-inputs vfx-operations]}]
+                        effect-inputs vfx-operations field-types]}]
   {:vocab (or vocab {})
    :capabilities (or capabilities {})
    :tunable-types (or tunable-types {})
@@ -86,6 +86,15 @@
    ;; caller because they live in mcmod (see check-vfx-payload!). nil = no
    ;; ABI available, so skip -- not "no operation is valid".
    :vfx-operations vfx-operations
+   ;; type-tag -> {field-key field-type}, so a field read off a value whose
+   ;; static type is known produces a typed register instead of :any. Keyed
+   ;; by TYPE, not by producing node: a :destination has one shape whoever
+   ;; returned it, and a register only carries its type.
+   ;;
+   ;; Supplied by the caller (combat-core owns what its own records look
+   ;; like; node-core owns only the tags). Open, not complete -- see
+   ;; compile-field-access for why an unlisted field is not an error yet.
+   :field-types (or field-types {})
    :reg-counters (atom {:doubles 0 :longs 0 :booleans 0 :objects 0})
    :reg-types (atom {})
    :const-pools (atom {:doubles [] :longs [] :booleans [] :objects []})
@@ -455,9 +464,41 @@
                  (dummy-register! env :any))
          :block-id block-id}))))
 
-(defn- compile-field-access [env locals block-id depth form k sub-form]
+(defn- compile-field-access
+  "(:field value) -> a register holding that field.
+
+   The field's type comes from env's :field-types schema for the SOURCE's
+   static type, when there is one. Before this, every field read produced
+   :any -- which mattered more than it sounds: :value/field is the second
+   most common component in shipped content, so the great majority of
+   values flowing through a graph arrived at their use site carrying no
+   type at all, and assignable?'s `from :any` rule waved each of them
+   through. Static-check could not help either; it only reasons about
+   compile-time-resolvable values, and these come from host queries.
+
+   Schemas are OPEN, not complete: a listed field gets its type, an
+   unlisted one stays :any, and neither is an error. That is deliberate and
+   not laziness. Today two different records share the :destination tag --
+   targeting/directional-destination returns six keys, platform's
+   resolve-destination returns thirteen -- so no single key set is
+   truthfully \"the fields of a :destination\", and declaring one complete
+   would reject legal reads. Splitting such tags per producer is what would
+   make completeness (and therefore typo detection) available; until then
+   the win here is that a read yields a TYPE, which is what
+   assignable? needs.
+
+   The destination register still allocates in the :objects bank
+   regardless. A field whose real type is :double would otherwise land in a
+   primitive bank, where effect-emit throws :nil-primitive-write on the
+   host's first nil -- the deferred one-way-:any round's problem, not this
+   one. Schemas therefore declare numeric fields as :any for now (see the
+   combat-core table), which keeps the bank correct while still pinning
+   which field names exist."
+  [env locals block-id depth form k sub-form]
   (let [{:keys [reg block-id]} (compile-form env locals block-id depth sub-form false)
-        dst (alloc-reg! env :objects :any)]
+        src-type (types/canonical-type (type-of env reg))
+        field-type (or (get-in (:field-types env) [src-type k]) :any)
+        dst (alloc-reg! env (types/bank field-type) field-type)]
     (append! env block-id {:op :get :nid (nid-for! env form) :dst dst :src reg :key k})
     {:reg dst :block-id block-id}))
 
