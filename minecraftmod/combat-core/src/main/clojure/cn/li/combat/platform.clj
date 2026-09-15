@@ -1448,12 +1448,27 @@
                       :type (or (:type position) (:entity-type position))
                       :entity-type (or (:entity-type position) (:type position))
                       :x x :y y :z z
+                      ;; The feet position in map form, spelled the way
+                      ;; cn.li.combat.platform/project-entity spells it.
+                      ;; Without this, (:position snapshot) was nil while the
+                      ;; same read against a :target/entities element worked,
+                      ;; and nothing could report the difference: both
+                      ;; queries returned :any, so the two spellings were
+                      ;; indistinguishable to the type checker. Seven reads
+                      ;; across mag-manip and storm-wing were evaluating to
+                      ;; nil, one of them feeding :target/raycast's :origin.
+                      ;; NOT :eye-position -- that is feet plus eye height,
+                      ;; a different point.
+                      :position {:x x :y y :z z}
                       :eye-height eye-height
                       :eye-position {:x x :y (+ y eye-height) :z z}
                       :alive? (not= false (:alive? position))}]
         (if (seq projection)
+          ;; :position joins the always-kept core for the same reason :x/:y/:z
+          ;; and :eye-position are in it: a caller that asked for a projection
+          ;; still needs to be able to locate the entity.
           (select-keys snapshot
-                       (conj (set projection) :alive? :x :y :z
+                       (conj (set projection) :alive? :x :y :z :position
                              :eye-height :eye-position))
           snapshot)))))
 

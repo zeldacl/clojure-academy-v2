@@ -26,9 +26,18 @@
 (def ^:private ^:dynamic *skill* nil)
 
 (def ^:private missing-field?
-  "[source-type field] pairs verified absent from the producing function."
-  #{[:entity-snapshot :position]
-    [:entity-ref :invulnerable-time]})
+  "[source-type field] pairs verified absent from the producing function.
+
+   [:entity-snapshot :position] used to be here and is FIXED: entity-snapshot!
+   now builds :position {:x :y :z} like project-entity does, and keeps it
+   through a projection alongside :x/:y/:z and :eye-position. That removed
+   seven of the eight sites.
+
+   The one left has no host-side answer. project-entity exposes no
+   invulnerability value at all, so there is nothing to add there -- the
+   repair has to come from whatever light-shield meant to read, which is its
+   author's call, not a typing decision."
+  #{[:entity-ref :invulnerable-time]})
 
 (deftest nil-field-read-sites
   (let [sites (atom [])
@@ -67,5 +76,5 @@
     ;; which) or a new one was authored (fix it). Either way it should not
     ;; pass silently -- a nil-valued read is exactly the class of defect the
     ;; whole type-contract effort exists to stop being invisible.
-    (is (= 8 (count @sites))
+    (is (= 1 (count @sites))
         (str "known nil-valued field reads changed: " (pr-str @sites)))))
