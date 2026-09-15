@@ -50,6 +50,10 @@
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
             [cn.li.ac.vfx.fx-catalog :as fx-catalog]
+            ;; For effect-input-specs only -- the editor must compile a
+            ;; document against the same VFX input declarations the catalog
+            ;; does, or its diagnostics stop matching the build's.
+            [cn.li.ac.ability.skills-catalog-v4 :as skills-catalog-v4]
             [cn.li.ability.editor.chrome :as chrome]
             [cn.li.ability.editor.label :as label]
             [cn.li.ability.editor.document :as document]
@@ -323,25 +327,15 @@
                ;; effect-input-specs), universal capabilities included.
                (= :skill mode)
                (assoc :vfx-operations vfx-contract/signal-ops
-                      :effect-inputs
-                      ;; :auto-provided? true is NOT decoration: cn.li.node.
-                      ;; types skips :missing-vfx-input and :nil-vfx-input for
-                      ;; an input carrying it, because a universal capability
-                      ;; (:age/:progress/:seed/:source-player-id) is supplied
-                      ;; by the scene runtime and a payload legitimately omits
-                      ;; it. This map was built without the flag while the
-                      ;; catalog's own effect-input-specs sets it, so the
-                      ;; editor reported "missing required input :seed"-class
-                      ;; diagnostics that the real build never produces.
-                      (let [universal (into {} (map (fn [[k t]] [k {:type t :auto-provided? true}]))
-                                            (vfx-api/scene-capabilities-for {}))]
-                        (into {}
-                              (map (fn [[id e]]
-                                     [id (merge universal
-                                                (or (get-in e [:document :inputs])
-                                                    (get-in e [:document :parameters])
-                                                    {}))]))
-                              vfx-catalog))))]
+                      ;; The catalog's builder, not a second one. This used
+                      ;; to be an inline copy that omitted :auto-provided?
+                      ;; and did not derive :required? -- so the diagnostics
+                      ;; panel reported missing/nil required-input errors for
+                      ;; the universal capabilities (:age/:progress/:seed/
+                      ;; :source-player-id) that the real build never
+                      ;; produces. The editor is supposed to preview the
+                      ;; build's verdict, not approximate it.
+                      :effect-inputs (skills-catalog-v4/effect-input-specs vfx-catalog)))]
     (-> {:path path
          :mode mode
          :opts opts

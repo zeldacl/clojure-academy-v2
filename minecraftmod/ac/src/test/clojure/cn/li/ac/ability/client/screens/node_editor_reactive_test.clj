@@ -6,6 +6,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
             [cn.li.ability.editor.label :as label]
+            [cn.li.ac.ability.skills-catalog-v4 :as skills-catalog-v4]
             [cn.li.ac.ability.client.screens.node-editor-reactive :as editor]))
 
 ;; P6: this screen no longer carries its own copy of the truncation
@@ -216,6 +217,29 @@
     (is (= :data (:kind link)))
     (is (= [[:n/lit :value] [:n/action :arg0]]
            [(:from link) (:to link)]))))
+
+(deftest editor-effect-inputs-come-from-the-catalogs-builder
+  ;; The editor used to build its own :effect-inputs map. It omitted
+  ;; :auto-provided? on the universal capabilities, which is what
+  ;; cn.li.node.types checks before skipping :missing-vfx-input and
+  ;; :nil-vfx-input -- so the diagnostics panel reported missing-required
+  ;; errors for :age/:progress/:seed/:source-player-id that the real build
+  ;; never produces. It also never derived :required? at all.
+  ;;
+  ;; Asserted on the OUTPUT rather than by reading the call site, so
+  ;; reintroducing a copy that happens to look right still fails.
+  (let [by-id {:demo {:document {:inputs {:radius {:type :double}
+                                          :tint {:type :any :default nil}}
+                                 :graphs {:render {:nodes {:n/a {:type :context-ref
+                                                                 :key :radius}}}}}}}
+        specs (skills-catalog-v4/effect-input-specs by-id)
+        demo (:demo specs)]
+    (testing "universal capabilities are present and flagged auto-provided"
+      (is (true? (:auto-provided? (:seed demo))))
+      (is (true? (:auto-provided? (:age demo)))))
+    (testing ":required? is derived from real use, and a :default opts out"
+      (is (true? (:required? (:radius demo))) ":radius is read by the render graph")
+      (is (nil? (:required? (:tint demo))) "a declared :default means the payload may omit it"))))
 
 (deftest v4-wire-refuses-a-type-incompatible-connection
   ;; Early feedback only -- the compiler rejects this too, and would still

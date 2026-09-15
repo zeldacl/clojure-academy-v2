@@ -10,7 +10,7 @@
             [cn.li.node.api :as node-api]
             [cn.li.vfx.api :as vfx-api]))
 
-(defn- effect-input-specs
+(defn effect-input-specs
   "effect-id → VFX `:inputs` map, for compile-time spawn payload shape checks
    (`:map-keys`, literal `:type`, unknown field names).
 
@@ -19,12 +19,20 @@
    scene-capabilities-for, NOT re-listed here: a payload may legitimately
    carry :seed even though no effect declares it, and duplicating that set
    would mean a new universal silently became an 'unknown field'. Merged as
-   `{:type t}` specs so they read like any other declared input."
-  []
-  (let [universal (into {} (map (fn [[k t]] [k {:type t :auto-provided? true}]))
-                        (vfx-api/scene-capabilities-for {}))]
-    (into {}
-          (map (fn [[id e]]
+   `{:type t}` specs so they read like any other declared input.
+
+   Public, and takes the already-assembled catalog, because the node editor
+   needs the identical map: it used to build its own and omitted
+   :auto-provided?, so its diagnostics panel reported missing/nil
+   required-input errors for the universals that the real build never
+   produces. One builder is the only way the two stay honest -- the editor
+   is supposed to preview the build's verdict, not approximate it."
+  ([] (effect-input-specs (:by-id (fx-catalog/assemble))))
+  ([by-id]
+   (let [universal (into {} (map (fn [[k t]] [k {:type t :auto-provided? true}]))
+                         (vfx-api/scene-capabilities-for {}))]
+     (into {}
+           (map (fn [[id e]]
                  (let [document (:document e)
                        used (into #{}
                                   (keep (fn [form]
@@ -40,8 +48,8 @@
                                                (and (contains? used k)
                                                     (not (contains? spec :default)))
                                                (assoc :required? true))]))
-                                    declared))])))
-          (:by-id (fx-catalog/assemble)))))
+                                     declared))])))
+           by-id))))
 
 (defn- default-compile-opts []
   {:vocab combat-api/skill-vocab

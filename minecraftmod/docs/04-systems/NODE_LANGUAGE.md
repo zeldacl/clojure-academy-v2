@@ -82,6 +82,19 @@
 `eval`）读取整份文档；list/symbol 天然就是 EDN 的一部分，`(v+ a b)` 这样的调用形式
 读进来就是普通数据，没有 reader-macro 也没有 eval 面。
 
+> ⚠ **`:requires` 目前不被任何东西消费。**上例照抄了它，实际的 skills-v4 文档也都
+> 带着它，但编译（`cn.li.node.compile`）、图校验（`cn.li.node.graph-document`）、
+> 运行期派发（`cn.li.combat.run`、`cn.li.ac.ability.service.combat-runtime`）里
+> **没有一处读它**。它既不决定采样哪些 capability，也不被校验。
+>
+> 实测：**50 个 skills-v4 文档里有 38 个的 `:requires` 与它们真正读取的
+> `:context-ref` 键对不上**——两个方向都有（漏声明、多声明）。所以它也不能直接被接
+> 成检查：先得决定它的语义到底是"本技能采样的输入契约"还是别的什么，再按那个语义
+> 把内容对齐一遍。在此之前，**不要依赖它，也不要以为它拦得住什么**。
+>
+> 一个 `?x` 能不能读到值，实际由 `:capabilities` 环境决定（`:unknown-capability`
+> 会在编译期报错），跟 `:requires` 写没写无关。
+
 **Sigil**（只在符号上识别）：
 
 - `$x` — 读一个 tunable：`[:tunable :x]`。
