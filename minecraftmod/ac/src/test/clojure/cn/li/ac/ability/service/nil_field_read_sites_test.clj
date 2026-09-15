@@ -21,13 +21,16 @@
    assert content never reads outside it.
 
    A type is listed below only when its producer builds the whole map in
-   one place. Three are deliberately absent:
+   one place. One is deliberately absent and cannot be added:
 
-     :hit-result   raycast! assoc's onto the raw hit from the platform
-                   bridge, so the key set is open and a read outside the
-                   assoc'd part may still be legitimate.
-     :terrain-plan / :energy-target   producers not audited yet; absence
-                   here means unchecked, not checked-and-clean."
+     :hit-result   raycast! assoc's its normalised keys ONTO the raw hit the
+                   loader bridge returned, and that map's shape is
+                   loader-specific by design -- mcbase's raycast-normalize
+                   exists precisely because bridges disagree (:hit-x vs :x,
+                   string vs keyword :face). There is no single key set to
+                   close it against, so a read here cannot be judged from
+                   the neutral side. Absence means UNCHECKED, not
+                   checked-and-clean."
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.skills-catalog-v4 :as skills-catalog]
             [cn.li.node.api :as node-api]
@@ -71,7 +74,14 @@
    :block-placement #{:world-id :position :hit-position :drop-position
                       :line-position :place-position :hit-block-position
                       :face :target-hit? :distance :hit? :can-place? :valid?
-                      :minimum-distance}})
+                      :minimum-distance}
+   ;; cn.li.ac.ability.service.combat-runtime/energy-target-result, an
+   ;; AC-registered host query rather than a combat-core one.
+   :energy-target #{:chargeable? :block-pos :block-bounds}
+   ;; platform/terrain-propagate!: the seed state map plus the
+   ;; :mastery-breaks it assoc's on at the end.
+   :terrain-plan #{:affected-blocks :transforms :broken-blocks :entities
+                   :mastery-breaks}})
 
 (def ^:private known-unrepaired
   "Found by this check, not yet fixed, each needing a decision this test
