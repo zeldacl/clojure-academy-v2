@@ -472,11 +472,6 @@
         :component :value/field,
         :nid :n/n066,
         :inputs {:field :position}},
-       :n061
-       {:type :component,
-        :component :math/gt,
-        :nid :n/n061,
-        :inputs {:arg1 0.0}},
        :n052
        {:type :parameter-ref, :key :large-fireball-ids, :nid :n/n052},
        :n082
@@ -520,7 +515,7 @@
         :nid :n/n--entry--pulse-2-th-ebc0160c},
        :n--entry--pulse-2-then-5-do-3
        {:type :branch, :nid :n/n--entry--pulse-2-then-5-do-3},
-       :n062 {:type :local-get, :key :explosion-power, :nid :n/n062},
+       :n062 {:type :local-get, :key :is-large-fireball?, :nid :n/n062},
        :start-pulse {:type :start, :nid :n/start-pulse},
        :n077 {:type :local-get, :key :projectile, :nid :n/n077},
        :n011 {:type :context-ref, :key :budget/scan, :nid :n/n011},
@@ -830,10 +825,6 @@
     {:id :e/link078,
      :kind :data,
      :from [:n/n062 :value],
-     :to [:n/n061 :arg0]}
-    {:id :e/link079,
-     :kind :data,
-     :from [:n/n061 :value],
      :to [:n/n060 :arg0]}
     {:id :e/link080,
      :kind :data,

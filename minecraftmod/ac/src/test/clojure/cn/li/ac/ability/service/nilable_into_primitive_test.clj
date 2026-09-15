@@ -141,13 +141,13 @@
       ;; the argument for declaring them: a typed field makes a false claim
       ;; about itself checkable.
       ;;
-      ;; 19 -> 9 typed the last three records whose producers DO guarantee
+      ;; 19 -> 9 -> 8 typed the last three records whose producers DO guarantee
       ;; their numeric fields: :entity-ref (project-entity, every numeric
       ;; field written (double (or ... d))), :beam-hit (beam-trace!'s hit
       ;; record, which had been mistaken for an :entity-ref), and the
       ;; block selection before them.
       ;;
-      ;; The 9 that remain are NOT untyped for lack of effort. Every one is
+      ;; The 8 that remain are NOT untyped for lack of effort. Every one is
       ;; a read of a field whose producer can legitimately omit it, so
       ;; declaring a type would be a false claim and defaulting the value
       ;; host-side would invent data to hide a defect. They are left
@@ -168,18 +168,30 @@
       ;;   a state read x1 (mark-teleport saves a destination to session
       ;;     state and reads :distance back out). Persisted session state
       ;;     has no static shape by construction.
-      ;;   :entity-ref :explosion-power x1 (vec-deviation). The host builds
-      ;;     it as (when (instance? LargeFireball entity) ...), so nil is
-      ;;     the normal case for every other projectile. main applied
-      ;;     (or ... (cfg-double :combat.fireball-explosion-radius)) at the
-      ;;     read site; the V4 port dropped that fallback, so this throws
-      ;;     on any non-fireball. combat-core cannot supply a content
-      ;;     config value, so the fix belongs in the skill, not here.
+      ;; A fifth group was here and is now FIXED rather than documented:
+      ;; vec-deviation's (:explosion-power projectile). The host builds that
+      ;; field as (when (instance? LargeFireball entity) ...), so nil is the
+      ;; normal case for every other projectile.
+      ;;
+      ;; The skill's fallback was not missing -- (math/select is-fireball
+      ;; power radius) was wired, with :fireball-explosion-radius already
+      ;; declared and mapped to main's own config key, and math/select's
+      ;; :any params let nil pass through it harmlessly. What defeated it
+      ;; was the GUARD: the condition was (math/gt power 0.0), whose
+      ;; :double params coerce, so the test that would have chosen the
+      ;; fallback threw before the select could run. The fallback was
+      ;; unreachable, not absent.
+      ;;
+      ;; It now reads the skill's own :is-large-fireball? local -- the
+      ;; large-fireball-ids membership test it already computes -- which is
+      ;; both nil-safe and closer to main than the comparison was: main
+      ;; used `or`, falling back only on nil, while (> power 0.0) also fell
+      ;; back for a fireball whose power really is zero.
       ;;
       ;; Each is the same explicit decision :resource-pool went through: say
       ;; whether the producing expression can return nil, then either
       ;; declare it and whitelist it with the reason, or fix the producer.
-      (is (= 9 (count @sites))
+      (is (= 8 (count @sites))
           (str "field reads reaching a numeric parameter changed. Each is a"
                " potential :convert throw; justify a new one or remove it: "
                (pr-str (sort-by (juxt :skill :field) @sites)))))))
