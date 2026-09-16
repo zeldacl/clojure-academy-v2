@@ -82,7 +82,7 @@
         ^{:nid "n/n--entry--start-10-t-291742c5"}
         (:marker-position destination),
         :color [255 255 255 255],
-        :particle-chance 0.4,
+        :particle-rate 8.0,
         :direction aim},
        :audience {:type :nearby, :radius 64.0}})]
     [^{:nid "n/n--entry--start-10-else-0"}
@@ -95,7 +95,7 @@
         ^{:nid "n/n--entry--start-10-e-13ca0d39"}
         (:marker-position destination),
         :color [255 51 51 255],
-        :particle-chance 0.0,
+        :particle-rate 0.0,
         :direction aim},
        :audience {:type :nearby, :radius 64.0}})])
    ^{:nid "n/n--entry--start-11"}
@@ -147,7 +147,7 @@
         ^{:nid "n/n--entry--pulse-10-t-b35ef1e3"}
         (:marker-position destination),
         :color [255 255 255 255],
-        :particle-chance 0.4,
+        :particle-rate 8.0,
         :direction aim},
        :audience {:type :nearby, :radius 64.0}})]
     [^{:nid "n/n--entry--pulse-10-else-0"}
@@ -160,7 +160,7 @@
         ^{:nid "n/n--entry--pulse-10-e-32abedf7"}
         (:marker-position destination),
         :color [255 51 51 255],
-        :particle-chance 0.0,
+        :particle-rate 0.0,
         :direction aim},
        :audience {:type :nearby, :radius 64.0}})])
    ^{:nid "n/n--entry--pulse-11"}

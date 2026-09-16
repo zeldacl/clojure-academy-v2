@@ -33,9 +33,9 @@
   (component-values pc layout (first (layout/column layout attr)) n))
 
 (deftest spawn-reserves-and-initializes-particles-test
-  (let [{:keys [layout spawn new-buffer]} (compile/compile-emitter sparks-decl context)
+  (let [{:keys [layout spawn burst new-buffer]} (compile/compile-emitter sparks-decl context)
         pc (new-buffer)]
-    (spawn pc 0.1)
+    (spawn pc burst 0.1)
     (testing "spawn/burst reserved exactly :count particles"
       (is (= 4 (.size pc))))
     (testing "location/line spreads position.x evenly across [start,end) -- last particle does
@@ -50,9 +50,9 @@
       (is (every? zero? (col-values pc layout :age 4))))))
 
 (deftest update-integrates-and-expires-on-schedule-test
-  (let [{:keys [layout spawn update new-buffer]} (compile/compile-emitter sparks-decl context)
+  (let [{:keys [layout spawn burst update new-buffer]} (compile/compile-emitter sparks-decl context)
         pc (new-buffer)]
-    (spawn pc 0.1)
+    (spawn pc burst 0.1)
     (update pc 1.0)
     (testing "one tick: age advanced, still alive (lifetime 2.0)"
       (is (= 4 (.size pc)))
@@ -73,10 +73,10 @@
             expired one is removed, every fresh one survives, regardless of
             index order after swapRemove's swap-with-last semantics"
     (let [decl (assoc sparks-decl :capacity 8)
-          {:keys [layout spawn update new-buffer]} (compile/compile-emitter decl context)
+          {:keys [layout spawn burst update new-buffer]} (compile/compile-emitter decl context)
           pc (new-buffer)]
-      (spawn pc 0.1)
-      (spawn pc 0.1)
+      (spawn pc burst 0.1)
+      (spawn pc burst 0.1)
       (is (= 8 (.size pc)))
       ;; Force half the buffer to already be past its lifetime before ticking.
       (let [[age-col] (layout/column layout :age)
@@ -101,9 +101,9 @@
 (defn- spawn-once
   "Run one emitter's spawn stage and return its buffer + layout."
   [decl context]
-  (let [{:keys [layout spawn new-buffer]} (compile/compile-emitter decl context)
+  (let [{:keys [layout spawn burst new-buffer]} (compile/compile-emitter decl context)
         pc (new-buffer)]
-    (spawn pc 0.05)
+    (spawn pc burst 0.05)
     [pc layout]))
 
 (def ^:private scatter-decl

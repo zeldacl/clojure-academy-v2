@@ -13,7 +13,8 @@
    class with no producer. Nothing rendered and no test noticed."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.vfx.frame :as frame]
-            [cn.li.vfx.layout :as layout])
+            [cn.li.vfx.layout :as layout]
+            [cn.li.vfx.runtime :as runtime])
   (:import [cn.li.mcmod.runtime.vfx ParticleColumns]))
 
 (def ^:private full-attrs
@@ -76,3 +77,84 @@
   (let [payload (.payload (first (.batches (emitter-frame nil))))]
     (is (contains? payload :material))
     (is (nil? (:material payload)))))
+
+;; --- continuous emission ----------------------------------------------------
+;;
+;; compile-instance runs :spawn once for :burst; everything after that is
+;; :rate. Before it existed an emitter could only ever hold the particles it
+;; was created with, which is why a session effect like the teleport marker
+;; -- whose whole visual IS a steady trickle -- had nothing to migrate to.
+
+(def ^:private trickle-decl
+  "8 particles/second = 0.4/tick, the rate main's EntityTPMarking emits at
+   (one particle on a 40% roll, every tick)."
+  {:id :trickle :capacity 64 :seed 7 :rate 8.0
+   :attrs {:position :vec3 :velocity :vec3 :age :float :lifetime :float}
+   :spawn [{:module :spawn/burst :count 0}
+           {:module :spawn/set :attr :position :value [0.0 0.0 0.0]}
+           {:module :spawn/set :attr :velocity :value [0.0 1.0 0.0]}
+           {:module :spawn/set :attr :age :value 0.0}
+           {:module :spawn/set :attr :lifetime :value 100.0}]
+   :update [{:module :integrate}]})
+
+(defn- ticked
+  "A store with one `decl` instance, advanced `n` ticks of 0.05s."
+  [decl n]
+  (let [store (runtime/create-store {:e {:emitters [decl]}})]
+    (runtime/ensure! store [:k] {:effect-id :e :seed 1 :user {}})
+    (dotimes [_ n] (runtime/tick! store 0.05))
+    (-> (runtime/lookup store [:k]) :emitters first :buffer)))
+
+(deftest a-sub-one-per-tick-rate-still-emits-test
+  (testing "0.4 particles per tick accumulates rather than truncating to 0"
+    ;; The whole point of the fractional accumulator: (long 0.4) is 0, so
+    ;; dropping the remainder each tick would emit nothing, forever.
+    (is (= 0 (.size (ticked trickle-decl 1))))
+    (is (= 1 (.size (ticked trickle-decl 3))))
+    (is (= 4 (.size (ticked trickle-decl 10))))
+    (is (= 40 (.size (ticked trickle-decl 100))))))
+
+(deftest rate-zero-emits-nothing-after-the-burst-test
+  (let [burst-only (assoc trickle-decl :rate 0.0
+                          :spawn (assoc-in (:spawn trickle-decl) [0 :count] 3))]
+    (is (= 3 (.size (ticked burst-only 1))))
+    (is (= 3 (.size (ticked burst-only 50)))
+        "no :rate means the burst is all an emitter ever produces")))
+
+(deftest emission-stops-at-capacity-rather-than-overrunning-test
+  ;; reserve clamps, so a long-lived emitter parks at capacity instead of
+  ;; writing past the end of the columns.
+  (let [small (assoc trickle-decl :capacity 8)]
+    (is (= 8 (.size (ticked small 200))))))
+
+(deftest a-particle-spawned-this-tick-is-not-also-integrated-this-tick-test
+  ;; Update runs before spawn, so the newest particle sits at exactly the
+  ;; position its spawn modules wrote for the one frame it is first drawn.
+  (let [pc (ticked trickle-decl 3)
+        l (layout/build (:attrs trickle-decl) 64)
+        y-col (second (layout/column l :position))]
+    (is (= 1 (.size pc)))
+    (is (= 0.0 (double (aget (.floats pc) (+ (* y-col 64) 0))))
+        "a velocity of +1 y would have moved it had integrate run first")))
+
+(deftest continuous-emission-does-not-repeat-one-particle-test
+  ;; Draws used to be seeded on the buffer SLOT. That is fine for a burst,
+  ;; where the slots are 0..n-1, and wrong for a continuous emitter:
+  ;; kill-expired swap-removes, so once the population settles reserve
+  ;; returns the same slot forever and every particle spawned from then on
+  ;; was an exact copy of the last. Seeded on the spawn ordinal instead.
+  (let [varied (-> trickle-decl
+                   (assoc :capacity 32
+                          :attrs (assoc (:attrs trickle-decl) :size :float))
+                   (update :spawn conj {:module :spawn/set :attr :size
+                                        :value {:kind :uniform :min 0.1 :max 0.2}})
+                   (assoc-in [:spawn 4 :value] 1.0)      ; :lifetime, in seconds
+                   (assoc :update [{:module :integrate} {:module :kill-expired}]))
+        pc (ticked varied 400)
+        l (layout/build (:attrs varied) 32)
+        col (long (first (layout/column l :size)))
+        sizes (mapv #(aget (.floats pc) (+ (* col 32) (long %))) (range (.size pc)))]
+    (is (= 8 (.size pc)) "settled at rate * lifetime")
+    (is (< 1 (count (distinct sizes)))
+        (str "every live particle has the same size, so the emitter is"
+             " drawing one particle over and over: " (pr-str sizes)))))

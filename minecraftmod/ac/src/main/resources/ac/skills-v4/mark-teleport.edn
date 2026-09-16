@@ -78,7 +78,7 @@
         ^{:nid "n/n--entry--start-9-do-52e388f8"}
         (:position destination),
         :color [188 252 238 255],
-        :particle-chance 0.4},
+        :particle-rate 8.0},
        :audience {:type :nearby, :radius 64.0}})]
     [])
    ^{:nid "n/n--entry--start-10"}
@@ -126,7 +126,7 @@
         ^{:nid "n/n--entry--pulse-8-do-4b645599"}
         (:position destination),
         :color [188 252 238 255],
-        :particle-chance 0.4},
+        :particle-rate 8.0},
        :audience {:type :nearby, :radius 64.0}})]
     [])
    ^{:nid "n/n--entry--pulse-9"}

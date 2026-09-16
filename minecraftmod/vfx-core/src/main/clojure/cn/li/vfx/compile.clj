@@ -84,7 +84,15 @@
    the emitter's seed with the particle index rather than drawing from a
    shared generator whose position depends on how many particles ran
    before it. `salt` separates the channels -- two axes of one spread, or
-   two modules of one stage, would otherwise move in lockstep."
+   two modules of one stage, would otherwise move in lockstep.
+
+   `index` is the particle's SPAWN ORDINAL, not its slot in the buffer.
+   Those coincide for a one-shot burst, which is why seeding on the slot
+   looked correct, but they diverge completely for a continuous emitter:
+   kill-expired swap-removes, so at steady state reserve hands out the
+   SAME slot every time, and every particle spawned from then on would be
+   an exact copy of the last -- one uniform cloud where the original
+   speckles."
   ^long [^long base ^long index ^long salt]
   (rng/next-seed (unchecked-add (unchecked-multiply base 1000003)
                                 (unchecked-add (unchecked-multiply index 131)
@@ -105,27 +113,32 @@
 
 (defn- scalar-writer [f layout attr]
   (let [cap (long (:capacity layout)) col (float-col layout attr)]
-    (fn [^ParticleColumns pc ^long from ^long to ^long seed]
-      (let [^floats a (.floats pc)]
+    (fn [^ParticleColumns pc from to seed ordinal]
+      (let [^floats a (.floats pc) from (long from) to (long to)
+            seed (long seed) ordinal (long ordinal)]
         (loop [i from]
           (when (< i to)
-            (aset a (+ (* col cap) i) (float (f i seed)))
+            (aset a (+ (* col cap) i) (float (f (+ ordinal (- i from)) seed)))
             (recur (unchecked-inc i))))))))
 
 (defn- vec3-writer [f layout attr]
   (let [cap (long (:capacity layout)) [cx cy cz] (vec3-cols layout attr)]
-    (fn [^ParticleColumns pc ^long from ^long to ^long seed]
-      (let [^floats a (.floats pc)]
+    (fn [^ParticleColumns pc from to seed ordinal]
+      (let [^floats a (.floats pc) from (long from) to (long to)
+            seed (long seed) ordinal (long ordinal)]
         (loop [i from]
           (when (< i to)
-            (let [[x y z] (f i seed (- to from) (- i from))]
+            ;; f's first argument is the spawn ordinal (what seeds the
+            ;; draw); its last is the position WITHIN this reservation
+            ;; (what :line interpolates along).
+            (let [[x y z] (f (+ ordinal (- i from)) seed (- to from) (- i from))]
               (aset a (+ (* cx cap) i) (float x))
               (aset a (+ (* cy cap) i) (float y))
               (aset a (+ (* cz cap) i) (float z)))
             (recur (unchecked-inc i))))))))
 
 (defn- spawn-value-writer
-  "value + target attribute -> (fn [pc from to seed])."
+  "value + target attribute -> (fn [pc from to seed ordinal])."
   [value attr layout context]
   (let [value (resolve-field value context)]
     (cond
@@ -194,10 +207,16 @@
   ;; :salt is assigned by compile-spawn-stage from the emitter's own :seed
   ;; and this module's position, never declared per module -- two modules
   ;; that happened to name the same seed would generate correlated values.
+  ;;
+  ;; :ordinal-box is also the stage's, a (long-array 1) it sets before
+  ;; running its modules. Read here rather than taken as an argument so
+  ;; spawn and update modules keep one compiled shape; see
+  ;; compile-spawn-stage for why the ordinal exists at all.
   (let [write (spawn-value-writer (:value decl) (:attr decl) layout context)
-        salt (long (or (:salt decl) 0))]
+        salt (long (or (:salt decl) 0))
+        ^longs ordinal-box (or (:ordinal-box decl) (long-array 1))]
     (fn [^ParticleColumns pc ^long from ^long to ^double _dt]
-      (write pc from to salt))))
+      (write pc from to salt (aget ordinal-box 0)))))
 
 (defmethod compile-module :forces/apply [decl layout _context]
   (let [[gx gy gz] (vec3-of (or (:gravity decl) [0.0 0.0 0.0]))
@@ -281,28 +300,52 @@
             (recur (dec i))))))))
 
 (defn compile-spawn-stage
-  "The compiled closure for one spawn-stage module list: reserves
-   :spawn/burst's :count new slots, then runs every remaining module --
-   each a :spawn/set writing one attribute -- over exactly that new range.
-   Returns (fn [^ParticleColumns pc dt] -> nil).
+  "The compiled closure for one spawn-stage module list: reserves `n` new
+   slots, then runs every module -- each a :spawn/set writing one attribute
+   -- over exactly that new range. Returns (fn [^ParticleColumns pc n dt]).
+
+   `n` is an ARGUMENT rather than :spawn/burst's baked-in :count, because
+   the same initializer list serves both ways an emitter produces
+   particles: the one-time burst at ensure! time and the continuous
+   :rate the runtime accumulates every tick. Baking the count in made the
+   stage runnable only once, which is why emitters could not emit.
 
    `seed` is the EMITTER's, salted here by each module's position so two
    modules drawing from a range do not move in lockstep. Modules never
    carry a seed of their own."
   ([modules layout context] (compile-spawn-stage modules layout context 0))
   ([modules layout context seed]
-   (let [count-decl (first (filter #(= :spawn/burst (:module %)) modules))
-         n (long (or (:count count-decl) 0))
+   (let [;; Monotonic count of particles this stage has ever spawned. The
+         ;; draws are seeded on it rather than on the buffer slot, which
+         ;; repeats forever once kill-expired starts swap-removing --
+         ;; see particle-seed. One box per compiled stage, and
+         ;; compile-instance compiles each emitter per instance, so two
+         ;; live instances of one effect do not share a counter.
+         ordinal-box (long-array 1)
          init-fns (into []
                         (map-indexed (fn [i decl]
-                                       (compile-module (assoc decl :salt
-                                                              (+ (* 977 (long seed)) i))
+                                       (compile-module (assoc decl
+                                                              :salt (+ (* 977 (long seed)) i)
+                                                              :ordinal-box ordinal-box)
                                                        layout context)))
                         (remove #(= :spawn/burst (:module %)) modules))]
-     (fn [^ParticleColumns pc ^double dt]
+     (fn [^ParticleColumns pc ^long n ^double dt]
        (when (pos? n)
-         (let [from (long (.reserve pc (int n))) to (+ from n)]
-           (doseq [f init-fns] (f pc from to dt))))))))
+         (let [from (long (.reserve pc (int n)))
+               ;; reserve clamps to capacity, so a full buffer yields
+               ;; from == capacity and an empty range rather than writing
+               ;; past the end.
+               to (min (long (.capacity pc)) (+ from n))]
+           (when (< from to)
+             (doseq [f init-fns] (f pc from to dt))
+             (aset ordinal-box 0 (+ (aget ordinal-box 0) (- to from))))))))))
+
+(defn spawn-burst-count
+  "The :count of the module list's :spawn/burst, or 0. Separate from
+   compile-spawn-stage so the count is data the runtime schedules rather
+   than a constant sealed inside the closure."
+  ^long [modules]
+  (long (or (:count (first (filter #(= :spawn/burst (:module %)) modules))) 0)))
 
 (defn compile-update-stage
   "modules run in order over the WHOLE live range each tick; kill-expired,
@@ -315,12 +358,14 @@
         (doseq [f fns] (f pc 0 to dt))))))
 
 (defn compile-emitter
-  "decl: {:id :capacity :seed n :attrs {attr-name type}
+  "decl: {:id :capacity :seed n :rate particles-per-second
+          :material {...} :attrs {attr-name type}
           :spawn [...] :update [...]}.
    context: {k already-resolved-value}, e.g. this effect instance's :user
    capability values, resolved once by the caller before compiling (see
    this namespace's docstring, scope cut 1).
-   Returns {:layout ... :spawn (fn [pc dt]) :update (fn [pc dt])
+   Returns {:layout ... :material ... :burst n :rate r
+            :spawn (fn [pc n dt]) :update (fn [pc dt])
             :new-buffer (fn [] a fresh ParticleColumns)}."
   [decl context]
   (let [layout (layout/build (:attrs decl) (long (:capacity decl)))]
@@ -329,6 +374,12 @@
      ;; per-particle column: an int-bank :color column would cost one int
      ;; per particle to say the same thing for all of them.
      :material (:material decl)
+     ;; Niagara's two spawn sources, kept as separate data: :burst is the
+     ;; one-time reservation at ensure! time, :rate is particles per
+     ;; SECOND that the runtime accumulates each tick (matching dt's unit
+     ;; and :integrate's). An emitter may declare either, both or neither.
+     :burst (spawn-burst-count (:spawn decl))
+     :rate (double (or (resolve-field (:rate decl) context) 0.0))
      :spawn (compile-spawn-stage (:spawn decl) layout context
                                  (long (or (:seed decl) 0)))
      :update (compile-update-stage (:update decl) layout context)

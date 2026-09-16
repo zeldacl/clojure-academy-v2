@@ -6,8 +6,46 @@
  {:position {:type :vec3},
   :direction {:type :vec3, :default [0.0 0.0 1.0]},
   :color {:type :any},
-  :particle-chance {:type :float}},
+  :particle-rate {:type :float}},
  :entry-triggers {:render :vfx/render},
+ :emitters
+ [{:id :marker-motes,
+   :capacity 256,
+   :seed 4211,
+   :rate [:context :particle-rate],
+   :attrs
+   {:position :vec3,
+    :velocity :vec3,
+    :size :float,
+    :alpha :float,
+    :age :float,
+    :lifetime :float},
+   :material
+   {:particle
+    {:texture "academy:textures/effects/tp_particle.png",
+     :color [255 255 255 255],
+     :size 0.1,
+     :fade-out 1.0}},
+   :spawn
+   [{:module :spawn/burst, :count 0}
+    {:module :spawn/set,
+     :attr :position,
+     :value
+     {:kind :box,
+      :center [:context :position],
+      :spread {:x [-1.0 1.0], :y [-1.4 0.0], :z [-1.0 1.0]}}}
+    {:module :spawn/set,
+     :attr :velocity,
+     :value {:kind :range, :x [-0.6 0.6], :y [0.0 1.0], :z [-0.6 0.6]}}
+    {:module :spawn/set,
+     :attr :size,
+     :value {:kind :uniform, :min 0.1, :max 0.2}}
+    {:module :spawn/set,
+     :attr :alpha,
+     :value {:kind :uniform, :min 153.0, :max 204.0}}
+    {:module :spawn/set, :attr :age, :value 0.0}
+    {:module :spawn/set, :attr :lifetime, :value 2.0}],
+   :update [{:module :integrate} {:module :kill-expired}]}],
  :phases
  {:render
   [^{:nid "n/n--entry--marker"}
@@ -16,24 +54,5 @@
      :color ?color,
      :direction ?direction,
      :age ?age})
-   ^{:nid "n/n--entry--default-0"}
-   (emitter
-    {:rate-per-tick 1.0,
-     :limit 256,
-     :anchor-offset-y 1.62,
-     :particle
-     {:life-ticks 20,
-      :color [0 255 0 255],
-      :spread {:x 1.0, :y 1.4, :z 1.0},
-      :speed 0.08,
-      :fade-in-ticks 5,
-      :size {:min 0.1, :max 0.2},
-      :material :additive,
-      :alpha {:min 153, :max 204},
-      :fade-out-ticks 20,
-      :velocity {:x 0.03, :y 0.05, :z 0.03},
-      :texture "academy:textures/effects/tp_particle.png"},
-     :anchor ?position,
-     :chance ?particle-chance})
    ^{:nid "n/n--entry--default-1"}
    (finish {:outcome :performed})]}}

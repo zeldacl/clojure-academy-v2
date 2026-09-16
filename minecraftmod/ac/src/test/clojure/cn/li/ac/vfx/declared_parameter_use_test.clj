@@ -103,6 +103,20 @@
           :let [text (slurp f)]]
       [(edn/read-string text) text])))
 
+(defn- emitter-context-reads
+  "Parameters an emitter declaration reads. An emitter is data, not a
+   program, so it names a parameter as [:context :k] rather than ?k, and
+   it sits ABOVE :phases in canonical section order -- the ?-scan below
+   sees neither the spelling nor the section. Missing this would have made
+   a parameter that genuinely drives an emitter (the teleport marker's
+   emission rate, which content sets to 0 to stop emission entirely) look
+   like a declared-but-unread leftover."
+  [doc]
+  (into #{}
+        (comp (filter #(and (vector? %) (= 2 (count %)) (= :context (first %))))
+              (map second))
+        (tree-seq coll? seq (:emitters doc))))
+
 (deftest every-declared-parameter-has-a-reader-test
   (let [offenders
         (for [[doc text] (vfx-docs)
@@ -110,6 +124,7 @@
                     body (subs text (or (str/index-of text ":phases") 0))
                     allowed (set/union runtime-read
                                        universal-side-channel
+                                       (emitter-context-reads doc)
                                        (get side-channel-read effect-id #{})
                                        (get incomplete-conversions effect-id #{}))
                     unread (remove (fn [param]

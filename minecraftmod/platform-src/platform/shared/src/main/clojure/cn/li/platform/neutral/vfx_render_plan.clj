@@ -584,19 +584,31 @@
                      (+ lo (* (- hi lo) (.nextDouble (java.util.Random. (long seed)))))))
     :else nil))
 
-(defn- fade-envelope
-  "The pre-V4 particle alpha envelope: ramp in over :fade-in-ticks, hold,
-   then ramp out over the last :fade-out-ticks of :life-ticks. Both ends are
-   optional and a particle with neither holds full alpha for its life."
-  ^double [particle ^double age]
-  (let [life (double (number-or (:life-ticks particle) 0.0))
-        fade-in (double (number-or (:fade-in-ticks particle) 0.0))
-        fade-out (double (number-or (:fade-out-ticks particle) 0.0))
-        in (if (and (pos? fade-in) (< age fade-in)) (/ age fade-in) 1.0)
+(defn- fade-ratio
+  "The pre-V4 particle alpha envelope: ramp in over `fade-in`, hold, then
+   ramp out over the last `fade-out` of `life`. Both ends are optional and
+   a particle with neither holds full alpha for its life.
+
+   Deliberately unit-agnostic -- it only requires that all four arguments
+   share one unit. They do not across its two callers: scene-op particles
+   count in ticks, emitter particle columns integrate in seconds (see
+   vfx-core's particle integrate module). Reading the numbers out of a map with
+   :*-ticks names, as this used to, is exactly how that becomes a silent
+   2.5x error in one of them."
+  ^double [^double age ^double life ^double fade-in ^double fade-out]
+  (let [in (if (and (pos? fade-in) (< age fade-in)) (/ age fade-in) 1.0)
         out (if (and (pos? life) (pos? fade-out) (> age (- life fade-out)))
               (/ (- life age) fade-out)
               1.0)]
     (max 0.0 (min 1.0 (* in out)))))
+
+(defn- fade-envelope
+  "fade-ratio over a scene-op :particle map, whose keys are all in ticks."
+  ^double [particle ^double age]
+  (fade-ratio age
+              (double (number-or (:life-ticks particle) 0.0))
+              (double (number-or (:fade-in-ticks particle) 0.0))
+              (double (number-or (:fade-out-ticks particle) 0.0))))
 
 (defn- particle-color
   "The particle's own colour with its alpha envelope applied.
@@ -615,15 +627,15 @@
      (long (Math/round ^double (max 0.0 (min 255.0 faded))))]))
 
 (defn- layout-column
-  "cn.li.vfx.layout's :cols entry for an attribute, or nil if the layout
+  "vfx-core's particle-layout :cols entry for an attribute, or nil if the layout
    dead-stripped it. Read out of the plain map the batch carries rather
-   than via cn.li.vfx.layout/column -- platform-shared must not gain a
+   than via vfx-core's own column accessor -- platform-shared must not gain a
    dependency on vfx-core just to do a get-in."
   [layout attr]
   (get-in layout [:cols attr]))
 
 (defn- packed-rgba
-  "Unpack the single int column cn.li.vfx.layout packs a :color attribute
+  "Unpack the single int column vfx-core's particle layout packs a :color attribute
    into. The layout deliberately packs 4 channels into one int rather than
    4 columns, so the renderer is where they come apart again."
   [^long packed]
@@ -640,13 +652,13 @@
    therefore emitted here, which every existing mc-* quad backend can consume
    without importing Minecraft classes into VFX core.
 
-   Reads cn.li.vfx.layout's columns off the ParticleColumns the emitter
+   Reads vfx-core's particle-layout columns off the ParticleColumns the emitter
    stack actually fills. It used to take a ParticleBuffer -- a class with no
    producer anywhere in the repo -- behind an `instance?` guard, so every
    emitter batch failed the guard and drew nothing. ParticleColumns is its
    successor; the guard was the last thing still naming the predecessor.
 
-   Every column but :position is optional, because cn.li.vfx.layout
+   Every column but :position is optional, because vfx-core's particle layout
    dead-strips any attribute no module writes: an emitter that never varies
    its size simply has no :size column, and takes the material's size."
   [^ParticleColumns particles layout material]
@@ -684,9 +696,14 @@
                   ;; envelope is the emitter-wide ramp in and out.
                   a0 (if alpha-col (at alpha-col i) (double (nth rgb 3)))
                   a0 (if color-col a0 (min a0 base-alpha))
+                  ;; Seconds on every argument: the :age and :lifetime
+                  ;; columns are integrated in seconds, so the emitter's
+                  ;; own fade pair is declared in seconds too rather than
+                  ;; borrowing the tick-named keys of the scene-op path.
                   env (if (and age-col life-col)
-                        (fade-envelope (assoc spec :life-ticks (at life-col i))
-                                       (at age-col i))
+                        (fade-ratio (at age-col i) (at life-col i)
+                                    (double (number-or (:fade-in spec) 0.0))
+                                    (double (number-or (:fade-out spec) 0.0)))
                         1.0)
                   a (long (Math/round (max 0.0 (min 255.0 (* a0 env)))))]
               {:kind :quad

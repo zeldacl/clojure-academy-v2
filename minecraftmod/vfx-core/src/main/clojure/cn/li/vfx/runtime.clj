@@ -75,12 +75,14 @@
 
 (defn- compile-instance
   "Reuses store's cached scene program (see compiled-scene-program above)
-   and compiles every emitter fresh, then runs each emitter's OWN :spawn
-   stage exactly ONCE here -- :spawn/burst means burst, a one-time
-   reservation, not a per-tick action; tick! below only ever runs :update
-   afterward. A continuously-emitting effect (a :spawn/rate-style module
-   re-triggering reservation on its own schedule) is a natural follow-up
-   this pass does not implement or claim to.
+   and compiles every emitter fresh, then runs each emitter's :spawn stage
+   here for its one-time :burst count. Continuous emission is the
+   emitter's :rate, which tick! accumulates -- see its docstring.
+
+   Each emitter gets its own (double-array 1) spawn accumulator, because a
+   :rate below one particle per tick (the teleport marker emits 8 per
+   second, i.e. 0.4 per tick) would otherwise truncate to zero every tick
+   and emit nothing at all.
 
    Also precomputes :render-views, the {:layout :buffer} view sample-
    frame! hands to its caller -- built once here instead of via select-
@@ -96,8 +98,9 @@
         emitters (mapv (fn [emitter-decl]
                          (let [compiled (pcompile/compile-emitter emitter-decl user)
                                buffer ((:new-buffer compiled))]
-                           ((:spawn compiled) buffer 0.0)
-                           (assoc compiled :buffer buffer)))
+                           ((:spawn compiled) buffer (long (:burst compiled)) 0.0)
+                           (assoc compiled :buffer buffer
+                                  :spawn-debt (double-array 1))))
                        (:emitters decl))
         render-views (mapv #(select-keys % [:layout :buffer :material]) emitters)]
     {:scene-program scene-program :emitters emitters :render-views render-views}))
@@ -167,9 +170,14 @@
    gte ?age ?fade-at)` -- so it must move in whole ticks regardless of
    `dt`, unlike particle-buffer age/lifetime, which genuinely does
    integrate over `dt` seconds inside each emitter's own :update stage
-   above). Spawn already ran once at ensure! time (see compile-instance)
-   -- only :update runs here, every tick, over whatever the buffer
-   currently holds.
+   above). The one-time :burst already ran at ensure! time (see
+   compile-instance); what runs here is :update followed by whatever whole
+   number of particles the emitter's :rate has accumulated.
+
+   Update BEFORE spawn, so a particle just reserved this tick is not also
+   integrated this tick: it must be drawn once at exactly the position its
+   spawn modules wrote, which is what the pre-V4 originals did by spawning
+   an entity that only starts moving on the following tick.
 
    :age bumps in place via aset on its own (long-array 1) -- see ensure!'s
    docstring -- so this no longer touches :instances at all (used to
@@ -178,8 +186,16 @@
    which was thrown away one tick later)."
   [store ^double dt]
   (doseq [[_ instance] @(:instances store)]
-    (doseq [{:keys [buffer update]} (:emitters instance)]
-      (update buffer dt))
+    (doseq [{:keys [buffer update spawn rate spawn-debt]} (:emitters instance)]
+      (update buffer dt)
+      (when (pos? (double rate))
+        (let [^doubles debt spawn-debt
+              pending (+ (aget debt 0) (* (double rate) dt))
+              n (long pending)]
+          (when (pos? n) (spawn buffer n dt))
+          ;; Keep the fraction, do not drop it -- that is the whole reason
+          ;; a sub-one-per-tick rate emits at all.
+          (aset debt 0 (- pending n)))))
     (let [^longs age-box (:age instance)]
       (aset age-box 0 (unchecked-inc (aget age-box 0))))))
 

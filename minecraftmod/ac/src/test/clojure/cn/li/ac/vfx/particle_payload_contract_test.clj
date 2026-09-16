@@ -45,12 +45,17 @@
 
 (def ^:private known-dropped
   "Keys effects write that reach no renderer. Each is a visual the pre-V4
-   implementation had: alpha/colour/material are its tint and blending,
-   the fade pair is its alpha envelope, velocity/speed/spread its motion,
-   and life-ticks its lifetime. Shrinking this list means implementing the
-   key in vfx-render-plan, not deleting it from content -- the values are
-   the originals' own numbers."
-  #{:material :particle-type :speed :spread :velocity})
+   implementation had. Shrinking this list means implementing the key or
+   migrating its effect to the emitter stack, not deleting it from content
+   -- the values are the originals' own numbers.
+
+   :material, :spread and :velocity left when teleport-marker moved to an
+   :emitters declaration. They were never implementable on this path:
+   motion needs per-particle state, which a scene op redrawn from scratch
+   each frame does not have and a ParticleColumns does. That is the
+   difference between the two paths, and it is why the remaining ten
+   scene-:emitter effects are migrations rather than renderer work."
+  #{:particle-type :speed})
 
 (defn- particle-maps
   "[[effect-id {particle-key value}] ...] for every :particle map written by

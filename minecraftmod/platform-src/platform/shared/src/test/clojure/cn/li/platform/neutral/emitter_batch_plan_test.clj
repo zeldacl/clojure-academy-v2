@@ -15,7 +15,7 @@
    POSITION against the columns that were actually filled.
 
    The layout map here is written out rather than built, because
-   platform-shared must not depend on vfx-core. cn.li.vfx.layout is the
+   platform-shared must not depend on vfx-core, whose layout builder is the
    producer, and emitter-layout-matches-the-render-plan-test over in
    vfx-core pins build's output to exactly this map -- that pair is what
    keeps the two ends from drifting apart again."
@@ -26,7 +26,7 @@
 (def ^:private capacity 4)
 
 (def ^:private layout
-  "cn.li.vfx.layout/build over
+  "vfx-core's particle layout builder over
      {:age :float :alpha :float :color :color :lifetime :float
       :position :vec3 :size :float}
    which assigns columns by sorted attribute name, floats and ints in
@@ -38,7 +38,7 @@
           :position [3 4 5] :size [6]}})
 
 (defn- rgba->packed
-  "The single int cn.li.vfx.layout packs a :color attribute into."
+  "The single int vfx-core's particle layout packs a :color attribute into."
   [[r g b a]]
   (bit-or (bit-shift-left (long a) 24) (bit-shift-left (long r) 16)
           (bit-shift-left (long g) 8) (long b)))
@@ -65,7 +65,7 @@
 
 (defn- emitter-plan
   "One emitter batch payload through the neutral plan, exactly as
-   cn.li.vfx.frame/->java-frame now builds it."
+   vfx-core's frame builder now builds it."
   [particles spec]
   (plan/neutral-op->plan
    {:operation :draw-batch
@@ -120,7 +120,12 @@
   ;; The envelope is emitter-wide (it lives on the material spec) but the
   ;; age and lifetime it reads are per-particle columns, so two particles
   ;; spawned at different times must be at different points of the ramp.
-  (let [spec {:texture "t.png" :fade-in-ticks 5 :fade-out-ticks 10}
+  ;;
+  ;; :fade-in / :fade-out, not the :fade-in-ticks / :fade-out-ticks of the
+  ;; scene-op path: these are compared against columns integrated in
+  ;; SECONDS, and borrowing the tick-named keys is how that becomes a
+  ;; silent 20x error.
+  (let [spec {:texture "t.png" :fade-in 5 :fade-out 10}
         at (fn [age] (nth (:color (first (quads (emitter-plan
                                                  [{:position [0.0 0.0 0.0] :size 0.5
                                                    :alpha 200 :age age :lifetime 20.0
@@ -135,7 +140,7 @@
     (is (= 0 (at 20.0)))))
 
 (deftest a-dead-stripped-column-falls-back-rather-than-crashing-test
-  ;; cn.li.vfx.layout dead-strips any attribute no module writes, so an
+  ;; vfx-core's particle layout dead-strips any attribute no module writes, so an
   ;; emitter with a constant size genuinely has no :size column. That must
   ;; take the material's size, not NPE on a nil column index.
   (let [bare {:capacity capacity :float-cols 3 :int-cols 0
