@@ -281,7 +281,9 @@
     ;; sample's own) and :stop-on-destroy? (a loop stops by no longer being
     ;; re-synced), :camera-fov's :duration-ticks (VfxOutput has no slot),
     ;; and :line's :color (the arm forwards :material only).
-    (is (= 33 (count (any-typed rows)))
+    ;; 33 -> 31: the two scene nodes that take a :color now take :rgba.
+    ;; One shipped effect was passing a BOOLEAN into that slot.
+    (is (= 31 (count (any-typed rows)))
         "vfx vocab :any-typed param count changed")
     (is (= 56 (count (filter :optional? rows)))
         "vfx vocab optional param count changed")

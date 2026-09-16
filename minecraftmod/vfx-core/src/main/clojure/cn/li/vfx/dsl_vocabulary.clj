@@ -60,7 +60,7 @@
    ;; :do sequence, so a faded leaf call now just passes its own computed
    ;; alpha directly).
    :ring
-   (node {:center (p* :vec3) :radius (p* :double) :segments (opt :long 16) :color (opt :any nil)
+   (node {:center (p* :vec3) :radius (p* :double) :segments (opt :long 16) :color (opt :rgba nil)
          :alpha (opt :double 1.0)})
    ;; Main Storm Wing's four TornadoEffect columns. The renderer owns the
    ;; randomized ring stack, scrolling texture and column transform; the
@@ -83,7 +83,7 @@
           :color (p* :any) :age (opt :double 0.0)})
    :target-box
    (node {:center (p* :vec3) :width (p* :double) :height (p* :double)
-          :color (opt :any nil)})
+          :color (opt :rgba nil)})
    :beam
    (node {:start (p* :vec3) :end (p* :vec3) :layers (opt :any nil) :grow-ticks (opt :long 0)
          :alpha (opt :double 1.0)})

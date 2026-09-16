@@ -27,7 +27,10 @@
    exemption a written claim, and leaves anything unlisted genuinely
    unread -- which is how :bounds-radius surfaced: declared by four
    effects, passed at thirteen skill sites, and named in no source file on
-   this branch or on main."
+   this branch or on main.
+
+   The parameters that remain unread are classified, not pending: see
+   incomplete-conversions below."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.set :as set]
@@ -48,14 +51,28 @@
 
 (def ^:private universal-side-channel #{:local-walk-speed})
 
-(def ^:private unverified
-  "Declared parameters this check cannot yet place. NOT an exemption list
-   -- each is a candidate the sweep found and nobody has traced to a
-   reader or proven dead. Shrinking this is real work; growing it silently
-   is what the assertion below prevents.
+(def ^:private incomplete-conversions
+  "Parameters declared for a visual the v4 effect body does not implement.
 
-   Kept as data rather than deleted so the count cannot drift: a NEW
-   unread parameter fails the test even while these remain."
+   NOT unknowns, and not exemptions. Each was traced: the parameter names
+   a feature of that skill's pre-V4 fx implementation, and the v4 :render
+   phase emits a fraction of it -- typically one generic emitter or ring
+   with its rates hardcoded. Spot-checked against the originals rather
+   than assumed: mine-detect really does carry a rescan interval and a
+   five-tier colour table, and blood-retrograde really does run a
+   splash/spray system with per-splash TTLs.
+
+   :directed-blastwave-charge used to be listed here and is not any more,
+   which is what finishing one looks like: its pre-V4 charge-ops gives the
+   exact formula (progress = ticks / max, radius = 0.1 + 0.16 * progress,
+   a 0.22-rate sine pulse, alpha 220 or 170 by :punched?), so all four of
+   its parameters now drive the ring. It also shipped passing :punched? --
+   a BOOLEAN -- as the ring's :color, which is why :color is now :rgba.
+
+   Finishing the rest is content work against those references, and some
+   may need scene vocabulary that does not exist yet (the emitter has no
+   frame animation or duplicate control for blood-retrograde's sprays).
+   That is a known cost, not an open question."
   '{:arc-channel-session #{:charge-ticks :visual-max-ticks}
     :arc-ring-fade-audio #{:arc-count-limit :arc-life-ticks :arc-radius
                            :arc-spacing :end :start}
@@ -70,7 +87,6 @@
                                :splash-frame-duration-ms :splash-life-ticks
                                :splash-texture-pattern :spray-duplicates
                                :surface-hits :target-height :target-width}
-    :directed-blastwave-charge #{:max-charge-ticks}
     :particle-burst-trail-transient #{:end :fade-in :fade-out :radius
                                       :spacing :velocity}
     :target-mark-session #{:ttl-ticks}
@@ -92,7 +108,7 @@
                     allowed (set/union runtime-read
                                        universal-side-channel
                                        (get side-channel-read effect-id #{})
-                                       (get unverified effect-id #{}))
+                                       (get incomplete-conversions effect-id #{}))
                     unread (remove (fn [param]
                                      (or (allowed param)
                                          (str/includes? body (str "?" (name param)))))
@@ -104,16 +120,17 @@
              " them and the editor offers them -- but no program, runtime or"
              " side-channel reader names them: " (pr-str (vec offenders))))))
 
-(deftest unverified-list-does-not-name-a-parameter-that-is-gone-test
+(deftest incomplete-conversion-list-does-not-name-a-parameter-that-is-gone-test
   ;; The list above is only honest while every entry still exists. A
-  ;; parameter deleted from an effect must leave it, or the list quietly
+  ;; parameter deleted from an effect -- or an effect finished, as
+  ;; :directed-blastwave-charge was -- must leave it, or the list quietly
   ;; becomes an exemption for a name nothing declares.
   (let [declared (into {} (map (fn [[doc _]] [(:id doc) (set (keys (:parameters doc)))]))
                        (vfx-docs))
-        stale (for [[effect-id params] unverified
+        stale (for [[effect-id params] incomplete-conversions
                     :let [gone (remove (get declared effect-id #{}) params)]
                     :when (seq gone)]
                 {:effect effect-id :no-longer-declared (vec (sort gone))})]
     (is (= [] (vec stale))
-        (str "the unverified list names parameters the effect no longer"
+        (str "the incomplete-conversion list names parameters the effect no longer"
              " declares: " (pr-str (vec stale))))))

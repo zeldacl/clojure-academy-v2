@@ -55,6 +55,13 @@
     ;; missing key is the normal "not listed" case rather than an error.
     ;; See the note at the end of combat's field-types.
     :terrain-spread :energy-cost-table :block-transform-table
+    ;; An [r g b a] colour. Worth a tag for one reason: while :color was
+    ;; :any a scene node accepted anything in that slot, and one shipped
+    ;; effect passed a BOOLEAN -- the ring drew in whatever a bool renders
+    ;; as. Content that carries a colour through an :any-typed effect
+    ;; parameter still passes, so this narrows exactly the case that was
+    ;; wrong without demanding every colour be re-declared at once.
+    :rgba
     ;; What marching a ray THROUGH a wall found: the first clear spot past
     ;; it, plus whether one exists at all. Not a :destination -- that record
     ;; describes where a ray STOPPED, has no :available?, and penetrate-
