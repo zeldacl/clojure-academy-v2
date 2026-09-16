@@ -13,6 +13,6 @@
  :params [{:name origin :type :vec3} {:name radius :type :double} {:name attempts :type :long}
           {:name hardness-max :type :double}]
  :do [(let blocks (target/blocks {:shape {:type :sphere :center origin :radius radius}
-                                  :projection {:max-hardness hardness-max} :limit attempts}))
+                                  :max-hardness hardness-max :limit attempts}))
       (each candidate blocks
         (block/break {:position (:position candidate)}))]}

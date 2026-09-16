@@ -56,6 +56,57 @@
       (when-let [[_ ks] (re-find #"\[\{:keys \[([^\]]*)\]" src)]
         (set (str/split (str/trim ks) #"\s+"))))))
 
+(def ^:private platform-fn-names
+  (into #{} (map str) (keys (ns-interns 'cn.li.combat.platform))))
+
+(defn- source-of [sym-name]
+  (repl/source-fn (symbol "cn.li.combat.platform" sym-name)))
+
+(defn- effective-source
+  "A handler's source plus that of any platform fn it calls.
+
+   Several handlers are thin arity/guard wrappers that forward the whole
+   request to an inner fn -- raycast! -> basic-raycast is the shape -- so
+   the params they serve are named one level down. One level is enough for
+   every handler here and keeps the check from chasing the whole module."
+  [handler-var]
+  (let [{:keys [ns name]} (meta handler-var)
+        own (repl/source-fn (symbol (str (ns-name ns)) (str name)))]
+    (when own
+      (->> (re-seq #"[a-z][\w!?*<>=-]*" own)
+           (filter platform-fn-names)
+           (remove #{(str name)})
+           (keep source-of)
+           (cons own)
+           (str/join "\n")))))
+
+(deftest every-declared-param-is-mentioned-by-its-handler-test
+  ;; The mirror of the check below, and the half that catches the opposite
+  ;; failure: content sets a param the host ignores. That is how
+  ;; :target/directional-destination-query's :policy was found -- declared,
+  ;; passed the whole way down, and never destructured by the callee.
+  ;;
+  ;; Deliberately weak: it asks whether the param NAME appears anywhere in
+  ;; the handler's source, not whether it is destructured, because handlers
+  ;; legitimately read via (:key request) or forward the whole request on.
+  ;; A name that appears nowhere cannot be being read by any spelling.
+  (let [offenders
+        (for [[handler-var capabilities] capabilities-by-handler-var
+              :let [src (effective-source handler-var)]
+              :when src
+              :let [declared (apply set/union
+                                    (map #(get params-by-capability % #{}) capabilities))
+                    unread (remove #(str/includes? src %) declared)]
+              :when (seq unread)]
+          {:handler (symbol (str (:name (meta handler-var))))
+           :capabilities (vec (sort capabilities))
+           :never-mentioned (vec (sort unread))})]
+    (is (= [] (vec offenders))
+        (str "these params are declared on a node -- so content can set them"
+             " and the editor offers them -- but their handler never names"
+             " them, so the value is silently dropped: "
+             (pr-str (vec offenders))))))
+
 (deftest handlers-only-read-keys-some-node-declares-test
   (is (seq capabilities-by-handler-var)
       "no handler vars resolved -- the check would pass vacuously")

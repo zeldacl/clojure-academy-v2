@@ -78,7 +78,9 @@
       ;; four :policy params could finally name a shape (one per handler),
       ;; and the fifth was deleted outright because its callee never read
       ;; it.
-      (is (= 49 (count anys))
+      ;; 49 -> 47: :projectile/redirect's :difficulty and :target/blocks'
+      ;; :projection, both declared and read by no handler.
+      (is (= 47 (count anys))
           (str "combat vocab :any-typed params changed. Offenders:\n"
                (str/join "\n" (map #(str "  " (:node %) " / " (:param %))
                                    (sort-by (juxt :node :param) anys))))))
@@ -86,12 +88,18 @@
       ;; 115 -> 118: :world/sound's :source/:volume/:pitch. sound! read all
       ;; three off the request already; the node declaring none of them was
       ;; why content could not set them.
-      (is (= 118 (count (filter :optional? rows)))
+      ;; 118 -> 115: :entity/spawn's and :block/break's :barrier? (the
+      ;; two-phase preflight this namespace's docstring says is
+      ;; deliberately not replicated) and :projectile/redirect's
+      ;; :difficulty. :target/blocks' :projection became :max-hardness,
+      ;; which is a rename, not a count change.
+      (is (= 115 (count (filter :optional? rows)))
           "combat vocab optional param count changed")
       ;; 231 -> 236: :target/penetration is new (+6) and
       ;; :target/directional-destination-query lost its unread :policy (-1).
       ;; 236 -> 239: :world/sound's three (see above).
-      (is (= 239 (count rows))
+      ;; 239 -> 236: the three deleted above.
+      (is (= 236 (count rows))
           "combat vocab total param count changed"))))
 
 (deftest combat-vocabulary-return-type-count-test

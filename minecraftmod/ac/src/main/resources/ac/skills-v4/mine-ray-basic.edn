@@ -230,12 +230,6 @@
          :direction aim,
          :length targeting-range,
          :step 0.5},
-        :projection
-        [:position
-         :hardness
-         :block-id
-         :breakable?
-         :requires-high-tier-tool?],
         :limit 1}))
      (let blocks __v4_n035)
      ^{:nid "n/n036"}
@@ -314,7 +308,6 @@
             (block/break
              {:tool-tier-capped? true,
               :drop? true,
-              :barrier? true,
               :position __v4_n062,
               :expected-block-id __v4_n064}))
            (let break-status __v4_n061)

@@ -176,7 +176,6 @@
              {:entity projectile,
               :target-position __v4_n038,
               :velocity __v4_n040,
-              :difficulty difficulty,
               :replacement-types __v4_n051})
             (let
              reflect-entity-progression

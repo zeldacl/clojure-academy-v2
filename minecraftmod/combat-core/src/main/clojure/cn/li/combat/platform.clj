@@ -325,41 +325,96 @@
              (teleportation/named-position-available?))
     (teleportation/get-saved-location owner location-name)))
 
+(defn- block-info
+  "One block described at integer coordinates, the :block-info record."
+  [owner world-id x y z hardness block-id]
+  {:position [(double x) (double y) (double z)]
+   :hardness (double (or hardness 0.0))
+   :block-id block-id
+   ;; These are neutral policy facts, not a skill decision.  The ability
+   ;; EDN decides whether a tier-capped variant may proceed.
+   :breakable? (boolean (and owner world-id
+                             (blocks/can-break-block?
+                              (str owner) (str world-id) x y z)))
+   :requires-high-tier-tool? (boolean
+                              (and world-id
+                                   (blocks/requires-high-tier-tool?
+                                    (str world-id) x y z)))})
+
+(defn- blocks-in-sphere
+  "Every block whose integer centre lies within `radius` of `center`.
+
+   Bounded the same way the pre-surface kernel bounded it (radius <= 8), so
+   the cube this walks can never exceed 17^3. mcmod exposes only
+   find-blocks-in-line, so the scan is here rather than behind a platform
+   primitive."
+  [world-id center radius]
+  (let [[ox oy oz] center
+        radius (double radius)
+        radius-sq (* radius radius)
+        r (long (Math/ceil radius))
+        x0 (long (Math/floor (+ (double ox) 0.5)))
+        y0 (long (Math/floor (+ (double oy) 0.5)))
+        z0 (long (Math/floor (+ (double oz) 0.5)))]
+    (when (<= 0.0 radius 8.0)
+      (for [x (range (- x0 r) (inc (+ x0 r)))
+            y (range (- y0 r) (inc (+ y0 r)))
+            z (range (- z0 r) (inc (+ z0 r)))
+            :let [dx (- (double x) (double ox))
+                  dy (- (double y) (double oy))
+                  dz (- (double z) (double oz))]
+            :when (<= (+ (* dx dx) (* dy dy) (* dz dz)) radius-sq)
+            :let [block-id (blocks/get-block (str world-id) x y z)]
+            :when block-id
+            :let [hardness (blocks/get-block-hardness (str world-id) x y z)]
+            ;; A negative hardness is upstream's "unbreakable" marker, and
+            ;; an absent one means the bridge could not describe the block.
+            :when (and hardness (<= 0.0 (double hardness)))]
+        [x y z hardness block-id]))))
+
 (defn block-select!
-  [{:keys [owner world-id shape limit]} _frame]
-  (let [start (point (or (:start shape) (:origin shape)))
-        direction (point (:direction shape))
-        length (double (or (:length shape) 0.0))
-        step (double (or (:step shape) 0.9))
-        limit (max 0 (min 4096 (long (or limit 4096))))]
-    (if (and world-id start direction (pos? length)
-             (pos? step) (blocks/available?))
-      (let [[sx sy sz] start [dx dy dz] direction]
-        (->> (blocks/find-blocks-in-line
-              (str world-id) sx sy sz dx dy dz length)
-             (filter map?)
-             (take limit)
-             (mapv (fn [block]
-                     (let [x (long (or (:x block) 0))
-                           y (long (or (:y block) 0))
-                           z (long (or (:z block) 0))]
-                       {:position [(double x)
-                                 (double (or (:y block) 0.0))
-                                 (double (or (:z block) 0.0))]
-                        :hardness (double (or (:hardness block) 0.0))
-                        :block-id (:block-id block)
-                        ;; These are neutral policy facts, not a skill
-                        ;; decision.  The ability EDN decides whether a
-                        ;; tier-capped variant may proceed.
-                        :breakable? (boolean (and owner world-id
-                                                   (blocks/can-break-block?
-                                                    (str owner) (str world-id) x y z)))
-                        :requires-high-tier-tool? (boolean
-                                                   (and world-id
-                                                        (blocks/requires-high-tier-tool?
-                                                         (str world-id) x y z)))})
-                     ))))
-      [])))
+  "Blocks along a line or inside a sphere, optionally capped by hardness.
+
+   The sphere arm exists because the surface lib's break-area/random-break
+   pass {:type :sphere ...} and this handler only ever understood :line, so
+   they selected nothing and the two skills that call them destroyed no
+   terrain at all. :max-hardness was likewise dropped -- break_area.edn's
+   own comment claimed it was 'pre-filtered host-side' and nothing filtered
+   it."
+  [{:keys [owner world-id shape limit max-hardness]} _frame]
+  (let [limit (max 0 (min 4096 (long (or limit 4096))))
+        cap (when max-hardness (double max-hardness))
+        within-cap? (fn [hardness] (or (nil? cap) (<= (double hardness) cap)))
+        rows
+        (cond
+          (= :sphere (:type shape))
+          (let [center (point (or (:center shape) (:origin shape)))
+                radius (double (or (:radius shape) 0.0))]
+            (when (and world-id center (blocks/available?))
+              (blocks-in-sphere world-id center radius)))
+
+          :else
+          (let [start (point (or (:start shape) (:origin shape)))
+                direction (point (:direction shape))
+                length (double (or (:length shape) 0.0))
+                step (double (or (:step shape) 0.9))]
+            (when (and world-id start direction (pos? length)
+                       (pos? step) (blocks/available?))
+              (let [[sx sy sz] start [dx dy dz] direction]
+                (->> (blocks/find-blocks-in-line
+                      (str world-id) sx sy sz dx dy dz length)
+                     (filter map?)
+                     (map (fn [block]
+                            [(long (or (:x block) 0))
+                             (long (or (:y block) 0))
+                             (long (or (:z block) 0))
+                             (:hardness block)
+                             (:block-id block)])))))))]
+    (->> (or rows [])
+         (filter (fn [[_ _ _ hardness _]] (within-cap? (or hardness 0.0))))
+         (take limit)
+         (mapv (fn [[x y z hardness block-id]]
+                 (block-info owner world-id x y z hardness block-id))))))
 
 (defn- terrain-overlap?
   [entity bx by bz radius]
@@ -1288,8 +1343,13 @@
 
 
 (defn owner-snapshot!
-  "Owner pose/velocity/look/flight-state through the neutral relays."
-  [{:keys [owner]} _frame]
+  "Owner pose/velocity/look/flight-state through the neutral relays.
+
+   :projection narrows the result to the named keys, the same meaning it
+   has on :target/entities. Every shipped call site passes one and reads
+   only inside it; the param was declared and ignored, so the narrowing
+   never happened."
+  [{:keys [owner projection]} _frame]
   (let [owner (str owner)
         position (when (raycast/available?)
                    (raycast/player-position owner))
@@ -1299,18 +1359,20 @@
                      (player-motion/on-ground? owner))
         look (when (raycast/available?)
                (raycast/player-look-vector owner))]
-    {:position (when (map? position)
-                 (select-keys position [:x :y :z :eye-y :world-id]))
-     :eye-position (when (map? position)
-                     (let [x (double (or (:x position) 0.0))
-                           y (double (or (:y position) 0.0))
-                           z (double (or (:z position) 0.0))
-                           eye-y (double (or (:eye-y position) (+ y 1.62)))]
-                       {:x x :y eye-y :z z}))
-     :look (or look {:x 0.0 :y 0.0 :z 1.0})
-     :velocity (or velocity {:x 0.0 :y 0.0 :z 0.0})
-     :on-ground? (boolean on-ground?)
-     :can-fly? (and (player-motion/available?) (player-motion/can-fly? owner))}))
+    (cond-> {:position (when (map? position)
+                         (select-keys position [:x :y :z :eye-y :world-id]))
+             :eye-position (when (map? position)
+                             (let [x (double (or (:x position) 0.0))
+                                   y (double (or (:y position) 0.0))
+                                   z (double (or (:z position) 0.0))
+                                   eye-y (double (or (:eye-y position) (+ y 1.62)))]
+                               {:x x :y eye-y :z z}))
+             :look (or look {:x 0.0 :y 0.0 :z 1.0})
+             :velocity (or velocity {:x 0.0 :y 0.0 :z 0.0})
+             :on-ground? (boolean on-ground?)
+             :can-fly? (and (player-motion/available?)
+                            (player-motion/can-fly? owner))}
+      (seq projection) (select-keys projection))))
 
 (defn entity-snapshot!
   "Neutral point-in-time projection of one non-player entity's pose."

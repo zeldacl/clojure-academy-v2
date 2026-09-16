@@ -253,7 +253,6 @@
               :add-tags ["ac_electron_missile"],
               :velocity [0.0 0.0 0.0],
               :life-ticks 400,
-              :barrier? true,
               :owner owner-id,
               :position body}))
            (let spawn-result __v4_n072)

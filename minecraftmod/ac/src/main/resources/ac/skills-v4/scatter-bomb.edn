@@ -162,7 +162,6 @@
             :add-tags ["ac_scatter_bomb"],
             :velocity [0.0 0.0 0.0],
             :life-ticks 2333333,
-            :barrier? true,
             :world-id wid,
             :owner owner-id,
             :position eye}))

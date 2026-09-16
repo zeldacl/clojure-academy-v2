@@ -1,5 +1,5 @@
 ;; Port of the old :terrain/break-area composite: break every block in a
-;; sphere (pre-filtered host-side by :projection {:max-hardness ...}),
+;; sphere (pre-filtered host-side by :max-hardness),
 ;; each one gated by an independent random/chance roll, with an
 ;; independent random/chance roll again for whether it drops. Both rolls
 ;; are query calls, so both are bound via `let` before use -- see
@@ -9,7 +9,7 @@
  :params [{:name origin :type :vec3} {:name radius :type :double} {:name hardness-max :type :double}
           {:name break-chance :type :double} {:name drop-chance :type :double} {:name limit :type :long}]
  :do [(let blocks (target/blocks {:shape {:type :sphere :center origin :radius radius}
-                                  :projection {:max-hardness hardness-max} :limit limit}))
+                                  :max-hardness hardness-max :limit limit}))
       (each block blocks
         (let should-break? (random/chance {:probability break-chance}))
         (when should-break?

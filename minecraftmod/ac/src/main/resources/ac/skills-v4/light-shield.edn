@@ -113,7 +113,6 @@
       (entity/spawn
        {:entity-type "academy:entity_md_shield",
         :velocity [0.0 0.0 0.0],
-        :barrier? true,
         :owner owner-id,
         :position body,
         :life-ticks life-ticks}))

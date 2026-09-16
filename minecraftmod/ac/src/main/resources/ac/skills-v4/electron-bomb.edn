@@ -56,7 +56,6 @@
      {:entity-type "academy:entity_md_ball",
       :add-tags ["ac_electron_bomb"],
       :velocity [0.0 0.0 0.0],
-      :barrier? true,
       :world-id wid,
       :owner owner-id,
       :position eye,

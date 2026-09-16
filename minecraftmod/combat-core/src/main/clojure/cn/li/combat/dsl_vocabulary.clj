@@ -205,8 +205,12 @@
            :sort (opt :any nil) :projection (opt :any nil)}
           [:list-of :entity-ref] #{:world-read} :entity/select 2)
 
+    ;; :max-hardness, not :projection. It was spelled :projection and
+    ;; carried {:max-hardness ...}, which collided with :target/entities'
+    ;; :projection -- a FIELD WHITELIST there, a selection FILTER here --
+    ;; and block-select! read neither, so the cap did nothing.
     :target/blocks
-    (node {:shape (p) :limit (opt :long 128) :projection (opt :any nil)}
+    (node {:shape (p) :limit (opt :long 128) :max-hardness (opt :double nil)}
           [:list-of :block-info] #{:world-read} :block/select 2)
 
     :target/entity-snapshot
@@ -347,7 +351,7 @@
     :entity/spawn
     (node {:entity-type (p* :string) :position (p* :vec3) :velocity (opt :vec3 nil)
            :world-id (opt :string nil) :life-ticks (opt :long nil) :owner (opt :any nil)
-           :add-tags (opt :any nil) :barrier? (opt :boolean false)}
+           :add-tags (opt :any nil)}
           :entity-ref #{:world-write} nil 2)
     :entity/configure
     (node {:entity (p* :entity-ref) :velocity (opt :vec3 nil) :block-id (opt :any nil)
@@ -390,8 +394,7 @@
 
     :block/break
     (node {:position (p* :vec3) :expected-block-id (opt :any nil) :fortune-level (opt :long 0)
-           :tool-tier-capped? (opt :boolean false) :drop? (opt :boolean true)
-           :barrier? (opt :boolean false)}
+           :tool-tier-capped? (opt :boolean false) :drop? (opt :boolean true)}
           :break-result #{:world-write} nil 2)
     :block/set
     (node {:position (p* :vec3) :block-id (p) :expected-block-ids (opt :any nil)} nil #{:world-write})
@@ -412,7 +415,7 @@
 
     :projectile/redirect
     (node {:entity (p* :entity-ref) :target-position (p* :vec3) :velocity (opt :vec3 nil)
-           :replacement-types (opt :any nil) :difficulty (opt :any nil)}
+           :replacement-types (opt :any nil)}
           nil #{:world-write})
     :projectile/schedule-beam
     (node {:origin (p* :vec3) :destination (p* :vec3) :damage (p* :double) :owner (p)
