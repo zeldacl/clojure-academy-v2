@@ -422,7 +422,7 @@
            :damage-type (opt :keyword :generic) :delay-ticks (opt :long 0)
            :origin-selector (opt :any nil) :destination-selector (opt :any nil)
            :world-id (opt :string nil) :seed (opt :long nil) :settlement-vfx (opt :any nil)
-           :exclude-owner? (opt :boolean true) :instance-key (opt :any nil)}
+           :exclude-owner? (opt :boolean true)}
           nil #{:world-write} nil 3)
 
     :inventory/consume

@@ -865,10 +865,13 @@
         (capabilities/register-action!
          :entity/mark
          (fn [{:keys [owner target mark-type duration-ticks requires-ability
-                      world-id rate] :as request}]
+                      world-id] :as request}]
            (let [owner (str owner)
                  target (str target)
-                 rate (or rate (mark-rate-for owner requires-ability))
+                 ;; Always computed. This was (or rate (mark-rate-for ...))
+                 ;; against a :rate the node does not declare, so no content
+                 ;; could ever supply one and the override never fired.
+                 rate (mark-rate-for owner requires-ability)
                  learned? (or (nil? requires-ability)
                               (ability-model/is-learned?
                                (:ability-data (owner-state owner))
@@ -957,11 +960,30 @@
            (let [resources (or (:resources budget) budget {})
                  scale (max 0.0 (let [s (double (or scale 1.0))] (if (Double/isFinite s) s 0.0)))
                  required (into {} (map (fn [[k v]] [k (* scale (double (or v 0.0)))]) resources))
-                 cp (double (get required :cp 0.0))
+                 requested-cp (double (get required :cp 0.0))
                  overload (double (get required :overload 0.0))
                  player (runtime-store/get-player-state (server-session-id) (str owner))
                  rd (or (:resource-data player) {})
                  creative? (boolean (get-in frame-ctx [:frame :capabilities :caster/creative?]))
+                 ;; :partial? takes what is there instead of refusing. The
+                 ;; param was declared, destructured and then never used, so
+                 ;; a partial spend behaved as all-or-nothing: its one
+                 ;; caller is a deflect cost whose pre-V4 implementation was
+                 ;; (min current-cp base-cost), noted as "spends the
+                 ;; remaining CP but never blocks", and this branch simply
+                 ;; spent nothing once the player ran low.
+                 ;;
+                 ;; Clamping is the whole fix. It is NOT also a licence to
+                 ;; bypass can-perform? -- that guard covers more than
+                 ;; affordability, the one caller uses this as a statement
+                 ;; and never branches on the result, and claiming success
+                 ;; would be a bigger change than the defect.
+                 ;;
+                 ;; Only CP is clamped: partial spending means something for
+                 ;; a resource drawn DOWN, not for overload, which is added.
+                 cp (if partial?
+                      (min requested-cp (double (or (:cur-cp rd) 0.0)))
+                      requested-cp)
                  sufficient? (resource-rules/can-perform? rd overload cp creative?)]
              (when-not sufficient?
                (log/warn "cost/spend insufficient"

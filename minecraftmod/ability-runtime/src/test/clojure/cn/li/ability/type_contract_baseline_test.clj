@@ -80,7 +80,10 @@
       ;; it.
       ;; 49 -> 47: :projectile/redirect's :difficulty and :target/blocks'
       ;; :projection, both declared and read by no handler.
-      (is (= 47 (count anys))
+      ;; 47 -> 46: :projectile/schedule-beam's :instance-key, likewise --
+      ;; found once the check stopped skipping handlers whose request is
+      ;; not their first parameter.
+      (is (= 46 (count anys))
           (str "combat vocab :any-typed params changed. Offenders:\n"
                (str/join "\n" (map #(str "  " (:node %) " / " (:param %))
                                    (sort-by (juxt :node :param) anys))))))
@@ -93,13 +96,15 @@
       ;; deliberately not replicated) and :projectile/redirect's
       ;; :difficulty. :target/blocks' :projection became :max-hardness,
       ;; which is a rename, not a count change.
-      (is (= 115 (count (filter :optional? rows)))
+      ;; 115 -> 114: :instance-key (see above).
+      (is (= 114 (count (filter :optional? rows)))
           "combat vocab optional param count changed")
       ;; 231 -> 236: :target/penetration is new (+6) and
       ;; :target/directional-destination-query lost its unread :policy (-1).
       ;; 236 -> 239: :world/sound's three (see above).
       ;; 239 -> 236: the three deleted above.
-      (is (= 236 (count rows))
+      ;; 236 -> 235: :instance-key.
+      (is (= 235 (count rows))
           "combat vocab total param count changed"))))
 
 (deftest combat-vocabulary-return-type-count-test

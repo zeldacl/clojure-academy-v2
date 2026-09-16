@@ -20,6 +20,7 @@
             [clojure.set :as set]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            [cn.li.combat.beam-settlement :as beam]
             [cn.li.combat.dsl-vocabulary :as vocab]
             [cn.li.combat.platform :as platform]))
 
@@ -40,27 +41,45 @@
    legitimately serve several (:target/block-placement shares
    resolve-destination!), so it is judged against their union."
   (let [var-of (into {} (map (fn [v] [@v v])) (vals (ns-publics 'cn.li.combat.platform)))]
-    (reduce (fn [acc [capability handler]]
-              (if-let [v (var-of handler)]
-                (update acc v (fnil conj #{}) capability)
-                acc))
-            {}
-            (merge (platform/query-handlers) (platform/action-handlers)))))
+    (-> (reduce (fn [acc [capability handler]]
+                  (if-let [v (var-of handler)]
+                    (update acc v (fnil conj #{}) capability)
+                    acc))
+                {}
+                (merge (platform/query-handlers) (platform/action-handlers)))
+        ;; install! registers this one outside both maps, wrapping the
+        ;; function below in a closure over an injected scheduler, so there
+        ;; is no registered value to resolve back to a var. Named here so
+        ;; the checks cover it rather than skipping it silently -- the
+        ;; capability is real and content calls it.
+        (assoc #'beam/schedule-action! #{:projectile/schedule-beam}))))
 
 (defn- destructured-keys
-  "The {:keys [...]} of the handler's FIRST parameter -- nil when it takes
-   the request without destructuring, which reads nothing to judge."
+  "The first {:keys [...]} in the handler's arglist -- nil when it takes the
+   request without destructuring, which reads nothing to judge.
+
+   Not anchored to the FIRST parameter: schedule-action! takes its injected
+   scheduler first and the request second, and anchoring skipped it
+   entirely, which is the same silent pass this check exists to prevent."
   [handler-var]
   (let [{:keys [ns name]} (meta handler-var)]
     (when-let [src (repl/source-fn (symbol (str (ns-name ns)) (str name)))]
-      (when-let [[_ ks] (re-find #"\[\{:keys \[([^\]]*)\]" src)]
+      (when-let [[_ ks] (re-find #"\{:keys \[([^\]]*)\]" src)]
         (set (str/split (str/trim ks) #"\s+"))))))
 
 (def ^:private platform-fn-names
   (into #{} (map str) (keys (ns-interns 'cn.li.combat.platform))))
 
-(defn- source-of [sym-name]
-  (repl/source-fn (symbol "cn.li.combat.platform" sym-name)))
+(def ^:private forwards-request-onward
+  "Handlers that hand the WHOLE request to an injected callback, so the
+   params they serve are consumed after a round trip no static scope can
+   follow. schedule-action! passes its payload to an instance-local
+   scheduler which later calls back into this same module to settle --
+   combat-core owns settlement by design, so the namespace is the honest
+   bound. Naming them costs the per-handler precision that caught
+   :projectile/redirect's :difficulty, which is why this is a list and not
+   the default."
+  #{"schedule-action!"})
 
 (defn- effective-source
   "A handler's source plus that of any platform fn it calls.
@@ -73,10 +92,15 @@
   (let [{:keys [ns name]} (meta handler-var)
         own (repl/source-fn (symbol (str (ns-name ns)) (str name)))]
     (when own
-      (->> (re-seq #"[a-z][\w!?*<>=-]*" own)
-           (filter platform-fn-names)
+      (->> (if (forwards-request-onward (str name))
+             (keys (ns-interns ns))
+             (re-seq #"[a-z][\w!?*<>=-]*" own))
+           (map str)
+           (filter (if (forwards-request-onward (str name))
+                     (constantly true)
+                     platform-fn-names))
            (remove #{(str name)})
-           (keep source-of)
+           (keep (fn [n] (repl/source-fn (symbol (str (ns-name ns)) n))))
            (cons own)
            (str/join "\n")))))
 

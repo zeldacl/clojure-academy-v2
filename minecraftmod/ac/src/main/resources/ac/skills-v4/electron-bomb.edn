@@ -75,7 +75,6 @@
    (projectile/schedule-beam
     {:world-id wid,
      :destination-selector {:mode :owner-raycast, :distance 15.0},
-     :instance-key [:activation :electron-bomb-ray],
      :seed seed,
      :damage $damage,
      :damage-type :magic,
