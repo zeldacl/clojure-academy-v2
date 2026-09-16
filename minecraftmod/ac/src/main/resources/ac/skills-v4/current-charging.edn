@@ -117,7 +117,6 @@
        :instance-key [:activation :current-charging-channel],
        :payload
        {:block-bounds nil,
-        :charge-ticks 0,
         :mode
         ^{:nid "n/n--entry--start-10-t-d3320aac"}
         (math/select item-present? :item :block),
@@ -133,8 +132,7 @@
           ^{:nid "n/n--entry--start-10-t-e17af49e"}
           (vec3/scale aim targeting-range))),
         :caster eye,
-        :block-pos nil,
-        :visual-max-ticks visual-max-ticks},
+        :block-pos nil},
        :audience __v4_n023})
      ^{:nid "n/n025"}
      (let
@@ -248,13 +246,11 @@
              :instance-key [:activation :current-charging-channel],
              :payload
              {:block-bounds nil,
-              :charge-ticks charge-ticks-next,
               :mode :item,
               :good? true,
               :target nil,
               :caster eye,
-              :block-pos nil,
-              :visual-max-ticks visual-max-ticks}})
+              :block-pos nil}})
            ^{:nid "n/n--entry--pulse-13-t-ee01e42f"}
            (vfx!
             {:effect-id :audio-loop-session,
@@ -274,13 +270,11 @@
              :instance-key [:activation :current-charging-channel],
              :payload
              {:block-bounds nil,
-              :charge-ticks charge-ticks-next,
               :mode :item,
               :good? false,
               :target nil,
               :caster eye,
-              :block-pos nil,
-              :visual-max-ticks visual-max-ticks}})
+              :block-pos nil}})
            ^{:nid "n/n--entry--pulse-13-t-9c7eff76"}
            (vfx!
             {:effect-id :audio-loop-session,
@@ -326,7 +320,6 @@
          {:block-bounds
           ^{:nid "n/n--entry--pulse-13-e-fc740358"}
           (:block-bounds energy-target),
-          :charge-ticks charge-ticks-next,
           :mode :block,
           :good? true,
           :target
@@ -335,8 +328,7 @@
           :caster eye,
           :block-pos
           ^{:nid "n/n--entry--pulse-13-e-3ac921a"}
-          (:block-pos energy-target),
-          :visual-max-ticks visual-max-ticks}})
+          (:block-pos energy-target)}})
        ^{:nid "n/n--entry--pulse-13-e-e70888cc"}
        (vfx!
         {:effect-id :audio-loop-session,
@@ -381,7 +373,6 @@
          {:block-bounds
           ^{:nid "n/n--entry--pulse-13-e-ac21d99e"}
           (:block-bounds energy-target),
-          :charge-ticks charge-ticks-next,
           :mode :block,
           :good? false,
           :target
@@ -390,8 +381,7 @@
           :caster eye,
           :block-pos
           ^{:nid "n/n--entry--pulse-13-e-a1e01842"}
-          (:block-pos energy-target),
-          :visual-max-ticks visual-max-ticks}})
+          (:block-pos energy-target)}})
        ^{:nid "n/n--entry--pulse-13-e-11bf70b"}
        (vfx!
         {:effect-id :audio-loop-session,

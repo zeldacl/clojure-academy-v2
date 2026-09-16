@@ -362,16 +362,13 @@
           :fade-at 30,
           :duration-ticks 50,
           :arc-at 3,
-          :arc-count-limit 64,
           :beam-at 0,
-          :arc-radius {:min 0.1, :max 0.25},
           :start
           ^{:nid "n/n--entry--release-19-889e097"}
           (:start beam-result),
           :ring-radius {:from 0.34, :to 0.34},
           :arc-life-ticks 30,
           :fade-to-tick 50,
-          :arc-spacing {:min 1.0, :max 2.0},
           :fade-from-alpha 1.0,
           :layers
           [{:shape :glow,

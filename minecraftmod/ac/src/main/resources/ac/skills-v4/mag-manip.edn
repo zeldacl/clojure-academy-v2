@@ -149,13 +149,11 @@
        :audience {:type :nearby, :radius 64.0},
        :payload
        {:block-bounds nil,
-        :charge-ticks 0,
         :mode :magnetic-hold,
         :good? true,
         :target eye,
         :caster eye,
-        :block-pos nil,
-        :visual-max-ticks 4096}})
+        :block-pos nil}})
      ^{:nid "n/n--entry--start-9-then-8"}
      (vfx!
       {:effect-id :audio-loop-session,
@@ -270,15 +268,13 @@
            :audience {:type :nearby, :radius 64.0},
            :payload
            {:block-bounds nil,
-            :charge-ticks 0,
             :mode :magnetic-hold,
             :good? true,
             :target eye,
             :caster eye,
             :block-pos
             ^{:nid "n/n--entry--start-9-el-4d782409"}
-            (:block-position grab-hit),
-            :visual-max-ticks 4096}})
+            (:block-position grab-hit)}})
          ^{:nid "n/n--entry--start-9-else-1-then-8"}
          (vfx!
           {:effect-id :audio-loop-session,
@@ -399,13 +395,11 @@
        :instance-key [:activation :mag-manip-hold],
        :payload
        {:block-bounds nil,
-        :charge-ticks hold-ticks-next,
         :mode :magnetic-hold,
         :good? true,
         :target focus,
         :caster eye,
-        :block-pos held-source-position,
-        :visual-max-ticks 4096}})
+        :block-pos held-source-position}})
      ^{:nid "n/n--entry--pulse-9-then-15"}
      (vfx!
       {:effect-id :audio-loop-session,
@@ -569,16 +563,13 @@
             :fade-at 8,
             :duration-ticks 12,
             :arc-at 2,
-            :arc-count-limit 64,
             :beam-at 0,
-            :arc-radius {:min 0.1, :max 0.25},
             :start
             ^{:nid "n/n--entry--release-10-790a1578"}
             (:position held-body),
             :ring-radius {:from 0.12, :to 0.34},
             :arc-life-ticks 8,
             :fade-to-tick 12,
-            :arc-spacing {:min 1.0, :max 2.0},
             :fade-from-alpha 1.0,
             :layers
             [{:shape :tube, :radius 0.13, :color [236 170 93 60]}

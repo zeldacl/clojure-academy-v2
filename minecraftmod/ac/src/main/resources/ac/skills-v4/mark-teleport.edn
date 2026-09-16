@@ -187,17 +187,13 @@
           :duration-ticks 20,
           :fade-ring-from 1.4,
           :sound-volume 0.6,
-          :arc-count-limit 32,
-          :arc-radius {:min 0.08, :max 0.18},
           :start
           ^{:nid "n/n--entry--release-2--8990fe5c"}
           (:position destination),
           :fade-ring-to 2.0,
           :sound-id "academy:em.teleport",
-          :arc-life-ticks 12,
           :ring-to 1.4,
           :fade-to-tick 20,
-          :arc-spacing {:min 0.6, :max 1.2},
           :fade-color [236 170 93 180],
           :fade-segments 24,
           :ring-from 0.25,

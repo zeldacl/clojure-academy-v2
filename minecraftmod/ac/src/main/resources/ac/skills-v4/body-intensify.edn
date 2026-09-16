@@ -85,15 +85,13 @@
        :audience {:type :owner},
        :payload
        {:block-bounds nil,
-        :charge-ticks 0,
         :mode :body-intensify,
         :good? true,
         :target
         ^{:nid "n/n--entry--start-6-th-985160ff"}
         (vec3/add eye [0.0 0.8 0.0]),
         :caster eye,
-        :block-pos nil,
-        :visual-max-ticks 100}})
+        :block-pos nil}})
      ^{:nid "n/n--entry--start-6-then-4"}
      (vfx!
       {:effect-id :audio-loop-session,
@@ -155,15 +153,13 @@
          :instance-key [:activation :body-intensify-charge],
          :payload
          {:block-bounds nil,
-          :charge-ticks hold-ticks-next,
           :mode :body-intensify,
           :good? true,
           :target
           ^{:nid "n/n--entry--pulse-6-th-bb6709e5"}
           (vec3/add eye [0.0 0.8 0.0]),
           :caster eye,
-          :block-pos nil,
-          :visual-max-ticks 100}})
+          :block-pos nil}})
        ^{:nid "n/n--entry--pulse-6-then-2-else-2"}
        (vfx!
         {:effect-id :audio-loop-session,

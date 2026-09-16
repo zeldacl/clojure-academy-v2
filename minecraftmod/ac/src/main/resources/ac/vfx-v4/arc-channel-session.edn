@@ -4,13 +4,11 @@
  :activation :instant,
  :parameters
  {:block-bounds {:type :any},
-  :charge-ticks {:type :int},
   :mode {:type :resource-id},
   :good? {:type :bool},
   :target {:type :any},
   :caster {:type :vec3},
-  :block-pos {:type :any},
-  :visual-max-ticks {:type :int}},
+  :block-pos {:type :any}},
  :entry-triggers {:render :vfx/render},
  :phases
  {:render

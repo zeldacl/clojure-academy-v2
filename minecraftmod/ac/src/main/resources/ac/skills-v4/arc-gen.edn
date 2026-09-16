@@ -73,15 +73,12 @@
         :fade-at 3,
         :duration-ticks 10,
         :arc-at 0,
-        :arc-count-limit 32,
         :beam-at 0,
-        :arc-radius {:min 0.06, :max 0.14},
         :start eye,
         :seed seed,
         :ring-radius {:from 0.12, :to 0.28},
         :arc-life-ticks 10,
         :fade-to-tick 10,
-        :arc-spacing {:min 1.0, :max 2.0},
         :fade-from-alpha 1.0,
         :layers
         [{:shape :tube, :radius 0.08, :color [236 170 93 60]}

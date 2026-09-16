@@ -86,14 +86,7 @@
    may need scene vocabulary that does not exist yet (the emitter has no
    frame animation or duplicate control for blood-retrograde's sprays).
    That is a known cost, not an open question."
-  '{:arc-channel-session #{:charge-ticks :visual-max-ticks}
-    :arc-ring-fade-audio #{:arc-count-limit :arc-life-ticks :arc-radius
-                           :arc-spacing :end :start}
-    :arc-ring-session #{:arc-count-limit :arc-life-ticks :arc-radius
-                        :arc-spacing :sound-id :sound-pitch :sound-position
-                        :sound-volume}
-    :beam-arc-fade #{:arc-count-limit :arc-radius :arc-spacing}
-    :block-progress-session #{:pulse-period}
+  '{:arc-ring-fade-audio #{:end :start}
     :block-scan-transient #{:advanced? :filter :max-range :max-results
                             :range :rescan-interval :tier-colors}
     :blood-retrograde-impact #{:look-dir :splash-count :splash-frame-count

@@ -122,8 +122,7 @@
         :progress 0.0,
         :color
         ^{:nid "n/n--entry--start-8-th-490067ce"}
-        (:progress-color runtime),
-        :pulse-period 0.3}})
+        (:progress-color runtime)}})
      ^{:nid "n/n--entry--start-8-then-8"}
      (vfx!
       {:effect-id :audio-loop-session,
@@ -273,8 +272,7 @@
             :progress progress,
             :color
             ^{:nid "n/n--entry--pulse-10-e-5b7465fe"}
-            (:progress-color runtime),
-            :pulse-period 0.3}})
+            (:progress-color runtime)}})
          ^{:nid "n/n--entry--pulse-10-e-a68e0438"}
          (vfx!
           {:effect-id :particle-burst,

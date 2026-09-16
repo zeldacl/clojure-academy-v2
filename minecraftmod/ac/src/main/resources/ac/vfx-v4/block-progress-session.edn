@@ -5,8 +5,7 @@
  :parameters
  {:target {:type :vec3},
   :progress {:type :float},
-  :color {:type :any},
-  :pulse-period {:type :float}},
+  :color {:type :any}},
  :entry-triggers {:render :vfx/render},
  :phases
  {:render

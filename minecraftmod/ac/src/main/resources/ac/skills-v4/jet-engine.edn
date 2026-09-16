@@ -265,13 +265,11 @@
          :instance-key [:activation :jet-engine-trail],
          :payload
          {:block-bounds nil,
-          :charge-ticks trigger-ticks,
           :mode :jet-engine-trigger,
           :good? true,
           :target next-position,
           :caster start-position,
-          :block-pos nil,
-          :visual-max-ticks 20}})
+          :block-pos nil}})
        ^{:nid "n/n--entry--pulse-1-el-a3cdef90"}
        (vfx!
         {:effect-id :particle-session,
@@ -359,15 +357,13 @@
          :audience {:type :nearby, :radius 64.0},
          :payload
          {:block-bounds nil,
-          :charge-ticks 0,
           :mode :jet-engine-trigger,
           :good? true,
           :target target-position,
           :caster
           ^{:nid "n/n--entry--release-1--edf31e53"}
           (:position owner-start),
-          :block-pos nil,
-          :visual-max-ticks 20}})
+          :block-pos nil}})
        ^{:nid "n/n--entry--release-1--6f1bb165"}
        (vfx!
         {:effect-id :particle-session,
