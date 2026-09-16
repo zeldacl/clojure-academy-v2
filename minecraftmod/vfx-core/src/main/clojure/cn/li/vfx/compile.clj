@@ -39,6 +39,19 @@
     (get context (second v))
     v))
 
+(defn- resolve-deep
+  "resolve-field at every depth. The material map reaches the renderer
+   verbatim, so a [:context :texture] inside it would otherwise arrive as a
+   literal two-element vector where a texture path was expected -- visible
+   only as a missing texture, since every layer downstream is happy to
+   carry an unknown value."
+  [v context]
+  (cond
+    (and (vector? v) (= 2 (count v)) (= :context (first v))) (get context (second v))
+    (map? v) (into (empty v) (map (fn [[k x]] [k (resolve-deep x context)])) v)
+    (vector? v) (mapv #(resolve-deep % context) v)
+    :else v))
+
 (defn- vec3-of [v] (mapv double v))
 
 (defn- float-col
@@ -68,13 +81,27 @@
 
 (defn- axis-range
   "[lo hi] for one axis of a {:x [lo hi] :y ... :z ...} spec, or [v v] when
-   the axis names a single number."
-  [spec axis]
-  (let [v (get spec axis)]
-    (cond
-      (number? v) [(double v) (double v)]
-      (and (sequential? v) (= 2 (count v))) [(double (first v)) (double (second v))]
-      :else [0.0 0.0])))
+   the axis names a single number. A single number is a CONSTANT, not a
+   symmetric +-v: content that means a half-extent writes the pair.
+
+   Both the spec and each axis resolve through the context, so an emitter
+   can take its spread from the effect's parameters instead of baking it
+   into the declaration."
+  [spec axis context]
+  (let [spec (resolve-field spec context)]
+    (if (and (sequential? spec) (= 3 (count spec)))
+      ;; A 3-vector is a per-axis HALF-EXTENT: [0.3 0.5 0.3] means
+      ;; +-0.3 / +-0.5 / +-0.3. It exists because that is the shape the
+      ;; originals have -- RandUtils.ranged(-s, s) on each axis -- and
+      ;; because it is expressible as a typed :vec3 parameter, where the
+      ;; map form would have to be declared :any.
+      (let [v (double (nth spec (case axis :x 0 :y 1 :z 2)))]
+        [(- (Math/abs v)) (Math/abs v)])
+      (let [v (resolve-field (get spec axis) context)]
+        (cond
+          (number? v) [(double v) (double v)]
+          (and (sequential? v) (= 2 (count v))) [(double (first v)) (double (second v))]
+          :else [0.0 0.0])))))
 
 (defn- particle-seed
   "A per-particle, per-channel seed.
@@ -170,26 +197,39 @@
                             (+ fz (* t (- tz fz)))]))
                        layout attr))
 
-        ;; vec3, scattered through a box around :center
-        :box
+        ;; vec3, a point somewhere along a ray from :center, plus a box
+        ;; scatter. One generator rather than two because main's emitters
+        ;; are one or the other and often both: a mine ray spawns motes at
+        ;; a random distance ALONG the player's look vector, an aura
+        ;; scatters them in a box around a body, and a ray with a scatter
+        ;; is a beam that frays. With :direction omitted it is exactly a
+        ;; :box, which is why :box is not also kept.
+        :scatter
         (let [[cx cy cz] (vec3-of (resolve-field (:center value) context))
-              spread (:spread value)
-              [lox hix] (axis-range spread :x)
-              [loy hiy] (axis-range spread :y)
-              [loz hiz] (axis-range spread :z)]
+              [dx dy dz] (vec3-of (or (resolve-field (:direction value) context)
+                                      [0.0 0.0 0.0]))
+              [dlo dhi] (let [d (resolve-deep (:distance value) context)]
+                          (cond (number? d) [(double d) (double d)]
+                                (sequential? d) [(double (first d)) (double (second d))]
+                                :else [0.0 0.0]))
+              spread (resolve-field (:spread value) context)
+              [lox hix] (axis-range spread :x context)
+              [loy hiy] (axis-range spread :y context)
+              [loz hiz] (axis-range spread :z context)]
           (vec3-writer (fn [i seed _n _k]
-                         [(+ cx (rng/uniform (particle-seed seed i 1) lox hix))
-                          (+ cy (rng/uniform (particle-seed seed i 2) loy hiy))
-                          (+ cz (rng/uniform (particle-seed seed i 3) loz hiz))])
+                         (let [t (rng/uniform (particle-seed seed i 7) dlo dhi)]
+                           [(+ cx (* t dx) (rng/uniform (particle-seed seed i 1) lox hix))
+                            (+ cy (* t dy) (rng/uniform (particle-seed seed i 2) loy hiy))
+                            (+ cz (* t dz) (rng/uniform (particle-seed seed i 3) loz hiz))]))
                        layout attr))
 
         ;; vec3, a per-axis range. Ranges rather than one symmetric
         ;; magnitude because the originals are asymmetric: the teleport
         ;; marker's particles drift sideways either way but only ever rise.
         :range
-        (let [[lox hix] (axis-range value :x)
-              [loy hiy] (axis-range value :y)
-              [loz hiz] (axis-range value :z)]
+        (let [[lox hix] (axis-range value :x context)
+              [loy hiy] (axis-range value :y context)
+              [loz hiz] (axis-range value :z context)]
           (vec3-writer (fn [i seed _n _k]
                          [(rng/uniform (particle-seed seed i 4) lox hix)
                           (rng/uniform (particle-seed seed i 5) loy hiy)
@@ -343,9 +383,14 @@
 (defn spawn-burst-count
   "The :count of the module list's :spawn/burst, or 0. Separate from
    compile-spawn-stage so the count is data the runtime schedules rather
-   than a constant sealed inside the closure."
-  ^long [modules]
-  (long (or (:count (first (filter #(= :spawn/burst (:module %)) modules))) 0)))
+   than a constant sealed inside the closure, and resolved through the
+   context so a transient effect can take its burst size from a
+   parameter -- which is what every one-shot burst in content does."
+  ^long [modules context]
+  (long (or (resolve-field
+             (:count (first (filter #(= :spawn/burst (:module %)) modules)))
+             context)
+            0)))
 
 (defn compile-update-stage
   "modules run in order over the WHOLE live range each tick; kill-expired,
@@ -373,12 +418,12 @@
      ;; Constant per emitter, so it rides on the batch rather than in a
      ;; per-particle column: an int-bank :color column would cost one int
      ;; per particle to say the same thing for all of them.
-     :material (:material decl)
+     :material (resolve-deep (:material decl) context)
      ;; Niagara's two spawn sources, kept as separate data: :burst is the
      ;; one-time reservation at ensure! time, :rate is particles per
      ;; SECOND that the runtime accumulates each tick (matching dt's unit
      ;; and :integrate's). An emitter may declare either, both or neither.
-     :burst (spawn-burst-count (:spawn decl))
+     :burst (spawn-burst-count (:spawn decl) context)
      :rate (double (or (resolve-field (:rate decl) context) 0.0))
      :spawn (compile-spawn-stage (:spawn decl) layout context
                                  (long (or (:seed decl) 0)))

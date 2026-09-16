@@ -108,15 +108,16 @@
        :instance-key [:activation :meltdowner-particles],
        :audience {:type :nearby, :radius 32.0},
        :payload
-       {:position body,
-        :rate-per-tick 4,
-        :limit 256,
-        :particle
-        {:material :additive,
-         :life-ticks 10,
-         :speed 0.04,
-         :color [106 242 106 150],
-         :spread {:x 0.7, :y 0.7, :z 0.7}}}})
+       {:color [106 242 106 150],
+        :alpha-min 150.0,
+        :life-max 0.5,
+        :spread [0.7 0.7 0.7],
+        :size-min 0.05,
+        :rate 80.0,
+        :life-min 0.5,
+        :size-max 0.07,
+        :alpha-max 150.0,
+        :position body}})
      ^{:nid "n/n--entry--start-2-then-7"}
      (vfx!
       {:effect-id :camera-fov-session,

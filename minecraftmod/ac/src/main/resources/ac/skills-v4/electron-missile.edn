@@ -85,16 +85,17 @@
        :instance-key [:activation :electron-missile-charge],
        :audience {:type :nearby, :radius 32.0},
        :payload
-       {:position body,
-        :rate-per-tick 2,
-        :limit 256,
-        :particle
-        {:material :additive,
-         :texture "academy:textures/effects/md_particle.png",
-         :life-ticks 10,
-         :speed 1.0,
-         :spread {:x 0.5, :y 0.8, :z 0.5},
-         :velocity {:x 0.02, :y 0.03, :z 0.02}}}})
+       {:alpha-min 76.0,
+        :life-max 0.5,
+        :spread [0.5 0.8 0.5],
+        :size-min 0.05,
+        :rate 40.0,
+        :life-min 0.5,
+        :size-max 0.07,
+        :alpha-max 152.0,
+        :position body,
+        :velocity [0.4 0.6 0.4],
+        :texture "academy:textures/effects/md_particle.png"}})
      ^{:nid "n/n--entry--start-7-then-8"}
      (vfx!
       {:effect-id :audio-one-shot,

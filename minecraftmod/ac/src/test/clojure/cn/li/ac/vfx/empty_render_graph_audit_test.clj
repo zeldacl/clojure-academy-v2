@@ -75,6 +75,22 @@
                       {:id (:id doc) :diagnostics diagnostics})))
     (reduce + (map #(count (:instrs %)) (:blocks ir)))))
 
+(defn- emitter-only-ids
+  "Effects that draw entirely through their :emitters declaration. Their
+   :render graph is legitimately empty because the particles ARE the
+   visual -- nothing is left for a scene op to emit.
+
+   Derived from the document rather than listed by hand: unlike the
+   side-channel stubs, whose justification lives in another namespace and
+   can only be asserted, this one is checkable right here. A list would
+   go stale the moment an effect lost its emitters."
+  []
+  (into #{}
+        (keep (fn [resource-name]
+                (let [doc (load-vfx-v4-doc resource-name)]
+                  (when (seq (:emitters doc)) (:id doc)))))
+        (vfx-v4-resource-names)))
+
 (defn- empty-render-graph-ids []
   (into #{}
         (keep (fn [resource-name]
@@ -84,11 +100,13 @@
 
 (deftest every-empty-render-graph-is-explicitly-classified-test
   (let [empty-ids (empty-render-graph-ids)
-        known (set/union side-channel-stubs known-migration-leftover-stubs)
+        known (set/union side-channel-stubs known-migration-leftover-stubs
+                         (emitter-only-ids))
         unclassified (set/difference empty-ids known)]
     (is (empty? unclassified)
         (str "New empty :render graph(s) found, not in side-channel-stubs or "
-             "known-migration-leftover-stubs: " unclassified
+             "known-migration-leftover-stubs, and draws no particles "
+             "either: " unclassified
              " -- classify explicitly (side-channel data flow, or a fresh "
              "V4 migration leftover) rather than letting this slip through"))))
 

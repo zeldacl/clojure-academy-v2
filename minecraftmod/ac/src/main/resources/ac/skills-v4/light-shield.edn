@@ -152,16 +152,18 @@
        :instance-key [:activation :light-shield-particles],
        :audience {:type :nearby, :radius 32.0},
        :payload
-       {:position eye,
-        :rate-per-tick 1,
-        :limit 4096,
-        :particle
-        {:material :additive,
-         :life-ticks 12,
-         :speed 1.0,
-         :color [165 230 255 190],
-         :spread {:x 0.5, :y 0.5, :z 0.5},
-         :velocity {:x 0.02, :y 0.02, :z 0.02}}}})
+       {:velocity-bias [0.0 0.4 0.0],
+        :color [165 230 255 190],
+        :alpha-min 190.0,
+        :life-max 0.6,
+        :spread [0.5 0.5 0.5],
+        :size-min 0.05,
+        :rate 20.0,
+        :life-min 0.6,
+        :size-max 0.07,
+        :alpha-max 190.0,
+        :position eye,
+        :velocity [0.4 0.6 0.4]}})
      ^{:nid "n/n--entry--start-2-then-13"}
      (vfx!
       {:effect-id :audio-loop-session,

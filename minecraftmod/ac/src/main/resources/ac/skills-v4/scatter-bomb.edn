@@ -189,7 +189,7 @@
          (state! :next-spawn-tick __v4_n057)
          ^{:nid "n/n--entry--pulse-2-el-d415cbcc"}
          (vfx!
-          {:effect-id :particle-burst,
+          {:effect-id :sprite-burst,
            :operation :spawn,
            :instance-key [:activation :scatter-bomb :ball],
            :payload

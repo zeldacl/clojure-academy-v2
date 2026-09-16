@@ -371,18 +371,19 @@
          :instance-key [:activation :jet-engine-particles],
          :audience {:type :nearby, :radius 64.0},
          :payload
-         {:position
+         {:alpha-min 76.0,
+          :life-max 0.5,
+          :spread [0.3 0.3 0.3],
+          :size-min 0.05,
+          :rate 220.0,
+          :life-min 0.5,
+          :size-max 0.07,
+          :alpha-max 152.0,
+          :position
           ^{:nid "n/n--entry--release-1--c9e3fbd9"}
           (:position owner-start),
-          :rate-per-tick 11,
-          :limit 256,
-          :particle
-          {:material :additive,
-           :texture "academy:textures/effects/md_particle.png",
-           :life-ticks 10,
-           :speed 1.0,
-           :spread {:x 0.3, :y 0.3, :z 0.3},
-           :velocity {:x 0.02, :y 0.02, :z 0.02}}}})
+          :velocity [0.4 0.4 0.4],
+          :texture "academy:textures/effects/md_particle.png"}})
        ^{:nid "n/n--entry--release-1--63a43012"}
        (vfx!
         {:effect-id :billboard-session,

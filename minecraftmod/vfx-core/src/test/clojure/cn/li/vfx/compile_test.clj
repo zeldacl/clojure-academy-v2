@@ -111,7 +111,7 @@
    :attrs {:position :vec3 :velocity :vec3 :alpha :float :lifetime :float}
    :spawn [{:module :spawn/burst :count 8}
            {:module :spawn/set :attr :position
-            :value {:kind :box :center [10.0 0.0 -5.0]
+            :value {:kind :scatter :center [10.0 0.0 -5.0]
                     :spread {:x [-1.0 1.0] :y [0.0 1.4] :z [-1.0 1.0]}}}
            {:module :spawn/set :attr :velocity
             :value {:kind :range :x [-0.03 0.03] :y [0.0 0.05] :z [-0.03 0.03]}}
@@ -119,7 +119,7 @@
            {:module :spawn/set :attr :lifetime :value 20.0}]
    :update []})
 
-(deftest box-spread-scatters-within-its-ranges-test
+(deftest scatter-without-a-direction-is-a-box-test
   (let [[pc layout] (spawn-once scatter-decl {})
         [cx cy cz] (layout/column layout :position)
         xs (component-values pc layout cx 8)

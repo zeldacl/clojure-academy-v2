@@ -238,7 +238,7 @@
       :spacing {:min 0.18, :max 0.32}}})
    ^{:nid "n/n--entry--start-13"}
    (vfx!
-    {:effect-id :particle-session,
+    {:effect-id :debris-field-session,
      :operation :spawn,
      :instance-key [:activation :storm-wing-particles],
      :audience {:type :nearby, :radius 64.0},
@@ -336,7 +336,7 @@
      :payload {:fade-ticks 15}})
    ^{:nid "n/n--entry--abort-8"}
    (vfx!
-    {:effect-id :particle-session,
+    {:effect-id :debris-field-session,
      :operation :destroy,
      :instance-key [:activation :storm-wing-particles],
      :payload {}})
@@ -530,7 +530,7 @@
            :separation-y-degrees 45.0}}})
        ^{:nid "n/n--entry--pulse-11-then-3-do-9"}
        (vfx!
-        {:effect-id :particle-session,
+        {:effect-id :debris-field-session,
          :operation :update,
          :instance-key [:activation :storm-wing-particles],
          :payload {:position body}})
@@ -641,7 +641,7 @@
          :separation-y-degrees 45.0}}})
      ^{:nid "n/n--entry--pulse-11-else-8"}
      (vfx!
-      {:effect-id :particle-session,
+      {:effect-id :debris-field-session,
        :operation :update,
        :instance-key [:activation :storm-wing-particles],
        :payload {:position body}})
@@ -696,7 +696,7 @@
          :payload {:fade-ticks 15}})
        ^{:nid "n/n--entry--pulse-11-else-13-do-8"}
        (vfx!
-        {:effect-id :particle-session,
+        {:effect-id :debris-field-session,
          :operation :destroy,
          :instance-key [:activation :storm-wing-particles],
          :payload {}})

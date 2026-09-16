@@ -3,18 +3,77 @@
  :lifecycle {:mode :transient},
  :activation :instant,
  :parameters
- {:position {:type :vec3},
-  :rate-per-tick {:type :int},
-  :limit {:type :int},
-  :particle {:type :any}},
+ {:velocity-bias {:type :vec3, :default [0.0 0.0 0.0]},
+  :color {:type :rgba, :default [255 255 255 255]},
+  :alpha-min {:type :float, :default 255.0},
+  :life-max {:type :float, :default 1.0},
+  :spread {:type :vec3, :default [0.0 0.0 0.0]},
+  :fade-out {:type :float, :default 0.0},
+  :size-min {:type :float, :default 0.1},
+  :life-min {:type :float, :default 1.0},
+  :distance-max {:type :float, :default 0.0},
+  :distance-min {:type :float, :default 0.0},
+  :size-max {:type :float, :default 0.1},
+  :count {:type :int},
+  :alpha-max {:type :float, :default 255.0},
+  :position {:type :vec3},
+  :velocity {:type :vec3, :default [0.0 0.0 0.0]},
+  :texture
+  {:type :string, :default "academy:textures/effects/md_particle.png"},
+  :direction {:type :vec3, :default [0.0 0.0 0.0]}},
  :entry-triggers {:render :vfx/render},
+ :emitters
+ [{:id :motes,
+   :capacity 256,
+   :seed 9139,
+   :attrs
+   {:position :vec3,
+    :velocity :vec3,
+    :size :float,
+    :alpha :float,
+    :age :float,
+    :lifetime :float},
+   :material
+   {:particle
+    {:texture [:context :texture],
+     :color [:context :color],
+     :fade-out [:context :fade-out]}},
+   :spawn
+   [{:module :spawn/burst, :count [:context :count]}
+    {:module :spawn/set,
+     :attr :position,
+     :value
+     {:kind :scatter,
+      :center [:context :position],
+      :direction [:context :direction],
+      :distance [[:context :distance-min] [:context :distance-max]],
+      :spread [:context :spread]}}
+    {:module :spawn/set,
+     :attr :velocity,
+     :value
+     {:kind :scatter,
+      :center [:context :velocity-bias],
+      :spread [:context :velocity]}}
+    {:module :spawn/set,
+     :attr :size,
+     :value
+     {:kind :uniform,
+      :min [:context :size-min],
+      :max [:context :size-max]}}
+    {:module :spawn/set,
+     :attr :alpha,
+     :value
+     {:kind :uniform,
+      :min [:context :alpha-min],
+      :max [:context :alpha-max]}}
+    {:module :spawn/set, :attr :age, :value 0.0}
+    {:module :spawn/set,
+     :attr :lifetime,
+     :value
+     {:kind :uniform,
+      :min [:context :life-min],
+      :max [:context :life-max]}}],
+   :update [{:module :integrate} {:module :kill-expired}]}],
  :phases
  {:render
-  [^{:nid "n/n--entry--default-0"}
-   (emitter
-    {:anchor ?position,
-     :rate-per-tick ?rate-per-tick,
-     :limit ?limit,
-     :particle ?particle})
-   ^{:nid "n/n--entry--default-1"}
-   (finish {:outcome :performed})]}}
+  [^{:nid "n/n--entry--default-1"} (finish {:outcome :performed})]}}
