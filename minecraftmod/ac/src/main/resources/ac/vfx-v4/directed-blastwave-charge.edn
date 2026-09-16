@@ -11,13 +11,17 @@
  :phases
  {:render
   [^{:nid "n/n--charge-progress"}
-   (let progress
-     (math/min 1.0 (math/div ?charge-ticks ?max-charge-ticks)))
+   (let
+    progress
+    (math/min 1.0 (math/div ?charge-ticks ?max-charge-ticks)))
    ^{:nid "n/n--charge-radius"}
    (let radius (math/add 0.1 (math/mul 0.16 progress)))
    ^{:nid "n/n--charge-pulse"}
-   (let pulse
-     (math/add radius (math/mul 0.025 (math/sin (math/mul 0.22 ?charge-ticks)))))
+   (let
+    pulse
+    (math/add
+     radius
+     (math/mul 0.025 (math/sin (math/mul 0.22 ?charge-ticks)))))
    ^{:nid "n/n--charge-alpha"}
    (let alpha (math/select ?punched? 0.863 0.667))
    ^{:nid "n/n--entry--default-0"}

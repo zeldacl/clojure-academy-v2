@@ -3,8 +3,7 @@
  :lifecycle {:mode :session},
  :activation :instant,
  :parameters
- {:owner {:type :entity-ref},
-  :position {:type :vec3},
+ {:position {:type :vec3},
   :direction {:type :vec3, :default [0.0 0.0 1.0]},
   :color {:type :any},
   :particle-chance {:type :float}},

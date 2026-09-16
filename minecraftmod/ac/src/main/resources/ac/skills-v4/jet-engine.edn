@@ -267,13 +267,6 @@
          {:block-bounds nil,
           :charge-ticks trigger-ticks,
           :mode :jet-engine-trigger,
-          :style
-          {:beam
-           {:pattern :thin-continuous,
-            :wiggle 0.35,
-            :life-ratio 0.5,
-            :width 0.08,
-            :color [185 245 255 220]}},
           :good? true,
           :target next-position,
           :caster start-position,
@@ -368,13 +361,6 @@
          {:block-bounds nil,
           :charge-ticks 0,
           :mode :jet-engine-trigger,
-          :style
-          {:beam
-           {:pattern :thin-continuous,
-            :wiggle 0.35,
-            :life-ratio 0.5,
-            :width 0.08,
-            :color [185 245 255 220]}},
           :good? true,
           :target target-position,
           :caster

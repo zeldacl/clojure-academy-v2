@@ -7,8 +7,7 @@
   :ttl-ticks {:type :int},
   :count {:type :int},
   :radius {:type :float},
-  :color {:type :any},
-  :seed {:type :int}},
+  :color {:type :any}},
  :entry-triggers {:render :vfx/render},
  :phases
  {:render

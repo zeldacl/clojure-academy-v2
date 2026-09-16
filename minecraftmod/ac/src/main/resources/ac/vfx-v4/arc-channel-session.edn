@@ -6,7 +6,6 @@
  {:block-bounds {:type :any},
   :charge-ticks {:type :int},
   :mode {:type :resource-id},
-  :style {:type :any},
   :good? {:type :bool},
   :target {:type :any},
   :caster {:type :vec3},

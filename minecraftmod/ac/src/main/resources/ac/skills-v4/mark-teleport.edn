@@ -74,8 +74,7 @@
        :operation :spawn,
        :instance-key [:activation :mark-teleport],
        :payload
-       {:owner owner-id,
-        :position
+       {:position
         ^{:nid "n/n--entry--start-9-do-52e388f8"}
         (:position destination),
         :color [188 252 238 255],

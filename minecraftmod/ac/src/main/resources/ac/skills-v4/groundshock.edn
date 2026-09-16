@@ -284,7 +284,6 @@
          {:origin origin,
           :direction aim,
           :surface-hits terrain-plan,
-          :seed seed,
           :sound-id "academy:vecmanip.groundshock",
           :sound-volume 2.0,
           :sound-pitch 1.0}})

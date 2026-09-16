@@ -35,7 +35,6 @@
     :payload
     {:position ?mark/target-position,
      :ttl-ticks $mark-duration-ticks,
-     :seed ?context/activation-seed,
      :count 3,
      :radius 0.35,
      :color [236 170 93 180]}}}],

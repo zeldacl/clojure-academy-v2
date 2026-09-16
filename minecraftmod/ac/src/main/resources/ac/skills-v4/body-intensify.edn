@@ -87,13 +87,6 @@
        {:block-bounds nil,
         :charge-ticks 0,
         :mode :body-intensify,
-        :style
-        {:beam
-         {:pattern :thin-continuous,
-          :wiggle 0.5,
-          :life-ratio 0.5,
-          :width 0.04,
-          :color [165 230 255 190]}},
         :good? true,
         :target
         ^{:nid "n/n--entry--start-6-th-985160ff"}
@@ -164,13 +157,6 @@
          {:block-bounds nil,
           :charge-ticks hold-ticks-next,
           :mode :body-intensify,
-          :style
-          {:beam
-           {:pattern :thin-continuous,
-            :wiggle 0.5,
-            :life-ratio 0.5,
-            :width 0.04,
-            :color [165 230 255 190]}},
           :good? true,
           :target
           ^{:nid "n/n--entry--pulse-6-th-bb6709e5"}

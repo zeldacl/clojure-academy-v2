@@ -11,7 +11,6 @@
   :splash-texture-pattern {:type :string},
   :splash-life-ticks {:type :int},
   :target-height {:type :float},
-  :seed {:type :int},
   :spray-textures {:type :any},
   :origin {:type :vec3},
   :surface-hits {:type :any},

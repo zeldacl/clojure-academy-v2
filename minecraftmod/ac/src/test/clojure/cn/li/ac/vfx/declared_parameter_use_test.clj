@@ -38,9 +38,14 @@
             [clojure.test :refer [deftest is]]))
 
 (def ^:private runtime-read
-  "Read by cn.li.vfx.runtime (lifecycle, identity, culling) rather than by
-   the scene program, so a program that never names them is correct."
-  #{:life-ticks :duration-ticks :owner :seed :style})
+  "Read by cn.li.vfx.runtime rather than by the scene program, so a program
+   that never names them is correct. Exactly the four keys
+   transient-duration and the fade path take off an instance's :user map --
+   read off those call sites, not inferred from the name appearing
+   somewhere in the file. An earlier version of this set listed :owner,
+   :seed and :style on exactly that mistake; none of the three is read
+   there, and listing them turned real findings into silence."
+  #{:duration-ticks :life-ticks :ttl-ticks :fade-ticks})
 
 (def ^:private side-channel-read
   "effect-id -> the params client-vfx-v2/update-presentation-sidechannels!
@@ -62,8 +67,16 @@
    five-tier colour table, and blood-retrograde really does run a
    splash/spray system with per-splash TTLs.
 
-   :directed-blastwave-charge used to be listed here and is not any more,
-   which is what finishing one looks like: its pre-V4 charge-ops gives the
+   Three are already gone. :particle-burst-trail-transient was authored for
+   the :particle-trail node -- its twelve parameters are that node's
+   parameters, one for one -- and had been wired to :emitter, which drops
+   :end and everything about the trail; it now calls the node it was
+   written for. :target-mark-session needed nothing: :ttl-ticks is read by
+   the runtime's transient-duration, which an earlier version of the
+   exemption list simply failed to name.
+
+   :directed-blastwave-charge is the third, and is what finishing one by
+   hand looks like: its pre-V4 charge-ops gives the
    exact formula (progress = ticks / max, radius = 0.1 + 0.16 * progress,
    a 0.22-rate sine pulse, alpha 220 or 170 by :punched?), so all four of
    its parameters now drive the ring. It also shipped passing :punched? --
@@ -87,9 +100,6 @@
                                :splash-frame-duration-ms :splash-life-ticks
                                :splash-texture-pattern :spray-duplicates
                                :surface-hits :target-height :target-width}
-    :particle-burst-trail-transient #{:end :fade-in :fade-out :radius
-                                      :spacing :velocity}
-    :target-mark-session #{:ttl-ticks}
     :terrain-shockwave-transient #{:direction :surface-hits}})
 
 (defn- vfx-docs []

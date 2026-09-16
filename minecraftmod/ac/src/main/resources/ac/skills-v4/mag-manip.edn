@@ -151,13 +151,6 @@
        {:block-bounds nil,
         :charge-ticks 0,
         :mode :magnetic-hold,
-        :style
-        {:beam
-         {:pattern :thin-continuous,
-          :wiggle 0.5,
-          :life-ratio 0.5,
-          :width 0.04,
-          :color [165 230 255 190]}},
         :good? true,
         :target eye,
         :caster eye,
@@ -279,13 +272,6 @@
            {:block-bounds nil,
             :charge-ticks 0,
             :mode :magnetic-hold,
-            :style
-            {:beam
-             {:pattern :thin-continuous,
-              :wiggle 0.5,
-              :life-ratio 0.5,
-              :width 0.04,
-              :color [165 230 255 190]}},
             :good? true,
             :target eye,
             :caster eye,
@@ -415,13 +401,6 @@
        {:block-bounds nil,
         :charge-ticks hold-ticks-next,
         :mode :magnetic-hold,
-        :style
-        {:beam
-         {:pattern :thin-continuous,
-          :wiggle 0.5,
-          :life-ratio 0.5,
-          :width 0.04,
-          :color [165 230 255 190]}},
         :good? true,
         :target focus,
         :caster eye,

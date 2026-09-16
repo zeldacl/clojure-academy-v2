@@ -19,14 +19,18 @@
  :phases
  {:render
   [^{:nid "n/n--entry--default-0"}
-   (emitter
-    {:rate-per-tick 1.0,
-     :limit ?count-limit,
-     :particle
-     {:texture ?texture,
-      :life-ticks ?life-ticks,
-      :size ?size,
-      :alpha ?alpha},
-     :anchor ?start})
+   (particle-trail
+    {:count-limit ?count-limit,
+     :life-ticks ?life-ticks,
+     :fade-out ?fade-out,
+     :start ?start,
+     :radius ?radius,
+     :size ?size,
+     :alpha ?alpha,
+     :end ?end,
+     :velocity ?velocity,
+     :texture ?texture,
+     :spacing ?spacing,
+     :fade-in ?fade-in})
    ^{:nid "n/n--entry--default-1"}
    (finish {:outcome :performed})]}}

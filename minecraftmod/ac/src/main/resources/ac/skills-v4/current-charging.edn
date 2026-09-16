@@ -121,7 +121,6 @@
         :mode
         ^{:nid "n/n--entry--start-10-t-d3320aac"}
         (math/select item-present? :item :block),
-        :style style,
         :good? false,
         :target
         ^{:nid "n/n--entry--start-10-t-7d723fd5"}
@@ -251,7 +250,6 @@
              {:block-bounds nil,
               :charge-ticks charge-ticks-next,
               :mode :item,
-              :style style,
               :good? true,
               :target nil,
               :caster eye,
@@ -278,7 +276,6 @@
              {:block-bounds nil,
               :charge-ticks charge-ticks-next,
               :mode :item,
-              :style style,
               :good? false,
               :target nil,
               :caster eye,
@@ -331,7 +328,6 @@
           (:block-bounds energy-target),
           :charge-ticks charge-ticks-next,
           :mode :block,
-          :style style,
           :good? true,
           :target
           ^{:nid "n/n--entry--pulse-13-e-86e368f"}
@@ -387,7 +383,6 @@
           (:block-bounds energy-target),
           :charge-ticks charge-ticks-next,
           :mode :block,
-          :style style,
           :good? false,
           :target
           ^{:nid "n/n--entry--pulse-13-e-f2043e99"}

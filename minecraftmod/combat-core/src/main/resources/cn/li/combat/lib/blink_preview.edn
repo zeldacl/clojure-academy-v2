@@ -22,7 +22,7 @@
       (if (math/gte (:cp context-resources) required-cp)
         [(vfx! {:effect-id :teleport-marker :operation marker-operation
                :instance-key [:activation :teleport-marker] :audience {:type :nearby :radius 64.0}
-               :payload {:owner owner-id :position (:position destination) :color [188 252 238 255]
+               :payload {:position (:position destination) :color [188 252 238 255]
                         :particle-chance 0.0}})]
         [(vfx! {:effect-id :teleport-marker :operation :destroy
                :instance-key [:activation :teleport-marker] :payload {}})])]}
