@@ -9,9 +9,10 @@
     [{:id :sparks :capacity 16
       :attrs {:position :vec3 :velocity :vec3 :age :float :lifetime :float}
       :spawn [{:module :spawn/burst :count 4}
-             {:module :location/line :from [:context :start] :to [:context :end]}
-             {:module :velocity/const :value [0.0 0.05 0.0]}
-             {:module :set :attr :lifetime :value 2.0}]
+             {:module :spawn/set :attr :position
+           :value {:kind :line :from [:context :start] :to [:context :end]}}
+             {:module :spawn/set :attr :velocity :value [0.0 0.05 0.0]}
+             {:module :spawn/set :attr :lifetime :value 2.0}]
       :update [{:module :integrate} {:module :kill-expired}]}]}})
 
 (defn- store [] (runtime/create-store sparks-registry))

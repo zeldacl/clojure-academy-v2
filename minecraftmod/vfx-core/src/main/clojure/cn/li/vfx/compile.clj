@@ -28,7 +28,8 @@
    authoring vocabulary the redesign plan sketches. Richer per-module
    expressions and int-bank attributes are natural, additive follow-ups
    once this model is proven, not a redesign."
-  (:require [cn.li.vfx.layout :as layout])
+  (:require [cn.li.node.rng :as rng]
+            [cn.li.vfx.layout :as layout])
   (:import [cn.li.mcmod.runtime.vfx ParticleColumns]))
 
 (set! *warn-on-reflection* true)
@@ -65,44 +66,138 @@
 
 (defmulti compile-module (fn [decl _layout _context] (:module decl)))
 
-(defmethod compile-module :location/line [decl layout context]
-  (let [[fx fy fz] (vec3-of (resolve-field (:from decl) context))
-        [tx ty tz] (vec3-of (resolve-field (:to decl) context))
-        cap (long (:capacity layout))
-        [px py pz] (vec3-cols layout :position)]
-    (fn [^ParticleColumns pc ^long from ^long to ^double _dt]
-      (let [^floats a (.floats pc) n (max 1.0 (double (- to from)))]
-        (loop [i from]
-          (when (< i to)
-            (let [t (/ (double (- i from)) n)]
-              (aset a (+ (* px cap) i) (float (+ fx (* t (- tx fx)))))
-              (aset a (+ (* py cap) i) (float (+ fy (* t (- ty fy)))))
-              (aset a (+ (* pz cap) i) (float (+ fz (* t (- tz fz))))))
-            (recur (unchecked-inc i))))))))
+(defn- axis-range
+  "[lo hi] for one axis of a {:x [lo hi] :y ... :z ...} spec, or [v v] when
+   the axis names a single number."
+  [spec axis]
+  (let [v (get spec axis)]
+    (cond
+      (number? v) [(double v) (double v)]
+      (and (sequential? v) (= 2 (count v))) [(double (first v)) (double (second v))]
+      :else [0.0 0.0])))
 
-(defmethod compile-module :velocity/const [decl layout context]
-  (let [[vx vy vz] (vec3-of (resolve-field (:value decl) context))
-        cap (long (:capacity layout))
-        [cvx cvy cvz] (vec3-cols layout :velocity)]
-    (fn [^ParticleColumns pc ^long from ^long to ^double _dt]
+(defn- particle-seed
+  "A per-particle, per-channel seed.
+
+   Deterministic on purpose: the same emitter must produce the same
+   particles on every client and on every replay of a frame, so this mixes
+   the emitter's seed with the particle index rather than drawing from a
+   shared generator whose position depends on how many particles ran
+   before it. `salt` separates the channels -- two axes of one spread, or
+   two modules of one stage, would otherwise move in lockstep."
+  ^long [^long base ^long index ^long salt]
+  (rng/next-seed (unchecked-add (unchecked-multiply base 1000003)
+                                (unchecked-add (unchecked-multiply index 131)
+                                               salt))))
+
+;; --- spawn value generators -------------------------------------------------
+;;
+;; A spawn module writes ONE attribute, and the shape of its :value decides
+;; how the value is produced. That is the whole vocabulary: a number is a
+;; constant, a 3-vector is a constant vec3, and a {:kind ...} map is a
+;; generator.
+;;
+;; It used to be one module per (attribute x source) pair -- :location/line
+;; wrote :position, :velocity/const wrote :velocity, :set wrote anything
+;; with a constant -- so every new way of producing a value multiplied by
+;; the attributes it could target. Adding a spread and a per-axis range
+;; that way needed three more modules to say two new things.
+
+(defn- scalar-writer [f layout attr]
+  (let [cap (long (:capacity layout)) col (float-col layout attr)]
+    (fn [^ParticleColumns pc ^long from ^long to ^long seed]
       (let [^floats a (.floats pc)]
         (loop [i from]
           (when (< i to)
-            (aset a (+ (* cvx cap) i) (float vx))
-            (aset a (+ (* cvy cap) i) (float vy))
-            (aset a (+ (* cvz cap) i) (float vz))
+            (aset a (+ (* col cap) i) (float (f i seed)))
             (recur (unchecked-inc i))))))))
 
-(defmethod compile-module :set [decl layout context]
-  (let [value (double (resolve-field (:value decl) context))
-        cap (long (:capacity layout))
-        col (float-col layout (:attr decl))]
-    (fn [^ParticleColumns pc ^long from ^long to ^double _dt]
+(defn- vec3-writer [f layout attr]
+  (let [cap (long (:capacity layout)) [cx cy cz] (vec3-cols layout attr)]
+    (fn [^ParticleColumns pc ^long from ^long to ^long seed]
       (let [^floats a (.floats pc)]
         (loop [i from]
           (when (< i to)
-            (aset a (+ (* col cap) i) (float value))
+            (let [[x y z] (f i seed (- to from) (- i from))]
+              (aset a (+ (* cx cap) i) (float x))
+              (aset a (+ (* cy cap) i) (float y))
+              (aset a (+ (* cz cap) i) (float z)))
             (recur (unchecked-inc i))))))))
+
+(defn- spawn-value-writer
+  "value + target attribute -> (fn [pc from to seed])."
+  [value attr layout context]
+  (let [value (resolve-field value context)]
+    (cond
+      (number? value)
+      (scalar-writer (fn [_i _seed] (double value)) layout attr)
+
+      (and (sequential? value) (= 3 (count value)))
+      (let [[x y z] (vec3-of value)]
+        (vec3-writer (fn [_i _seed _n _k] [x y z]) layout attr))
+
+      (map? value)
+      (case (:kind value)
+        ;; scalar, uniform in [:min :max] -- a spawn-time range such as an
+        ;; alpha of 153-204, where every particle must differ
+        :uniform
+        (let [lo (double (resolve-field (:min value) context))
+              hi (double (resolve-field (:max value) context))]
+          (scalar-writer (fn [i seed] (rng/uniform (particle-seed seed i 0) lo hi))
+                         layout attr))
+
+        ;; vec3, spread evenly along a segment -- the burst is a line
+        :line
+        (let [[fx fy fz] (vec3-of (resolve-field (:from value) context))
+              [tx ty tz] (vec3-of (resolve-field (:to value) context))]
+          (vec3-writer (fn [_i _seed n k]
+                         (let [t (/ (double k) (max 1.0 (double n)))]
+                           [(+ fx (* t (- tx fx)))
+                            (+ fy (* t (- ty fy)))
+                            (+ fz (* t (- tz fz)))]))
+                       layout attr))
+
+        ;; vec3, scattered through a box around :center
+        :box
+        (let [[cx cy cz] (vec3-of (resolve-field (:center value) context))
+              spread (:spread value)
+              [lox hix] (axis-range spread :x)
+              [loy hiy] (axis-range spread :y)
+              [loz hiz] (axis-range spread :z)]
+          (vec3-writer (fn [i seed _n _k]
+                         [(+ cx (rng/uniform (particle-seed seed i 1) lox hix))
+                          (+ cy (rng/uniform (particle-seed seed i 2) loy hiy))
+                          (+ cz (rng/uniform (particle-seed seed i 3) loz hiz))])
+                       layout attr))
+
+        ;; vec3, a per-axis range. Ranges rather than one symmetric
+        ;; magnitude because the originals are asymmetric: the teleport
+        ;; marker's particles drift sideways either way but only ever rise.
+        :range
+        (let [[lox hix] (axis-range value :x)
+              [loy hiy] (axis-range value :y)
+              [loz hiz] (axis-range value :z)]
+          (vec3-writer (fn [i seed _n _k]
+                         [(rng/uniform (particle-seed seed i 4) lox hix)
+                          (rng/uniform (particle-seed seed i 5) loy hiy)
+                          (rng/uniform (particle-seed seed i 6) loz hiz)])
+                       layout attr))
+
+        (throw (ex-info "unknown spawn value generator"
+                        {:kind (:kind value) :attr attr})))
+
+      :else
+      (throw (ex-info "spawn value must be a number, a 3-vector or a {:kind ...} generator"
+                      {:attr attr :value value})))))
+
+(defmethod compile-module :spawn/set [decl layout context]
+  ;; :salt is assigned by compile-spawn-stage from the emitter's own :seed
+  ;; and this module's position, never declared per module -- two modules
+  ;; that happened to name the same seed would generate correlated values.
+  (let [write (spawn-value-writer (:value decl) (:attr decl) layout context)
+        salt (long (or (:salt decl) 0))]
+    (fn [^ParticleColumns pc ^long from ^long to ^double _dt]
+      (write pc from to salt))))
 
 (defmethod compile-module :forces/apply [decl layout _context]
   (let [[gx gy gz] (vec3-of (or (:gravity decl) [0.0 0.0 0.0]))
@@ -187,17 +282,27 @@
 
 (defn compile-spawn-stage
   "The compiled closure for one spawn-stage module list: reserves
-   :spawn/burst's :count new slots, then runs every remaining module
-   (assumed :location/line, :velocity/const, :set, ...) over exactly that
-   new range. Returns (fn [^ParticleColumns pc dt] -> nil)."
-  [modules layout context]
-  (let [count-decl (first (filter #(= :spawn/burst (:module %)) modules))
-        n (long (or (:count count-decl) 0))
-        init-fns (mapv #(compile-module % layout context) (remove #(= :spawn/burst (:module %)) modules))]
-    (fn [^ParticleColumns pc ^double dt]
-      (when (pos? n)
-        (let [from (long (.reserve pc (int n))) to (+ from n)]
-          (doseq [f init-fns] (f pc from to dt)))))))
+   :spawn/burst's :count new slots, then runs every remaining module --
+   each a :spawn/set writing one attribute -- over exactly that new range.
+   Returns (fn [^ParticleColumns pc dt] -> nil).
+
+   `seed` is the EMITTER's, salted here by each module's position so two
+   modules drawing from a range do not move in lockstep. Modules never
+   carry a seed of their own."
+  ([modules layout context] (compile-spawn-stage modules layout context 0))
+  ([modules layout context seed]
+   (let [count-decl (first (filter #(= :spawn/burst (:module %)) modules))
+         n (long (or (:count count-decl) 0))
+         init-fns (into []
+                        (map-indexed (fn [i decl]
+                                       (compile-module (assoc decl :salt
+                                                              (+ (* 977 (long seed)) i))
+                                                       layout context)))
+                        (remove #(= :spawn/burst (:module %)) modules))]
+     (fn [^ParticleColumns pc ^double dt]
+       (when (pos? n)
+         (let [from (long (.reserve pc (int n))) to (+ from n)]
+           (doseq [f init-fns] (f pc from to dt))))))))
 
 (defn compile-update-stage
   "modules run in order over the WHOLE live range each tick; kill-expired,
@@ -210,7 +315,8 @@
         (doseq [f fns] (f pc 0 to dt))))))
 
 (defn compile-emitter
-  "decl: {:id :capacity :attrs {attr-name type} :spawn [...] :update [...]}.
+  "decl: {:id :capacity :seed n :attrs {attr-name type}
+          :spawn [...] :update [...]}.
    context: {k already-resolved-value}, e.g. this effect instance's :user
    capability values, resolved once by the caller before compiling (see
    this namespace's docstring, scope cut 1).
@@ -219,7 +325,8 @@
   [decl context]
   (let [layout (layout/build (:attrs decl) (long (:capacity decl)))]
     {:layout layout
-     :spawn (compile-spawn-stage (:spawn decl) layout context)
+     :spawn (compile-spawn-stage (:spawn decl) layout context
+                                 (long (or (:seed decl) 0)))
      :update (compile-update-stage (:update decl) layout context)
      :new-buffer (fn [] (ParticleColumns. (int (:capacity layout))
                                           (int (:float-cols layout))
