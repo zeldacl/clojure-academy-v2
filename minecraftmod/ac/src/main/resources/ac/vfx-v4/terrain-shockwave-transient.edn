@@ -4,8 +4,6 @@
  :activation :instant,
  :parameters
  {:origin {:type :vec3},
-  :direction {:type :vec3},
-  :surface-hits {:type :any},
   :sound-id {:type :string},
   :sound-volume {:type :float},
   :sound-pitch {:type :float}},

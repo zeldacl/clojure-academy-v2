@@ -187,9 +187,6 @@
           :duration-ticks 20,
           :fade-ring-from 1.4,
           :sound-volume 0.6,
-          :start
-          ^{:nid "n/n--entry--release-2--8990fe5c"}
-          (:position destination),
           :fade-ring-to 2.0,
           :sound-id "academy:em.teleport",
           :ring-to 1.4,
@@ -197,9 +194,6 @@
           :fade-color [236 170 93 180],
           :fade-segments 24,
           :ring-from 0.25,
-          :end
-          ^{:nid "n/n--entry--release-2--6a288881"}
-          (:position destination),
           :ring-color [188 252 238 220],
           :ring-segments 24},
          :audience {:type :nearby, :radius 64.0}})

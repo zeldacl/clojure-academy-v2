@@ -82,18 +82,18 @@
    its parameters now drive the ring. It also shipped passing :punched? --
    a BOOLEAN -- as the ring's :color, which is why :color is now :rgba.
 
-   Finishing the rest is content work against those references, and some
-   may need scene vocabulary that does not exist yet (the emitter has no
-   frame animation or duplicate control for blood-retrograde's sprays).
-   That is a known cost, not an open question."
-  '{:arc-ring-fade-audio #{:end :start}
-    :block-scan-transient #{:advanced? :filter :max-range :max-results
+   The two that remain are blocked on the renderer, not on authoring, and
+   particle-payload-contract-test says exactly how: an emitter's :particle
+   map is free-form :any and vfx-render-plan reads six of its keys.
+   blood-retrograde's splash needs per-splash colour and life, block-scan's
+   readout a colour per tool tier, and neither is a key the renderer reads.
+   Writing them would produce content that compiles and renders wrong."
+  '{:block-scan-transient #{:advanced? :filter :max-range :max-results
                             :range :rescan-interval :tier-colors}
     :blood-retrograde-impact #{:look-dir :splash-count :splash-frame-count
                                :splash-frame-duration-ms :splash-life-ticks
                                :splash-texture-pattern :spray-duplicates
-                               :surface-hits :target-height :target-width}
-    :terrain-shockwave-transient #{:direction :surface-hits}})
+                               :surface-hits :target-height :target-width}})
 
 (defn- vfx-docs []
   (let [root (io/file (io/resource "ac/vfx-v4"))]

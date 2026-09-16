@@ -282,8 +282,6 @@
          :audience {:type :nearby, :radius 32.0},
          :payload
          {:origin origin,
-          :direction aim,
-          :surface-hits terrain-plan,
           :sound-id "academy:vecmanip.groundshock",
           :sound-volume 2.0,
           :sound-pitch 1.0}})
