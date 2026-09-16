@@ -126,8 +126,13 @@
            :geometry {:kind :beam :start (:start op) :end (:end op)
                       :grow-ticks (:grow-ticks op)}
            :material (beam-material op)}
+    ;; :grow-ticks is forwarded here for the same reason the :beam arm
+    ;; forwards it -- both produce a {:kind :beam} geometry and the render
+    ;; plan reads it off that. Omitting it meant the two shipped ray-beam
+    ;; effects set a growth that never animated.
     :ray-beam {:operation :draw-batch :stage :world-after-translucent :primitive :quad
-               :geometry {:kind :beam :start (:start op) :end (:end op)}
+               :geometry {:kind :beam :start (:start op) :end (:end op)
+                          :grow-ticks (:grow-ticks op)}
                :material (:style op)}
     :ray-fan {:operation :draw-batch :stage :world-after-translucent :primitive :quad
               :geometry {:kind :ray-fan :origin (:origin op) :direction (:direction op)
@@ -168,7 +173,8 @@
                      :alpha (double (or (:alpha op) 1.0))}}
     :emitter {:operation :draw-batch :stage :world-translucent :primitive :quad
               :geometry {:kind :emitter :anchor (:anchor op) :rate-per-tick (:rate-per-tick op)
-                        :limit (:limit op) :chance (:chance op) :age (:age op) :particle (:particle op) :anchor-offset-y (:anchor-offset-y op)
+                        :limit (:limit op) :chance (:chance op) :particle (:particle op)
+                        :anchor-offset-y (:anchor-offset-y op)
                         :hand-origin? (boolean (:hand-origin? op))
                         :source-player-id (:source-player-id op)}
               :material {:particle (:particle op)}}

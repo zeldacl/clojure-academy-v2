@@ -275,11 +275,17 @@
 
 (deftest vfx-vocabulary-untyped-parameter-count-test
   (let [rows (param-rows vfx-vocab/nodes)]
-    (is (= 35 (count (any-typed rows)))
+    ;; 35 -> 33, 60 -> 56, 132 -> 128: four params that frame/legacy-op
+    ;; never forwarded, so no renderer could see them --
+    ;; :audio-loop's :instance-key (->java-frame overwrites it with the
+    ;; sample's own) and :stop-on-destroy? (a loop stops by no longer being
+    ;; re-synced), :camera-fov's :duration-ticks (VfxOutput has no slot),
+    ;; and :line's :color (the arm forwards :material only).
+    (is (= 33 (count (any-typed rows)))
         "vfx vocab :any-typed param count changed")
-    (is (= 60 (count (filter :optional? rows)))
+    (is (= 56 (count (filter :optional? rows)))
         "vfx vocab optional param count changed")
-    (is (= 132 (count rows))
+    (is (= 128 (count rows))
         "vfx vocab total param count changed")
     (testing "vfx nodes are all scene actions -- nothing here returns a value"
       (is (every? nil? (map :returns (vals vfx-vocab/nodes)))

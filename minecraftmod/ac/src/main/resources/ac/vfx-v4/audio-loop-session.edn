@@ -13,9 +13,7 @@
  {:render
   [^{:nid "n/n--entry--default-0"}
    (audio-loop
-    {:instance-key [:effect-instance :audio-loop],
-     :stop-on-destroy? true,
-     :position ?position,
+    {:position ?position,
      :sound-id ?sound-id,
      :volume ?volume,
      :pitch ?pitch,

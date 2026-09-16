@@ -107,7 +107,9 @@
    :ray-beam
    (node {:start (p* :vec3) :end (p* :vec3) :style (opt :any nil) :grow-ticks (opt :long 0)})
    :line
-   (node {:from (p* :vec3) :to (p* :vec3) :color (opt :any nil) :material (opt :any nil)})
+   ;; No :color: the frame arm forwards :material and nothing else, so a
+   ;; colour set here reached no renderer.
+   (node {:from (p* :vec3) :to (p* :vec3) :material (opt :any nil)})
    :quad
    (node {:geometry (p) :material (opt :any nil)})
    ;; Zigzag lightning bolt (main arc-gen / EntityArc). Expanded to textured
@@ -169,13 +171,22 @@
    :audio-one-shot
    (node {:sound-id (p* :string) :volume (opt :double 1.0) :pitch (opt :double 1.0) :position (p* :vec3)})
    :audio-loop
-   (node {:sound-id (p* :string) :volume (opt :double 1.0) :pitch (opt :double 1.0) :position (p* :vec3)
-         :instance-key (opt :any nil) :looping? (opt :boolean true)
-         :stop-on-destroy? (opt :boolean true)})
+   ;; No :instance-key: ->java-frame assocs the SAMPLE's own instance key
+   ;; onto every op, so one set here was always overwritten -- identity
+   ;; belongs to the envelope, not the payload.
+   ;;
+   ;; No :stop-on-destroy? either. A loop is re-synced by key every frame
+   ;; it is sampled, so destroying the instance stops it by construction;
+   ;; the flag selected nothing and appeared nowhere in the renderer.
+   (node {:sound-id (p* :string) :volume (opt :double 1.0) :pitch (opt :double 1.0)
+         :position (p* :vec3) :looping? (opt :boolean true)})
 
    ;; --- camera/post ---------------------------------------------------------
    :camera-fov
-   (node {:value (p* :double) :duration-ticks (opt :long 0)})
+   ;; No :duration-ticks: VfxOutput has no slot for one, and a scene is
+   ;; re-sampled every render frame, so a ramp is expressed by computing
+   ;; :value from the effect's own age rather than by declaring a span.
+   (node {:value (p* :double)})
    :camera-shake
    (node {:amplitude (p* :double) :duration (p* :double)})
    :post-process

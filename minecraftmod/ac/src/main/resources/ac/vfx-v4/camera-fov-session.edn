@@ -9,6 +9,6 @@
  :phases
  {:render
   [^{:nid "n/n--entry--default-0"}
-   (camera-fov {:duration-ticks 1, :value ?offset})
+   (camera-fov {:value ?offset})
    ^{:nid "n/n--entry--default-1"}
    (finish {:outcome :performed})]}}
