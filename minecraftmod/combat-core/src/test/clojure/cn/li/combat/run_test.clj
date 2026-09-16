@@ -25,7 +25,7 @@
   {:query! (fn [cap args _fr]
             (swap! calls conj [:query cap args])
             (case cap
-              :raycast {:entity-id "target-uuid" :position {:x 1.0 :y 2.0 :z 3.0}}
+              :target/raycast {:entity-id "target-uuid" :position {:x 1.0 :y 2.0 :z 3.0}}
               nil))
    :command! (fn [cap args _fr] (swap! calls conj [:action cap args]))})
 
@@ -42,7 +42,7 @@
                :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}}}
         frame (run/dispatch! program :default input)]
     (testing "raycast queried with the resolved capability, not the raw node id"
-      (is (= [:query :raycast {:origin {:x 0.0 :y 1.0 :z 0.0} :direction {:x 0.0 :y 0.0 :z 1.0}
+      (is (= [:query :target/raycast {:origin {:x 0.0 :y 1.0 :z 0.0} :direction {:x 0.0 :y 0.0 :z 1.0}
                                :distance 24.0 :include-entities? true :include-blocks? true
                                :living-only? true}]
              (first @calls))))

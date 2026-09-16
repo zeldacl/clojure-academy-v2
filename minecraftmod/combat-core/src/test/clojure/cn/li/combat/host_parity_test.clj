@@ -28,3 +28,33 @@
 (deftest platform-query-handlers-have-engine-arity-test
   (is (= [] (parity/query-handler-arity-gaps))
       "every query handler must accept (request frame-context), the shape used by ability-runtime"))
+
+(deftest nodes-that-need-different-handlers-do-not-share-a-capability-test
+  ;; The gap the three tests above could not see. They ask whether every
+  ;; capability is registered -- :raycast was. What they cannot ask is
+  ;; whether ONE registered handler is being asked to serve several
+  ;; different request shapes, which is what the raycast family did: five
+  ;; nodes all declared :raycast, and platform/raycast! then `case`d on a
+  ;; :query-kind request key that nothing in the repo ever set. Four of its
+  ;; five branches were dead, so :target/raycast-fan returned a single hit
+  ;; where it declares [:list-of :hit-result], and penetrate-teleport gated
+  ;; on an :available? that the fallback handler does not emit.
+  ;;
+  ;; A shared capability is legitimate only when the nodes want the SAME
+  ;; behaviour, which is a claim about their return type: the one
+  ;; deliberate pair left (:target/resolve-destination and
+  ;; :target/block-placement) is one query read two ways.
+  (let [by-capability (->> vocab/nodes
+                           (group-by (fn [[node-id spec]]
+                                       (or (:capability spec) node-id)))
+                           (filter (fn [[_ entries]] (< 1 (count entries)))))
+        offenders (for [[capability entries] by-capability
+                        :let [returns (set (map (comp :returns val) entries))]
+                        :when (< 1 (count returns))]
+                    {:capability capability
+                     :nodes (mapv key entries)
+                     :returns returns})]
+    (is (= [] (vec offenders))
+        (str "these nodes share one host handler but declare different"
+             " return types, so the handler cannot serve all of them and"
+             " nothing else will report it: " (pr-str (vec offenders))))))

@@ -827,19 +827,48 @@
                (update position :y + (double (or (:marker-offset-y policy) 0.0)))
                :hit? false)))))
 
+;; Each raycast-family node registers its OWN capability below, so each gets
+;; its own handler here.
+;;
+;; This used to be one raycast! that `case`d on a :query-kind request key.
+;; Nothing ever set that key -- engine-v2's :query! assocs only :owner and
+;; :world-id, and :query-kind appears nowhere else in the repo, nor on main
+;; -- so four of its five branches were unreachable and every one of the
+;; five nodes got basic-raycast. It was silent because a raycast result is
+;; a well-formed map: :target/raycast-fan declares [:list-of :hit-result]
+;; and received a single one, and penetrate-teleport gated on an
+;; :available? that basic-raycast does not emit, so nil became false and
+;; the skill could never fire.
+(defn- ray-request-usable?
+  [request]
+  (and (:world-id request) (point (:origin request)) (raycast/available?)))
+
 (defn raycast!
-  [{:keys [owner query-kind] :as request} _frame]
-  (when (and (:world-id request) (point (:origin request))
-             (or (point (:direction request))
-                 (= :directional-destination query-kind))
-             (raycast/available?))
-    (case query-kind
-      :raycast-fan (raycast-fan! request nil)
-      :directional-destination (directional-raycast owner request)
-      :resolve-destination (resolve-destination owner request)
-      :block-placement (resolve-destination owner request)
-      :penetration (penetration-raycast request)
-      (basic-raycast request))))
+  [request _frame]
+  (when (and (ray-request-usable? request) (point (:direction request)))
+    (basic-raycast request)))
+
+(defn raycast-fan-query!
+  [request frame]
+  (when (and (ray-request-usable? request) (point (:direction request)))
+    (raycast-fan! request frame)))
+
+(defn resolve-destination!
+  [request _frame]
+  (when (and (ray-request-usable? request) (point (:direction request)))
+    (resolve-destination (:owner request) request)))
+
+(defn directional-destination!
+  ;; The one that does NOT require a vector :direction: its :direction is
+  ;; the :forward/:back/:left/:right enum, resolved against :look.
+  [request _frame]
+  (when (ray-request-usable? request)
+    (directional-raycast (:owner request) request)))
+
+(defn penetration!
+  [request _frame]
+  (when (and (ray-request-usable? request) (point (:direction request)))
+    (penetration-raycast request)))
 
 (defn interaction-resolve!
   "Resolve a neutral reflection interaction for the supplied target.
@@ -1829,7 +1858,14 @@
             (+ oz (* dz range))]}))
 
 (defn query-handlers []
-  {:raycast raycast!
+  {:target/raycast raycast!
+   :target/raycast-fan raycast-fan-query!
+   :target/resolve-destination resolve-destination!
+   ;; Same handler under both capabilities: :target/block-placement is
+   ;; resolve-destination read for placement, not a different query.
+   :target/block-placement resolve-destination!
+   :target/directional-destination-query directional-destination!
+   :target/penetration penetration!
    :item/held item-held!
    :entity/select entity-select!
    :block/select block-select!

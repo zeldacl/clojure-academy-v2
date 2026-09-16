@@ -15,7 +15,7 @@
           {:name blink-distance :type :double} {:name blink-cp :type :double}
           {:name creative? :type :boolean} {:name marker-operation :type :keyword}]
  :do [(let destination
-        (target/directional-destination body aim eye-y direction blink-distance {}))
+        (target/directional-destination body aim eye-y direction blink-distance))
       (state! :destination destination)
       (let context-resources ?context/resources)
       (let required-cp (math/select creative? 0.0 blink-cp))

@@ -96,6 +96,10 @@
    ;; Adding :max-cp to make both producers fit would turn a read that is
    ;; nil today into one this check calls fine.
    :resource-pool #{:cp :overload}
+   ;; targeting/march-through-collision's five keys plus the two
+   ;; penetration-raycast assocs on. One producer, one closed key set.
+   :penetration-result #{:position :distance :march-distance :available?
+                         :valid? :marker-position :hit?}
    ;; platform/terrain-propagate!: the seed state map plus the
    ;; :mastery-breaks it assoc's on at the end.
    :terrain-plan #{:affected-blocks :transforms :broken-blocks :entities

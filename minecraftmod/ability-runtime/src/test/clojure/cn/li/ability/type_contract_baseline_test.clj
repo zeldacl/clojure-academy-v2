@@ -74,14 +74,20 @@
       ;; block-transforms were tagged. That node takes seventeen positional
       ;; params, nine of them :double, so the mistake these three now catch
       ;; is an argument landing in the wrong slot.
-      (is (= 54 (count anys))
+      ;; 54 -> 49 when the raycast family stopped sharing one capability:
+      ;; four :policy params could finally name a shape (one per handler),
+      ;; and the fifth was deleted outright because its callee never read
+      ;; it.
+      (is (= 49 (count anys))
           (str "combat vocab :any-typed params changed. Offenders:\n"
                (str/join "\n" (map #(str "  " (:node %) " / " (:param %))
                                    (sort-by (juxt :node :param) anys))))))
     (testing "optional parameters are why a missing wire cannot raise :missing-param"
       (is (= 115 (count (filter :optional? rows)))
           "combat vocab optional param count changed")
-      (is (= 231 (count rows))
+      ;; 231 -> 236: :target/penetration is new (+6) and
+      ;; :target/directional-destination-query lost its unread :policy (-1).
+      (is (= 236 (count rows))
           "combat vocab total param count changed"))))
 
 (deftest combat-vocabulary-return-type-count-test
@@ -189,7 +195,18 @@
                             ;; :distance, so there is no branch on which
                             ;; the key can be missing -- including the
                             ;; miss, whose distance is the full ray length.
-                            [:destination :distance] [:hit-result :distance]}
+                            [:destination :distance] [:hit-result :distance]
+                            ;; march-through-collision builds its result in
+                            ;; two places and both set all five keys;
+                            ;; penetration-raycast's two assocs on top are
+                            ;; unconditional. So no branch omits any of
+                            ;; these -- when the march returns at all, it
+                            ;; returns them.
+                            [:penetration-result :distance]
+                            [:penetration-result :march-distance]
+                            [:penetration-result :available?]
+                            [:penetration-result :valid?]
+                            [:penetration-result :hit?]}
         declared (for [[type-tag schema] combat-vocab/field-types
                        [field-key field-type] (if (map? schema)
                                                 schema
@@ -299,15 +316,17 @@
     ;; than an error, which a uniform schema would bank primitively and
     ;; turn into a silent 0.0.
     ;;
-    ;; The remaining 4 are all a `policy` map (:target/hold-destination,
-    ;; :target/raycast-destination, :target/directional-destination, and
-    ;; :combat/beam-strike's reflection-policy). These cannot be typed
-    ;; while five raycast-family nodes share one :raycast capability and
-    ;; platform/raycast! dispatches on a :query-kind that nothing supplies:
-    ;; one handler serving five request shapes is exactly why :policy has
-    ;; to be :any. Typing them first would describe a contract that does
-    ;; not execute.
-    (is (= 4 (count (any-typed rows)))
+    ;; 4 -> 0. The four were all a `policy` map, and they could only be
+    ;; typed once the raycast family stopped sharing a single :raycast
+    ;; capability behind a :query-kind nothing set -- one handler serving
+    ;; five request shapes is why :policy had no shape to name. Three now
+    ;; carry the tag of the handler that reads them and the fourth
+    ;; (:target/directional-destination's) is gone, because
+    ;; targeting/directional-destination never destructured a :policy.
+    ;;
+    ;; ZERO is now an invariant, not a ratchet: a new :any-typed :defn
+    ;; param means someone added an untyped one.
+    (is (= 0 (count (any-typed rows)))
         (str ":defn library :any-typed param count changed. Offenders: "
              (pr-str (map (juxt :fn :param) (any-typed rows)))))
     (is (= 0 (count (filter #(= :any (types/canonical-type (:returns %)))

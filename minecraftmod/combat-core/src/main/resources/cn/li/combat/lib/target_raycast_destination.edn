@@ -11,7 +11,7 @@
 ;; the reads. A :defn returning one value should return that value.
 {:defn :target/raycast-destination
  :params [{:name origin :type :vec3} {:name direction :type :vec3} {:name distance :type :double}
-          {:name policy :type :any} {:name include-entities? :type :boolean}
+          {:name policy :type :destination-policy} {:name include-entities? :type :boolean}
           {:name include-blocks? :type :boolean}]
  :do [(let hit (target/raycast {:origin origin :direction direction :distance distance
                                 :include-entities? include-entities? :include-blocks? include-blocks?}))

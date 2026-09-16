@@ -25,7 +25,7 @@
           {:name length :type :double} {:name visual-length :type :double} {:name radius :type :double}
           {:name query-radius :type :double} {:name entity-limit :type :long} {:name damage :type :double}
           {:name damage-type :type :keyword} {:name block-limit :type :long}
-          {:name reflection-policy :type :any} {:name step :type :double}]
+          {:name reflection-policy :type :reflection-policy} {:name step :type :double}]
  :do [(let beam (kernel/trace-beam {:origin origin :trace-origin trace-origin :direction direction
                                     :length length :visual-length visual-length :radius radius
                                     :query-radius query-radius :entity-limit entity-limit

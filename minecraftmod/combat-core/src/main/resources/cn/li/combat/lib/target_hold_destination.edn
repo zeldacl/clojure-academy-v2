@@ -8,7 +8,7 @@
  :params [{:name origin :type :vec3} {:name direction :type :vec3} {:name hold-ticks :type :double}
           {:name range-per-hold-tick :type :double} {:name maximum-range :type :double}
           {:name available-resource :type :double} {:name resource-per-distance :type :double}
-          {:name policy :type :any} {:name include-entities? :type :boolean}
+          {:name policy :type :destination-policy} {:name include-entities? :type :boolean}
           {:name include-blocks? :type :boolean}]
  :do [(let grown (math/mul range-per-hold-tick (math/add hold-ticks 1.0)))
       (let capped (math/min grown maximum-range))

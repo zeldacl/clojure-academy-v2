@@ -43,7 +43,7 @@
 
 (defn- register-fakes! [calls]
   (capabilities/register-query!
-   :raycast (fn [args _frame] (swap! calls conj [:query :raycast args]) {:entity-id "target-1"})
+   :target/raycast (fn [args _frame] (swap! calls conj [:query :target/raycast args]) {:entity-id "target-1"})
    {:allow-overwrite? true})
   (capabilities/register-query!
    :cost/spend (fn [args _frame] (swap! calls conj [:query :cost/spend args]) true)
@@ -80,7 +80,7 @@
           result (engine-v2/dispatch! runtime :engine-v2-test-ability
                                       {:owner "player-1" :entry :start :input input})]
       (testing "the raycast query got :owner/:world-id injected (not declared by the DSL node itself)"
-        (is (some #(= [:query :raycast {:origin {:x 0.0 :y 1.5 :z 0.0} :direction {:x 0.0 :y 0.0 :z 1.0}
+        (is (some #(= [:query :target/raycast {:origin {:x 0.0 :y 1.5 :z 0.0} :direction {:x 0.0 :y 0.0 :z 1.0}
                                         :distance 20.0 :include-entities? true
                                         :owner "player-1" :world-id "overworld"}]
                       %)

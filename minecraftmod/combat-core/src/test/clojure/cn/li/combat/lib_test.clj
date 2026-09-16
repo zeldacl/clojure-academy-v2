@@ -24,13 +24,16 @@
               :command! (fn [_cap _args _fr])}
         text "{:id :t-directional :activation :instant
                :parameters {:eye-y {:type :double} :distance {:type :double}}
-               :do [(target/directional-destination ?caster/eye ?caster/aim $eye-y :forward $distance {})
+               :do [(target/directional-destination ?caster/eye ?caster/aim $eye-y :forward $distance)
                     (finish {:outcome :performed})]}"
         input {:tunables {:eye-y 1.5 :distance 20.0}
                :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}}}]
     (compile-and-dispatch! text host input)
-    (is (= [[:raycast {:origin {:x 0.0 :y 1.0 :z 0.0} :look {:x 0.0 :y 0.0 :z 1.0} :eye-y 1.5
-                       :direction :forward :distance 20.0 :policy {}}]]
+    ;; No :policy in the request: the node has no such param any more,
+    ;; because targeting/directional-destination never read one.
+    (is (= [[:target/directional-destination-query
+             {:origin {:x 0.0 :y 1.0 :z 0.0} :look {:x 0.0 :y 0.0 :z 1.0} :eye-y 1.5
+              :direction :forward :distance 20.0}]]
            @calls))))
 
 ;; --- target/raycast-destination ----------------------------------------------
@@ -51,10 +54,14 @@
                :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}}}]
     (compile-and-dispatch! text host input)
     (testing "raycast ran first, without a :hit arg"
-      (is (= :raycast (first (first @calls))))
+      (is (= :target/raycast (first (first @calls))))
       (is (not (contains? (second (first @calls)) :hit))))
+    ;; The two steps now reach DIFFERENT capabilities. While both were
+    ;; :raycast the host could not tell them apart, and this test's own
+    ;; stub had to branch on (contains? args :hit) to fake the routing
+    ;; production was missing.
     (testing "resolve-destination ran second, fed the FIRST call's own return value"
-      (is (= :raycast (first (second @calls))))
+      (is (= :target/resolve-destination (first (second @calls))))
       (is (= {:entity-id nil :position {:x 5.0 :y 6.0 :z 7.0}} (:hit (second (second @calls))))))))
 
 ;; --- target/hold-destination --------------------------------------------------
@@ -98,12 +105,15 @@
     (compile-and-dispatch! text host input)
     (testing "resource-limited 10/2=5 beats the raw 50 distance cap"
       (let [[cap args] (first @calls)]
-        (is (= :raycast cap))
+        ;; Its own capability, and the scan parameters arrive as named
+        ;; params. They used to ride inside a :policy map on :target/raycast
+        ;; that the host never routed on, so this skill got a plain raycast.
+        (is (= :target/penetration cap))
         (is (= 5.0 (:distance args)))
-        (is (false? (:include-entities? args)))
-        (is (true? (:include-blocks? args)))
-        (is (= {:type :penetration :scan-step 0.5 :clearance-steps 3 :marker-offset-y 0.25}
-               (:policy args)))))))
+        (is (= 0.5 (:scan-step args)))
+        (is (= 3 (:clearance-steps args)))
+        (is (= 0.25 (:marker-offset-y args)))
+        (is (not (contains? args :policy)))))))
 
 ;; --- terrain/apply-break-budget -----------------------------------------------
 
@@ -164,7 +174,7 @@
         text "{:id :t-beam :activation :instant
                :parameters {:length {:type :double} :radius {:type :double} :damage {:type :double}}
                :do [(combat/beam-strike ?caster/eye ?caster/eye ?caster/aim $length $length $radius
-                      $radius 256 $damage :fire 4096 nil 1.0)
+                      $radius 256 $damage :fire 4096 {:shot-distance 10.0 :damage-multiplier 0.5 :reflection-base-damage 2.0} 1.0)
                     (finish {:outcome :performed})]}"
         input {:tunables {:length 32.0 :radius 1.0 :damage 6.0}
                :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}}}]
@@ -177,7 +187,7 @@
   (let [text "{:id :t-beam-nil :activation :instant
                :parameters {:length {:type :double} :radius {:type :double} :damage {:type :double}}
                :do [(combat/beam-strike ?caster/eye ?caster/eye ?caster/aim $length nil $radius
-                      $radius 256 $damage :fire 4096 nil 1.0)
+                      $radius 256 $damage :fire 4096 {:shot-distance 10.0 :damage-multiplier 0.5 :reflection-base-damage 2.0} 1.0)
                     (finish {:outcome :performed})]}" ]
     (try
       (run/compile-doc! text lib/fns)

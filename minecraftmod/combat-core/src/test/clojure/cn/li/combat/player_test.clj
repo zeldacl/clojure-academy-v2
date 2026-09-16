@@ -14,13 +14,13 @@
   {:query! (fn [cap args _fr]
             (swap! calls conj [:query cap args])
             (case cap
-              :raycast {:entity-id "target-uuid" :position {:x 1.0 :y 2.0 :z 3.0}}))
+              :target/raycast {:entity-id "target-uuid" :position {:x 1.0 :y 2.0 :z 3.0}}))
    :command! (fn [cap args _fr] (swap! calls conj [:action cap args]))})
 
 (defn- fake-host-no-hit [calls]
   {:query! (fn [cap args _fr]
             (swap! calls conj [:query cap args])
-            (case cap :raycast {:entity-id nil}))
+            (case cap :target/raycast {:entity-id nil}))
    :command! (fn [cap args _fr] (swap! calls conj [:action cap args]))})
 
 (def ^:private input {:capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
@@ -47,7 +47,7 @@
         program (run/compile-program ir (fake-host calls))
         _frame (run/dispatch! program :default input)]
     (is (true? ok))
-    (is (some #(= [:query :raycast {:origin {:x 0.0 :y 1.5 :z 0.0} :direction {:x 0.0 :y 0.0 :z 1.0}
+    (is (some #(= [:query :target/raycast {:origin {:x 0.0 :y 1.5 :z 0.0} :direction {:x 0.0 :y 0.0 :z 1.0}
                                     :distance 20.0 :include-entities? true :living-only? true}]
                   %)
               @calls))

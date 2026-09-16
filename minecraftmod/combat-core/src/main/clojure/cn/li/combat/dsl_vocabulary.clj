@@ -123,7 +123,8 @@
            :length (p* :double) :visual-length (opt :double nil) :radius (p* :double)
            :query-radius (opt :double nil) :entity-limit (opt :long 256)
            :damage (opt :double 0.0) :damage-type (opt :keyword :generic)
-           :block-limit (opt :long 4096) :reflection-policy (opt :any nil) :step (opt :double nil)}
+           :block-limit (opt :long 4096) :reflection-policy (opt :reflection-policy nil)
+           :step (opt :double nil)}
           :beam-result #{:world-write} :kernel/trace-beam 4)
 
     :kernel/terrain-wave-plan
@@ -179,8 +180,8 @@
    {:target/raycast
     (node {:origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
            :include-entities? (opt :boolean false) :include-blocks? (opt :boolean false)
-           :living-only? (opt :boolean false) :policy (opt :any nil)}
-          :hit-result #{:world-read} :raycast 2)
+           :living-only? (opt :boolean false) :policy (opt :raycast-policy nil)}
+          :hit-result #{:world-read} :target/raycast 2)
 
     ;; :yaw-range-degrees is a [min max] range pair, not a scalar --
     ;; every real call site (blood_retrograde.edn, S6) passes a 2-element
@@ -197,7 +198,7 @@
     (node {:origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
            :yaw-range-degrees (opt :any 0.0) :pitch-angles (opt :any nil)
            :limit (opt :long 8) :seed (opt :long nil)}
-          [:list-of :hit-result] #{:world-read} :raycast 3)
+          [:list-of :hit-result] #{:world-read} :target/raycast-fan 3)
 
     :target/entities
     (node {:shape (p) :filter (opt :any nil) :limit (opt :long 128)
@@ -229,13 +230,30 @@
 
     :target/resolve-destination
     (node {:hit (p) :origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
-           :policy (opt :any nil)}
-          :destination #{:world-read} :raycast 2)
+           :policy (opt :destination-policy nil)}
+          :destination #{:world-read} :target/resolve-destination 2)
 
+    ;; March a ray THROUGH a wall and report the first clear spot past it.
+    ;; Its own node because it is its own handler: it used to be spelled as
+    ;; a :target/raycast call carrying {:type :penetration ...} in :policy,
+    ;; which platform/raycast! was meant to route on and never did, so
+    ;; penetrate-teleport got a plain raycast back -- with no :available?,
+    ;; the key it gates the teleport on. The scan parameters are named
+    ;; params here rather than policy keys because they are required inputs
+    ;; to the march, not options on some other query.
+    :target/penetration
+    (node {:origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
+           :scan-step (p* :double) :clearance-steps (p* :long)
+           :marker-offset-y (opt :double 0.0)}
+          :penetration-result #{:world-read} :target/penetration 2)
+
+    ;; Shares resolve-destination's handler AND therefore its policy tag:
+    ;; this node is that query under its :block-placement reading, not a
+    ;; different request shape.
     :target/block-placement
     (node {:hit (p) :origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
-           :policy (opt :any nil)}
-          :block-placement #{:world-read} :raycast 2)
+           :policy (opt :destination-policy nil)}
+          :block-placement #{:world-read} :target/block-placement 2)
 
     ;; :direction here is NOT a spatial vector despite the field-name
     ;; heuristic this whole table otherwise follows (see this namespace's
@@ -247,10 +265,15 @@
     ;; :keyword) when porting cn.li.combat.lib's target/directional-
     ;; destination composite -- no ability had exercised this node end to
     ;; end before that.
+    ;; No :policy param, deliberately. targeting/directional-destination
+    ;; does not destructure one -- it never has, on this branch or on main
+    ;; -- so the param was passed the whole way down and dropped. Deleted
+    ;; rather than tagged: a type on an argument the callee cannot read
+    ;; documents a contract that does not exist.
     :target/directional-destination-query
     (node {:look (p* :vec3) :eye-y (p* :double) :origin (p* :vec3) :direction (p* :keyword)
-           :distance (p* :double) :policy (opt :any nil)}
-          :destination #{:world-read} :raycast 2)
+           :distance (p* :double)}
+          :destination #{:world-read} :target/directional-destination-query 2)
 
     :owner/snapshot
     (node {:projection (opt :any nil)} :owner-snapshot #{:owner-read} :owner/snapshot 1)
@@ -587,7 +610,7 @@
                  ;; through untouched, so it is exactly that node's own
                  ;; element type.
                  :blocks [:list-of :block-info]
-                 :reflection-policy :any}   ; the caller's own policy, echoed
+                 :reflection-policy :reflection-policy}  ; the caller's own, echoed back
 
    ;; combat-runtime/energy-target-result.
    :energy-target {:chargeable? :boolean    ; (boolean (and tile ...)), never nil
@@ -721,6 +744,21 @@
    ;; amount read off it reached a :math/* parameter as a :convert that was
    ;; trusted and never verified.
    :resource-pool :double
+
+   ;; targeting/march-through-collision's result plus the two keys
+   ;; penetration-raycast assocs on. Every key is set on BOTH of the march's
+   ;; return branches and the two assocs are unconditional, so none can be
+   ;; missing when the result exists at all -- which is what lets the
+   ;; numeric three bank primitively. penetrate-teleport reads :distance
+   ;; into a :math/gte, and :available? is the key it gates the whole
+   ;; teleport on.
+   :penetration-result {:position :vec3
+                        :distance :double
+                        :march-distance :double
+                        :available? :boolean
+                        :valid? :boolean
+                        :marker-position :vec3
+                        :hit? :boolean}
 
    ;; DELIBERATELY ABSENT, though they are tagged types: :terrain-spread,
    ;; :energy-cost-table and :block-transform-table.

@@ -55,6 +55,15 @@
     ;; missing key is the normal "not listed" case rather than an error.
     ;; See the note at the end of combat's field-types.
     :terrain-spread :energy-cost-table :block-transform-table
+    ;; What marching a ray THROUGH a wall found: the first clear spot past
+    ;; it, plus whether one exists at all. Not a :destination -- that record
+    ;; describes where a ray STOPPED, has no :available?, and penetrate-
+    ;; teleport reads exactly that key.
+    :penetration-result
+    ;; The option maps the raycast family takes. One per handler, not one
+    ;; shared tag: their key sets are disjoint, and while all five nodes
+    ;; shared a single handler there was no shape to name.
+    :raycast-policy :destination-policy :reflection-policy
     ;; :any is the one deliberate escape hatch, for genuinely generic
     ;; plumbing like :data/bind's :value field, which by design forwards
     ;; whatever type the caller's expression produces.
