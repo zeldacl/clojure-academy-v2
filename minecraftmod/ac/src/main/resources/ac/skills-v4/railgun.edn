@@ -395,7 +395,12 @@
           :ring-segments 12}})
        ^{:nid "n/n--entry--release-19-then-9"}
        (world/sound
-        {:sound-id "academy:em.railgun", :world-id wid, :position eye})
+        {:sound-id "academy:em.railgun",
+         :world-id wid,
+         :position eye,
+         :source :ambient,
+         :volume 0.5,
+         :pitch 1.0})
        ^{:nid "n/n--entry--release-19-then-10"}
        (finish {:outcome :committed, :end-ability? true})]
       [^{:nid "n/n--entry--release-19-else-0"}

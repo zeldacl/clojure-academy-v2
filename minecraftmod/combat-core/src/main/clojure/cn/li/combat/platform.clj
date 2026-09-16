@@ -562,13 +562,17 @@
 
 (defn- basic-raycast [request]
   (let [{:keys [world-id owner origin direction distance include-entities?
-                include-blocks? block-policy policy]} request
+                include-blocks? policy]} request
         [sx sy sz] (point origin)
         [dx dy dz] (point direction)
         distance (max 0.0 (min 128.0 (double (or distance 0.0))))
         ray-origin [sx sy sz]
         endpoint [(+ sx (* dx distance)) (+ sy (* dy distance)) (+ sz (* dz distance))]
-        block-hit-fn (if (= :collidable-or-water (or block-policy (:block-policy policy)))
+        ;; One spelling. The top-level :block-policy this also read is
+        ;; declared by no node, so it was always nil -- the policy map is
+        ;; the only way content can reach this, and arc-gen.edn is the one
+        ;; caller that does.
+        block-hit-fn (if (= :collidable-or-water (:block-policy policy))
                        raycast/raycast-collidable-blocks-or-water
                        raycast/raycast-blocks)
         hit (cond
@@ -948,49 +952,6 @@
                        (assoc :reset-invulnerable-time? true)))]
         {:status (if (not= false applied) :applied :failed)}))))
 
-(defn charged-area-damage!
-  "Apply bounded radial damage with deterministic charge ratio and falloff."
-  [{:keys [owner world-id center radius damage damage-type projection
-           current-ticks minimum-ticks maximum-ticks ratio-min ratio-max
-           ratio-slot limit]
-    entity-filter :filter}]
-  (let [center (point center)
-        radius (double (max 0.0 (min 64.0 (or radius 0.0))))
-        minimum (double (or minimum-ticks 0.0))
-        maximum (double (or maximum-ticks minimum))
-        current (double (or current-ticks minimum))
-        span (max 1.0 (- maximum minimum))
-        ratio (max (double (or ratio-min 0.0))
-                   (min (double (or ratio-max 1.0))
-                        (/ (- current minimum) span)))
-        base-damage (double (or damage 0.0))
-        entities (if (and owner world-id center (pos? radius))
-                   (entity-select! {:owner owner :world-id world-id
-                                    :shape {:type :sphere :center center :radius radius}
-                                    :filter entity-filter :projection projection
-                                    :limit (max 0 (min 256 (long (or limit 256))))}
-                                   nil)
-                   [])
-        results (mapv (fn [entity]
-                        (let [position (point (:position entity))
-                              distance (if (and center position)
-                                         (Math/sqrt
-                                          (reduce + (map (fn [a b]
-                                                           (let [d (- (double a) (double b))]
-                                                             (* d d)))
-                                                         center position)))
-                                         radius)
-                              falloff (max 0.0 (min 1.0 (- 1.0 (/ distance (max radius 1.0)))))
-                              amount (* base-damage ratio falloff)
-                              result (when (pos? amount)
-                                       (damage! {:owner owner :world-id world-id
-                                                 :target (:id entity) :amount amount
-                                                 :damage-type damage-type}))]
-                          {:entity (:id entity) :amount amount :result result}))
-                      entities)
-        applied (filter #(= :applied (get-in % [:result :status])) results)]
-    {:status (if (seq applied) :applied :failed)
-     :ratio ratio :ratio-slot ratio-slot :hits results}))
 (defn break!
   [{:keys [owner world-id position expected-block-id drop? fortune-level
            tool-tier-capped?]} _frame-ctx]
@@ -1202,44 +1163,16 @@
 (defn discard-entity!
   "Discard a neutral entity through the mcmod relay.
 
-   A session may retain an entity UUID, but older content also expresses the
-   neutral operation as owner + entity-type (for example a shield body).  The
-   latter is resolved in the owner's world and filtered by both owner and type
-   before any discard, so one player can never remove another player's session
-   entity."
-  [{:keys [world-id owner entity entity-type]}]
-  (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
-        direct? (and world-id entity-id (world-effects/available?))]
-    (cond
-      direct?
+   By entity ref only. A second arm resolved owner + entity-type by scanning
+   a 128-block radius, for content that named the entity by kind rather than
+   by id -- but :entity/discard declares no :entity-type param, so nothing
+   could ever reach it, and all three shipped callers pass {:entity ball}."
+  [{:keys [world-id entity]}]
+  (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))]
+    (if (and world-id entity-id (world-effects/available?))
       {:status (if (world-effects/discard-entity-by-uuid!
                     world-id (str entity-id))
                  :applied :failed)}
-
-      (and world-id owner entity-type (world-effects/available?))
-      (let [owner-id (str owner)
-            owner-pos (entity-motion/entity-position (str world-id) owner-id)
-            candidates (when (and (map? owner-pos)
-                              (every? #(number? (get owner-pos %)) [:x :y :z]))
-                         (world-effects/find-entities-in-radius
-                          (str world-id) (double (:x owner-pos))
-                          (double (:y owner-pos)) (double (:z owner-pos)) 128.0))
-            matches (filter (fn [candidate]
-                             (and (= (str entity-type)
-                                     (str (or (:type candidate) (:entity-type candidate))))
-                                  (= owner-id
-                                     (str (or (:owner-id candidate)
-                                              (:owner-uuid candidate))))))
-                           (or candidates []))
-            applied (keep (fn [candidate]
-                            (let [id (or (:id candidate) (:uuid candidate) (:entity-id candidate))]
-                              (when (and id (world-effects/discard-entity-by-uuid!
-                                             world-id (str id))) id)))
-                          matches)]
-        {:status (if (seq applied) :applied :failed)
-         :discarded (count applied)})
-
-      :else
       {:status :rejected :reason :invalid-entity-discard})))
 
 (defn configure-entity!
@@ -1353,184 +1286,6 @@
   (configure-entity! {:world-id world-id :entity target :velocity vector
                        :add-tags []}))
 
-(defn radial-impulse!
-  "Apply a deterministic radial velocity to entities in a bounded sphere."
-  [{:keys [owner world-id center radius speed-min speed-max seed]}]
-  (let [center (point center)
-        radius (double (or radius 0.0))
-        speed-min (double (or speed-min 0.0))
-        speed-max (double (or speed-max speed-min))
-        finite? #(and (number? %) (Double/isFinite (double %)))
-        valid? (and owner world-id center
-                    (every? finite? (conj center radius speed-min speed-max))
-                    (<= 0.0 radius 32.0)
-                    (<= 0.0 speed-min speed-max 32.0)
-                    (world-effects/available?))]
-    (if-not valid?
-      {:status :rejected :reason :invalid-radial-impulse-request}
-      (let [[cx cy cz] center
-            entities (entity-select!
-                      {:owner owner :world-id world-id
-                       :shape {:type :sphere :center center :radius radius}
-                       :projection [:id :position :eye-height]
-                       :limit 256}
-                      nil)
-            seed (long (or seed 0))
-            hits (loop [xs (seq entities) index 0 total 0]
-                   (if-let [entity (first xs)]
-                     (let [[ex ey ez] (or (point (:position entity)) [cx cy cz])
-                           ey (+ ey (double (or (:eye-height entity) 0.0)))
-                           vx (- ex cx) vy (- ey cy) vz (- ez cz)
-                           length (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))]
-                       (if (<= length 1.0e-6)
-                         (recur (next xs) (inc index) total)
-                         (let [rng (rng/next-seed
-                                    (unchecked-add seed index))
-                               magnitude (rng/uniform rng speed-min speed-max)
-                               result (entity-impulse!
-                                       {:world-id world-id :target entity
-                                        :vector [(* (/ vx length) magnitude)
-                                                 (* (/ vy length) magnitude)
-                                                 (* (/ vz length) magnitude)]})]
-                           (recur (next xs) (inc index)
-                                  (if (= :applied (:status result))
-                                    (inc total) total)))))
-                     total))]
-        {:status :applied :hits hits}))))
-
-(defn random-break!
-  "Break bounded random blocks around an origin with configurable hardness
-   and drop policies.  This is a reusable terrain primitive, not a skill
-   implementation."
-  [{:keys [owner world-id origin attempts radius hardness-max break-probability
-           drop-probability seed drop?]}]
-  (let [origin (point origin)
-        attempts (long (or attempts 0))
-        radius (double (or radius 0.0))
-        hardness-max (double (or hardness-max 0.0))
-        break-probability (double (or break-probability 1.0))
-        drop-probability (double (or drop-probability
-                                    (if (nil? drop?) 1.0 0.0)))
-        valid? (and owner world-id origin (blocks/available?)
-                    (<= 0 attempts 256) (<= 0.0 radius 32.0)
-                    (Double/isFinite hardness-max) (<= 0.0 hardness-max 64.0)
-                    (Double/isFinite break-probability)
-                    (<= 0.0 break-probability 1.0)
-                    (Double/isFinite drop-probability)
-                    (<= 0.0 drop-probability 1.0))]
-    (if-not valid?
-      {:status :rejected :reason :invalid-random-break-request}
-      (let [[ox oy oz] origin
-            seed (long (or seed 0))
-            broken (loop [index 0 total 0]
-                     (if (>= index attempts)
-                       total
-                       (let [rng (rng/next-seed (unchecked-add seed index))
-                             rx (long (Math/floor (rng/uniform rng (- radius) radius)))
-                             r1 (rng/next-seed rng)
-                             ry (long (Math/floor (rng/uniform r1 (- radius) radius)))
-                             r2 (rng/next-seed r1)
-                             rz (long (Math/floor (rng/uniform r2 (- radius) radius)))
-                             x (long (Math/floor (+ ox rx)))
-                             y (long (Math/floor (+ oy ry)))
-                             z (long (Math/floor (+ oz rz)))
-                             hardness (double (or (blocks/get-block-hardness
-                                                  (str world-id) x y z)
-                                                 -1.0))
-                             allowed? (and (>= hardness 0.0)
-                                           (<= hardness hardness-max)
-                                           (blocks/can-break-block?
-                                            (str owner) (str world-id) x y z))
-                             break? (and allowed?
-                                          (<= (rng/unit-double r2)
-                                              break-probability))
-                             did-break? (and break?
-                                              (not= false
-                                                    (blocks/break-block!
-                                                     (str owner) (str world-id)
-                                                     x y z
-                                                     (<= (rng/unit-double r2)
-                                                         drop-probability))))]
-                         (recur (inc index) (if did-break? (inc total) total)))))]
-        {:status :applied :broken broken}))))
-
-(defn area-break!
-  "Scan a bounded spherical neighborhood inside an integer cube and apply
-   EDN-supplied hardness, break and drop policies.  The loops are primitive
-   and deterministic; no coordinate collection is allocated."
-  [{:keys [owner world-id origin radius hardness-max break-probability
-           drop-probability self-drop? seed]}]
-  (let [origin (point origin)
-        radius (double (or radius 0.0))
-        hardness-max (double (or hardness-max 0.0))
-        break-probability (double (or break-probability 1.0))
-        drop-probability (double (or drop-probability 1.0))
-        valid? (and owner world-id origin (blocks/available?)
-                    (<= 0.0 radius 8.0)
-                    (Double/isFinite hardness-max) (<= 0.0 hardness-max 64.0)
-                    (Double/isFinite break-probability)
-                    (<= 0.0 break-probability 1.0)
-                    (Double/isFinite drop-probability)
-                    (<= 0.0 drop-probability 1.0))]
-    (if-not valid?
-      {:status :rejected :reason :invalid-area-break-request}
-      (let [[ox0 oy0 oz0] origin
-            ox (double ox0) oy (double oy0) oz (double oz0)
-            x0 (long (+ ox 0.5)) y0 (long (+ oy 0.5)) z0 (long (+ oz 0.5))
-            r (long (Math/ceil radius))
-            radius-sq (* radius radius)
-            seed (long (or seed 0))
-            scan-block (fn [x y z index]
-                         (let [dx (- (double x) ox)
-                               dy (- (double y) oy)
-                               dz (- (double z) oz)
-                               inside? (<= (+ (* dx dx) (* dy dy) (* dz dz)) radius-sq)
-                               rng (rng/next-seed (unchecked-add seed index))
-                               hardness (if inside?
-                                         (double (or (blocks/get-block-hardness
-                                                      (str world-id) x y z) -1.0))
-                                         -1.0)
-                               block-id (when (and inside? (>= hardness 0.0))
-                                          (blocks/get-block (str world-id) x y z))
-                               allowed? (and inside? (<= hardness hardness-max) block-id
-                                             (blocks/can-break-block?
-                                              (str owner) (str world-id) x y z))
-                               break? (and allowed?
-                                            (<= (rng/unit-double rng)
-                                                break-probability))
-                               drop? (if (or (not allowed?) self-drop?)
-                                        false
-                                        (<= (rng/unit-double
-                                             (rng/next-seed rng))
-                                            drop-probability))]
-                           (if break?
-                             (let [result (blocks/break-block!
-                                           (str owner) (str world-id) x y z drop?)]
-                               (when (and self-drop?
-                                          (not= false result)
-                                          (server-bridge/server-bridge-available?))
-                                 (server-bridge/spawn-item-stack-at!
-                                  (str world-id) x y z block-id 1))
-                               (if (not= false result) 1 0))
-                             0)))
-            scan-z (fn scan-z [x y z total index]
-                     (if (> z (+ z0 r))
-                       [total index]
-                       (scan-z x y (inc z)
-                               (+ total (scan-block x y z index))
-                               (inc index))))
-            scan-y (fn scan-y [x y total index]
-                     (if (> y (+ y0 r))
-                       [total index]
-                       (let [[total index] (scan-z x y (- z0 r) total index)]
-                         (scan-y x (inc y) total index))))
-            scan-x (fn scan-x [x total index]
-                     (if (> x (+ x0 r))
-                       total
-                       (let [[total index] (scan-y x (- y0 r) total index)]
-                         (scan-x (inc x) total index))))
-            broken (scan-x (- x0 r) 0 0)]
-        {:status :applied :broken broken}))))
 
 (defn owner-snapshot!
   "Owner pose/velocity/look/flight-state through the neutral relays."
@@ -1869,7 +1624,10 @@
    :item/held item-held!
    :entity/select entity-select!
    :block/select block-select!
-   :interaction/resolve interaction-resolve!
+   ;; interaction-resolve! is NOT registered: it has no node and no
+   ;; content caller, and beam-trace! calls it directly as an ordinary
+   ;; function. A capability registration nothing can dispatch only made
+   ;; it look reachable from EDN.
    :saved-location saved-location!
    :owner/snapshot owner-snapshot!
    :entity/snapshot entity-snapshot!
@@ -1891,7 +1649,6 @@
 
 (defn action-handlers []
   {:entity/damage damage!
-   :combat/charged-area-damage charged-area-damage!
    :entity/status entity-status!
 
    :entity/impulse entity-impulse!
@@ -1913,15 +1670,7 @@
    :owner/can-fly owner-can-fly!
    :motion/entity-velocity entity-velocity!
    :motion/entity-velocity-add entity-velocity-add!
-   :projectile/redirect projectile-redirect!
-
-   ;; Internal kernel capabilities are not exported by schema-export.
-   ;; Value-returning kernels (:kernel/trace-beam, :kernel/terrain-wave-plan,
-   ;; :kernel/scatter-end) live in query-handlers — vocab :returns makes the
-   ;; compiler emit :query, not :action.
-   :kernel/terrain-break-area area-break!
-   :kernel/terrain-random-break random-break!
-   :kernel/motion-radial-impulse radial-impulse!})
+   :projectile/redirect projectile-redirect!})
 
 (defn install!
   "Register Combat Core capabilities with an injected delayed-work scheduler.

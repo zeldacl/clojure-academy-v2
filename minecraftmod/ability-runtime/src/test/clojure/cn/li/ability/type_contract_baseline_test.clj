@@ -83,11 +83,15 @@
                (str/join "\n" (map #(str "  " (:node %) " / " (:param %))
                                    (sort-by (juxt :node :param) anys))))))
     (testing "optional parameters are why a missing wire cannot raise :missing-param"
-      (is (= 115 (count (filter :optional? rows)))
+      ;; 115 -> 118: :world/sound's :source/:volume/:pitch. sound! read all
+      ;; three off the request already; the node declaring none of them was
+      ;; why content could not set them.
+      (is (= 118 (count (filter :optional? rows)))
           "combat vocab optional param count changed")
       ;; 231 -> 236: :target/penetration is new (+6) and
       ;; :target/directional-destination-query lost its unread :policy (-1).
-      (is (= 236 (count rows))
+      ;; 236 -> 239: :world/sound's three (see above).
+      (is (= 239 (count rows))
           "combat vocab total param count changed"))))
 
 (deftest combat-vocabulary-return-type-count-test

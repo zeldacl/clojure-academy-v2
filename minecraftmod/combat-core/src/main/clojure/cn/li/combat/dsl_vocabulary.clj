@@ -376,8 +376,16 @@
     :world/lightning
     (node {:position (p* :vec3) :world-id (opt :string nil) :visual-only? (opt :boolean false)}
           nil #{:world-write} :world/lightning 2)
+    ;; sound! has always read :source/:volume/:pitch off the request, but
+    ;; this node declared none of them, so every server-side sound played
+    ;; at the handler's fallbacks with no way for content to say otherwise
+    ;; -- and the pre-V4 implementations did set them per call site, so
+    ;; volumes shifted. Declared with the handler's own fallbacks as
+    ;; defaults, so omitting them keeps today's behaviour.
     :world/sound
-    (node {:sound-id (p* :string) :position (p* :vec3) :world-id (opt :string nil)}
+    (node {:sound-id (p* :string) :position (p* :vec3) :world-id (opt :string nil)
+           :source (opt :keyword :ambient) :volume (opt :double 1.0)
+           :pitch (opt :double 1.0)}
           nil #{:world-write} :world/sound 1)
 
     :block/break
