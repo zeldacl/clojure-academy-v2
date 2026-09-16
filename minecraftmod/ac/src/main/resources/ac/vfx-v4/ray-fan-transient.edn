@@ -12,7 +12,6 @@
   :length {:type :float},
   :grow-ticks {:type :int},
   :origin {:type :vec3},
-  :bounds-radius {:type :float},
   :direction {:type :vec3}},
  :entry-triggers {:render :vfx/render},
  :phases

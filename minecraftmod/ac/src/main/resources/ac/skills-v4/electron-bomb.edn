@@ -100,7 +100,6 @@
        :arc-life-ticks 10,
        :aoe-points [],
        :aoe-origin eye,
-       :bounds-radius 0.8,
        :pattern :weak}},
      :destination destination,
      :owner owner-id,

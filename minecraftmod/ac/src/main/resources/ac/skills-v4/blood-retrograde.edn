@@ -59,7 +59,7 @@
      :operation :spawn,
      :instance-key [:activation :blood-charge],
      :audience {:type :owner},
-     :payload {:speed 0.1}})
+     :payload {:local-walk-speed 0.1}})
    ^{:nid "n/n--entry--start-2"}
    (finish {:outcome :started})],
   :pulse
@@ -81,7 +81,7 @@
      :instance-key [:activation :blood-charge],
      :audience {:type :owner},
      :payload
-     {:speed
+     {:local-walk-speed
       ^{:nid "n/n--entry--pulse-4-in-53978b78"}
       (math/lerp 0.1 0.007 ratio)}})
    ^{:nid "n/n009"}

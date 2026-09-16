@@ -2,7 +2,7 @@
  :id :blood-retrograde-charge,
  :lifecycle {:mode :session},
  :activation :instant,
- :parameters {:speed {:type :float}},
+ :parameters {:local-walk-speed {:type :float}},
  :entry-triggers {:render :vfx/render},
  :phases
  {:render

@@ -7,8 +7,7 @@
   :end {:type :vec3},
   :life-ticks {:type :int},
   :grow-ticks {:type :int},
-  :style {:type :any},
-  :bounds-radius {:type :float}},
+  :style {:type :any}},
  :entry-triggers {:render :vfx/render},
  :phases
  {:render

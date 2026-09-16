@@ -5,7 +5,6 @@
  :parameters
  {:alpha {:type :float},
   :duration-ticks {:type :int},
-  :color {:type :any},
   :local-walk-speed {:type :float, :default nil}},
  :entry-triggers {:render :vfx/render},
  :phases

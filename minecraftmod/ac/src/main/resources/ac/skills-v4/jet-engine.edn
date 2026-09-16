@@ -443,10 +443,7 @@
          :instance-key [:activation :jet-engine-flash],
          :audience {:type :owner},
          :payload
-         {:alpha 85.0,
-          :duration-ticks 20,
-          :color [210 250 255 255],
-          :local-walk-speed nil}})
+         {:alpha 85.0, :duration-ticks 20, :local-walk-speed nil}})
        (let use-progression ?progression/use)
        (let main-cooldown ?cooldown/main)
        ^{:nid "n/n--entry--release-1--2e3da775"}

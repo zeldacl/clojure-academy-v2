@@ -334,8 +334,9 @@
            :grow-ticks 3,
            :style
            {:layers
-            [{:shape :tube, :radius 0.17, :color [106 242 106 180]}]},
-           :bounds-radius 0.4}})]
+            [{:shape :tube,
+              :radius 0.17,
+              :color [106 242 106 180]}]}}})]
        []))
      ^{:nid "n/n075"}
      (let __v4_n075 (math/mul time-rate $beam-block-energy))

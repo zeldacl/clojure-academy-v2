@@ -110,8 +110,7 @@
         :grow-ticks 0,
         :style
         ^{:nid "n/n--entry--start-8-th-76262268"}
-        (:beam-style runtime),
-        :bounds-radius 0.6}})
+        (:beam-style runtime)}})
      ^{:nid "n/n--entry--start-8-then-7"}
      (vfx!
       {:effect-id :block-progress-session,
@@ -213,8 +212,7 @@
         :grow-ticks 0,
         :style
         ^{:nid "n/n--entry--pulse-10-e-5ebc5b23"}
-        (:beam-style runtime),
-        :bounds-radius 0.6}})
+        (:beam-style runtime)}})
      ^{:nid "n/n--entry--pulse-10-else-1"}
      (vfx!
       {:effect-id :audio-loop-session,

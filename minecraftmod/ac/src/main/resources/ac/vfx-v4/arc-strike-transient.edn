@@ -15,7 +15,6 @@
   :aoe-points {:type :any},
   :aoe-origin {:type :vec3},
   :end {:type :vec3},
-  :bounds-radius {:type :float},
   :pattern {:type :resource-id}},
  :entry-triggers {:render :vfx/render},
  :phases

@@ -367,7 +367,6 @@
         :end
         ^{:nid "n/n--entry--release-5-impact-end"}
         (:position aim-hit),
-        :bounds-radius 0.0,
         :pattern :strong}})
      ^{:nid "n/n--entry--release-5-then-11"}
      (vfx!

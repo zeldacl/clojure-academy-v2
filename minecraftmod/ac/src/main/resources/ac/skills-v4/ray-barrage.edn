@@ -108,7 +108,6 @@
           (:position aim-hit),
           :life-ticks 50,
           :grow-ticks 0,
-          :bounds-radius 0.8,
           :style
           {:fade-in-ticks 4,
            :fade-out-ticks 8,
@@ -219,7 +218,6 @@
           :origin
           ^{:nid "n/n--entry--start-9-th-4599cba0"}
           (:position aim-hit),
-          :bounds-radius 15.0,
           :direction aim}})
        ^{:nid "n/n--entry--start-9-then-6-then-9"}
        (vfx!
@@ -256,7 +254,6 @@
           (:position aim-hit),
           :life-ticks 30,
           :grow-ticks 0,
-          :bounds-radius 0.8,
           :style
           {:fade-in-ticks 4,
            :fade-out-ticks 8,

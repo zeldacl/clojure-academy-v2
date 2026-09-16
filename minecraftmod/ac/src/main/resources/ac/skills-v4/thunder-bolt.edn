@@ -254,7 +254,6 @@
         ^{:nid "n/n--entry--default-2--ddbbc45b"}
         (:position aim-hit),
         :end main-end,
-        :bounds-radius 2.0,
         :pattern :strong}})
      ^{:nid "n/n098"}
      (let __v4_n098 (collection/nonempty aoe-targets))
