@@ -5,7 +5,14 @@
    map with no schema anywhere -- so an effect may write any key into it and
    the compiler cannot object. The neutral render plan reads exactly six:
    :age :frame-count :frame-duration-ms :scale :size :texture. Everything
-   else content writes is dropped between the scene op and the renderer.
+   else content wrote was dropped between the scene op and the renderer.
+
+   Five of those are now honoured -- the particle's own :color, its :alpha
+   (scalar or a {:min :max} range held stable across frames), and the
+   :fade-in-ticks / :fade-out-ticks / :life-ticks envelope. What remains
+   dropped is motion and blending: :velocity, :speed, :spread, :material
+   and :particle-type, which need per-particle state or a render-state
+   field the quad op does not carry.
 
    That is not a small gap. teleport-marker's particle carries main's tp_mark
    spec exactly -- alpha 153-204, fade-in 5 / fade-out 20, size 0.1-0.2,
@@ -13,12 +20,10 @@
    renderer applies the texture and the size. The particles are the wrong
    colour, never fade, and do not move.
 
-   This is also the reason the last two incomplete conversions cannot be
-   finished by authoring alone: blood-retrograde's splash needs per-splash
-   colour and life, and block-scan's readout needs a colour per tool tier.
-   Both are :particle keys the render plan does not read, so writing them
-   would produce content that compiles and renders wrong -- the exact defect
-   this file exists to stop.
+   That unblocks part of what the last two incomplete conversions need --
+   block-scan's colour per tool tier is now expressible, and so is
+   blood-retrograde's per-splash colour and life -- while their spray
+   motion still is not.
 
    The check therefore pins the contract rather than the content: any key an
    effect writes must be one the renderer reads, or be listed below as a
@@ -29,8 +34,14 @@
 
 (def ^:private render-plan-reads
   "Read off vfx-render-plan's particle call sites -- (:age particle),
-   (:size particle) and so on -- not inferred from the names. Six keys."
-  #{:age :frame-count :frame-duration-ms :scale :size :texture})
+   (:size particle) and so on -- not inferred from the names.
+
+   :color, :alpha and the :fade-in-ticks/:fade-out-ticks/:life-ticks
+   envelope joined this set when marker-quad started resolving the
+   particle's own appearance instead of drawing the material colour at full
+   opacity."
+  #{:age :frame-count :frame-duration-ms :scale :size :texture
+    :color :alpha :fade-in-ticks :fade-out-ticks :life-ticks})
 
 (def ^:private known-dropped
   "Keys effects write that reach no renderer. Each is a visual the pre-V4
@@ -39,8 +50,7 @@
    and life-ticks its lifetime. Shrinking this list means implementing the
    key in vfx-render-plan, not deleting it from content -- the values are
    the originals' own numbers."
-  #{:alpha :color :fade-in-ticks :fade-out-ticks :life-ticks :material
-    :particle-type :speed :spread :velocity})
+  #{:material :particle-type :speed :spread :velocity})
 
 (defn- particle-maps
   "[[effect-id {particle-key value}] ...] for every :particle map written by

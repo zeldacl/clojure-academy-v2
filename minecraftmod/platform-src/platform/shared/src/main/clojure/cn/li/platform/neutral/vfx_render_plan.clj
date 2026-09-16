@@ -579,6 +579,67 @@
                               (V3/scale forward 0.24)))))
     (v3-from anchor)))
 
+(defn- color-rgba
+  "A colour in this file's canonical [r g b a] form, accepting the {:r :g
+   :b :a} spelling the material path also uses.
+
+   Channels pass through unconverted. Running them through number-or would
+   turn every [0 255 0 255] the content writes into [0.0 255.0 0.0 255.0],
+   a representation change in the neutral ABI for no gain -- only the alpha
+   this namespace computes needs to be a number of its own choosing."
+  [color]
+  (cond
+    (and (vector? color) (<= 3 (count color)))
+    [(or (nth color 0) 255) (or (nth color 1) 255)
+     (or (nth color 2) 255) (or (nth color 3 255) 255)]
+    (map? color)
+    [(or (:r color) 255) (or (:g color) 255) (or (:b color) 255) (or (:a color) 255)]
+    :else nil))
+
+(defn- particle-alpha
+  "An :alpha that is a number, or a {:min :max} range resolved
+   deterministically from `seed` -- a range re-rolled per frame would make
+   one particle flicker instead of holding the value it was spawned with."
+  [alpha seed]
+  (cond
+    (number? alpha) (double alpha)
+    (map? alpha) (let [lo (double (number-or (:min alpha) 0.0))
+                       hi (double (number-or (:max alpha) lo))]
+                   (if (<= hi lo)
+                     lo
+                     (+ lo (* (- hi lo) (.nextDouble (java.util.Random. (long seed)))))))
+    :else nil))
+
+(defn- fade-envelope
+  "The pre-V4 particle alpha envelope: ramp in over :fade-in-ticks, hold,
+   then ramp out over the last :fade-out-ticks of :life-ticks. Both ends are
+   optional and a particle with neither holds full alpha for its life."
+  ^double [particle ^double age]
+  (let [life (double (number-or (:life-ticks particle) 0.0))
+        fade-in (double (number-or (:fade-in-ticks particle) 0.0))
+        fade-out (double (number-or (:fade-out-ticks particle) 0.0))
+        in (if (and (pos? fade-in) (< age fade-in)) (/ age fade-in) 1.0)
+        out (if (and (pos? life) (pos? fade-out) (> age (- life fade-out)))
+              (/ (- life age) fade-out)
+              1.0)]
+    (max 0.0 (min 1.0 (* in out)))))
+
+(defn- particle-color
+  "The particle's own colour with its alpha envelope applied.
+
+   Both were dropped for as long as :particle was a free-form :any map that
+   this plan read six keys off: an emitter drew its MATERIAL colour at full
+   opacity, so content carrying the original's tint and fade -- teleport
+   marker's green at 153-204 alpha with a 5/20 fade pair -- rendered white
+   and never faded."
+  [particle fallback ^double age seed]
+  (let [base (or (color-rgba (:color particle)) (color-rgba fallback) default-color)
+        declared (particle-alpha (:alpha particle) seed)
+        alpha0 (double (or declared (nth base 3)))
+        faded (* alpha0 (fade-envelope particle age))]
+    [(nth base 0) (nth base 1) (nth base 2)
+     (long (Math/round ^double (max 0.0 (min 255.0 faded))))]))
+
 (defn- marker-quad [anchor color particle geometry view-ctx]
   (let [chance (number-or (:chance geometry) 1.0)
         seed (long (hash [anchor (:age geometry)]))
@@ -589,6 +650,15 @@
         center (V3/add center (V3. 0.0 (number-or (:anchor-offset-y geometry) 0.0) 0.0))
         half (max 0.001 (number-or (or (:size particle) (:scale particle)) 0.08))
         texture (animated-texture particle)
+        ;; The alpha roll is seeded on the anchor ALONE, not on the
+        ;; spawn seed above, which folds in :age -- re-rolling a
+        ;; {:min :max} alpha every frame would make one particle flicker
+        ;; instead of holding the value it spawned with.
+        color (particle-color particle color
+                              (max 0.0 (number-or (or (:age particle)
+                                                      (:age geometry))
+                                                  0.0))
+                              (hash anchor))
         [right up] (view-basis view-ctx)
         side (V3/scale right half)
         lift (V3/scale up half)
