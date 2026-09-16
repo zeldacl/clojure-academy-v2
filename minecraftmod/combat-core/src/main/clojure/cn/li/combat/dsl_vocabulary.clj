@@ -128,8 +128,10 @@
 
     :kernel/terrain-wave-plan
     (node {:origin (p* :vec3) :direction (p* :vec3) :initial-energy (p* :double)
-           :max-iterations (p* :long) :seed (p* :long) :spread (p) :energy-cost (p)
-           :block-transforms (p) :mastery (p* :double) :mastery-threshold (p* :double)
+           :max-iterations (p* :long) :seed (p* :long)
+           :spread (p* :terrain-spread) :energy-cost (p* :energy-cost-table)
+           :block-transforms (p* :block-transform-table)
+           :mastery (p* :double) :mastery-threshold (p* :double)
            :mastery-radius (p* :long) :mastery-hardness-cap (p* :double)
            :ground-break-probability (p* :double) :drop-probability (p* :double)
            :launch-base (p* :double) :launch-span (p* :double) :entity-search-radius (p* :double)}
@@ -718,4 +720,21 @@
    ;; reads in shipped content -- 33 of 83. While the pool was :any, every
    ;; amount read off it reached a :math/* parameter as a :convert that was
    ;; trusted and never verified.
-   :resource-pool :double})
+   :resource-pool :double
+
+   ;; DELIBERATELY ABSENT, though they are tagged types: :terrain-spread,
+   ;; :energy-cost-table and :block-transform-table.
+   ;;
+   ;; The two tables are keyed by block id, and a missing key is not an
+   ;; error there -- it is the normal case meaning "this block has no
+   ;; special cost / no transform", which terrain-propagate! handles with
+   ;; (or (get costs block-id) (:default costs) 0.5) and a nil transform
+   ;; check. A uniform :double schema would bank such a read primitively
+   ;; and turn "not listed" into a silent 0.0. :terrain-spread's own fields
+   ;; are defaulted by the host the same way.
+   ;;
+   ;; Nothing is lost: content BUILDS all three and never field-reads them,
+   ;; so a schema would type reads that do not exist. The tags earn their
+   ;; keep at the parameter, not at the field -- see their comment in
+   ;; types.clj.
+   })

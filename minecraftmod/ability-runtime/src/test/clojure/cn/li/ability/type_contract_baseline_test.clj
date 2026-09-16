@@ -70,7 +70,11 @@
       ;; 58 -> 57 when :combat/damage's :damage-pipeline was removed: it was
       ;; declared, set by five skills, and read by nothing in the host or
       ;; upstream.
-      (is (= 57 (count anys))
+      ;; 57 -> 54 when :kernel/terrain-wave-plan's spread / energy-cost /
+      ;; block-transforms were tagged. That node takes seventeen positional
+      ;; params, nine of them :double, so the mistake these three now catch
+      ;; is an argument landing in the wrong slot.
+      (is (= 54 (count anys))
           (str "combat vocab :any-typed params changed. Offenders:\n"
                (str/join "\n" (map #(str "  " (:node %) " / " (:param %))
                                    (sort-by (juxt :node :param) anys))))))
@@ -288,13 +292,22 @@
     ;; missing type is work, a grammar that cannot express an existing type
     ;; is a bug, and this row had been filed under the wrong one.
     ;;
-    ;; The remaining 7 are the genuine kind. Four are a `policy` map
-    ;; (:target/hold-destination, :target/raycast-destination,
-    ;; :target/directional-destination, :combat/beam-strike's
-    ;; reflection-policy) and three are :terrain/wave-plan's spread /
-    ;; energy-cost / block-transforms. Each needs an opaque tag or a field
-    ;; schema before it can stop being :any.
-    (is (= 7 (count (any-typed rows)))
+    ;; 7 -> 4: :terrain/wave-plan's spread / energy-cost / block-transforms
+    ;; are now tagged. They take a tag and NO field schema on purpose --
+    ;; content builds all three and never field-reads them, and the two
+    ;; block-id-keyed tables treat a missing key as "not listed" rather
+    ;; than an error, which a uniform schema would bank primitively and
+    ;; turn into a silent 0.0.
+    ;;
+    ;; The remaining 4 are all a `policy` map (:target/hold-destination,
+    ;; :target/raycast-destination, :target/directional-destination, and
+    ;; :combat/beam-strike's reflection-policy). These cannot be typed
+    ;; while five raycast-family nodes share one :raycast capability and
+    ;; platform/raycast! dispatches on a :query-kind that nothing supplies:
+    ;; one handler serving five request shapes is exactly why :policy has
+    ;; to be :any. Typing them first would describe a contract that does
+    ;; not execute.
+    (is (= 4 (count (any-typed rows)))
         (str ":defn library :any-typed param count changed. Offenders: "
              (pr-str (map (juxt :fn :param) (any-typed rows)))))
     (is (= 0 (count (filter #(= :any (types/canonical-type (:returns %)))

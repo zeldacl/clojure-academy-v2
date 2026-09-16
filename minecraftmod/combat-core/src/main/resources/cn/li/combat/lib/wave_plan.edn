@@ -7,8 +7,8 @@
 ;; map-literal repackaging needed.
 {:defn :terrain/wave-plan
  :params [{:name origin :type :vec3} {:name direction :type :vec3} {:name initial-energy :type :double}
-          {:name max-iterations :type :long} {:name seed :type :long} {:name spread :type :any}
-          {:name energy-cost :type :any} {:name block-transforms :type :any} {:name mastery :type :double}
+          {:name max-iterations :type :long} {:name seed :type :long} {:name spread :type :terrain-spread}
+          {:name energy-cost :type :energy-cost-table} {:name block-transforms :type :block-transform-table} {:name mastery :type :double}
           {:name mastery-threshold :type :double} {:name mastery-radius :type :long}
           {:name mastery-hardness-cap :type :double} {:name ground-break-probability :type :double}
           {:name drop-probability :type :double} {:name launch-base :type :double}

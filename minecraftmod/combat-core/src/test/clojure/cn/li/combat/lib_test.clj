@@ -303,3 +303,42 @@
     (testing "the returned plan's :affected-blocks list drove the each loop into a real action"
       (is (= [[:command :block/set {:position {:x 1.0 :y 0.0 :z 0.0} :block-id :air}]]
              (filter #(= :command (first %)) @calls))))))
+
+(deftest wave-plan-rejects-a-scrambled-argument-test
+  ;; The test above asserts the 17-field passthrough is "not scrambled" by
+  ;; inspecting values AFTER a successful run. This asserts the compiler
+  ;; refuses to get that far: nine of those seventeen params are :double,
+  ;; so a slot-ordering slip is the realistic mistake, and it used to be
+  ;; accepted silently because spread/energy-cost/block-transforms were
+  ;; :any. Passing a :double tunable where the spread belongs must not
+  ;; compile.
+  (let [text "{:id :t-wave-bad :activation :instant
+               :parameters {:initial-energy {:type :double} :max-iterations {:type :long}
+                          :seed {:type :long} :mastery {:type :double} :mastery-threshold {:type :double}
+                          :mastery-radius {:type :long} :mastery-hardness-cap {:type :double}
+                          :ground-break-probability {:type :double} :drop-probability {:type :double}
+                          :launch-base {:type :double} :launch-span {:type :double}
+                          :entity-search-radius {:type :double}}
+               :do [(let plan (terrain/wave-plan ?caster/eye ?caster/aim $initial-energy $max-iterations
+                                $seed $mastery {} {} $mastery $mastery-threshold $mastery-radius
+                                $mastery-hardness-cap $ground-break-probability $drop-probability
+                                $launch-base $launch-span $entity-search-radius))
+                    (finish {:outcome :performed})]}"]
+    (is (thrown? clojure.lang.ExceptionInfo (run/compile-doc! text lib/fns))))
+
+  (testing "and the well-typed empty maps the real caller passes still compile"
+    ;; Guard against the tags being so strict that nothing satisfies them:
+    ;; a map literal is :any, which assignable? still lets through.
+    (let [text "{:id :t-wave-ok :activation :instant
+                 :parameters {:initial-energy {:type :double} :max-iterations {:type :long}
+                            :seed {:type :long} :mastery {:type :double} :mastery-threshold {:type :double}
+                            :mastery-radius {:type :long} :mastery-hardness-cap {:type :double}
+                            :ground-break-probability {:type :double} :drop-probability {:type :double}
+                            :launch-base {:type :double} :launch-span {:type :double}
+                            :entity-search-radius {:type :double}}
+                 :do [(let plan (terrain/wave-plan ?caster/eye ?caster/aim $initial-energy $max-iterations
+                                  $seed {:angle-radians 90.0} {} {} $mastery $mastery-threshold
+                                  $mastery-radius $mastery-hardness-cap $ground-break-probability
+                                  $drop-probability $launch-base $launch-span $entity-search-radius))
+                      (finish {:outcome :performed})]}"]
+      (is (some? (run/compile-doc! text lib/fns))))))

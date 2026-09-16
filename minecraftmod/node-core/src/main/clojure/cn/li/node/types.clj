@@ -42,6 +42,19 @@
     ;; reached a numeric parameter as an unchecked :convert, and those were
     ;; the single largest group of such reads in shipped content.
     :resource-pool
+    ;; The three option maps a terrain wave plan takes. They earn tags for a
+    ;; reason the other handles do not: their node has SEVENTEEN positional
+    ;; params, nine of them :double, so the realistic mistake is not passing
+    ;; a malformed spread -- it is passing the wrong argument in the spread
+    ;; slot. While these were :any, a :double landing in any of the three
+    ;; was accepted silently.
+    ;;
+    ;; None of the three carries a field schema, unlike :resource-pool
+    ;; which they otherwise resemble: content BUILDS these and never reads
+    ;; a field off one, and the two tables are keyed by block id where a
+    ;; missing key is the normal "not listed" case rather than an error.
+    ;; See the note at the end of combat's field-types.
+    :terrain-spread :energy-cost-table :block-transform-table
     ;; :any is the one deliberate escape hatch, for genuinely generic
     ;; plumbing like :data/bind's :value field, which by design forwards
     ;; whatever type the caller's expression produces.
