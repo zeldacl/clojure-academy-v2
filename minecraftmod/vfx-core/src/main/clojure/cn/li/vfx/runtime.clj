@@ -99,7 +99,7 @@
                            ((:spawn compiled) buffer 0.0)
                            (assoc compiled :buffer buffer)))
                        (:emitters decl))
-        render-views (mapv #(select-keys % [:layout :buffer]) emitters)]
+        render-views (mapv #(select-keys % [:layout :buffer :material]) emitters)]
     {:scene-program scene-program :emitters emitters :render-views render-views}))
 
 (defn ensure!

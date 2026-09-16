@@ -209,7 +209,6 @@
              (int (hash (or (:material op) :default)))
              (name (or (:primitive op) :line))
              0
-             nil
              (or (:payload op) op)))
 
 (defn- audio-position->xyz [position]
@@ -264,16 +263,24 @@
           (.add batches (op->java-batch legacy))
           (when-let [output (op->java-output legacy)] (.add outputs output)))))
     (doseq [[instance-key {:keys [emitters]}] sampled
-            {:keys [layout buffer]} emitters]
+            {:keys [layout buffer material]} emitters]
       (let [^ParticleColumns particle-buffer buffer]
         (.add batches
               (VfxBatch. VfxRenderStage/WORLD_TRANSLUCENT
                          (int (hash (:id layout)))
                          "particle"
                          (int (.size particle-buffer))
-                         nil
-                         {:instance-key instance-key
+                         ;; The payload IS the op: the loader hands it
+                         ;; straight to vfx-render-plan/neutral-op->plan,
+                         ;; which dispatches on :primitive. Without these
+                         ;; keys the batch reached the plan's default arm
+                         ;; and every emitter rendered nothing.
+                         {:operation :draw-batch
+                          :stage :world-translucent
+                          :primitive :particle
+                          :instance-key instance-key
                           :layout layout
+                          :material material
                           :particles particle-buffer}))))
     (VfxFrame. (long frame-id) (long resource-generation) batches outputs)))
 

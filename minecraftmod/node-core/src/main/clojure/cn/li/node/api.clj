@@ -41,7 +41,7 @@
   [:schema :id :skill :lifecycle :activation
    :parameters :state :tunables
    :costs :cooldown :progression :invariants
-   :requires :entry-triggers :external-triggers
+   :requires :entry-triggers :external-triggers :emitters
    :name-key :description-key :metadata :presentation
    :mark-policies :damage-policies])
 

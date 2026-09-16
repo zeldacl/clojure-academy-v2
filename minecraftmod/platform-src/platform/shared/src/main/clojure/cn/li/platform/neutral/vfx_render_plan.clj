@@ -8,7 +8,7 @@
   (:require [clojure.string :as str]
             [cn.li.platform.neutral.arc-geometry :as arc-geometry])
   (:import [cn.li.mcmod.math V3]
-           [cn.li.mcmod.runtime.vfx ParticleBuffer]))
+           [cn.li.mcmod.runtime.vfx ParticleColumns]))
 
 (def ^:private default-color [255 255 255 255])
 (def ^:private default-texture "minecraft:textures/misc/white.png")
@@ -405,32 +405,6 @@
         :color color}]
       [])))
 
-(defn- particle-ops
-  "Expand the bounded Java particle SoA into billboard-like world quads.
-
-  The neutral ABI deliberately carries positions/colors only; camera-facing
-  orientation remains a version renderer concern. A stable XZ-facing quad is
-  therefore emitted here, which every existing mc-* quad backend can consume
-  without importing Minecraft classes into VFX core."
-  [^ParticleBuffer particles material]
-  (let [n (min (.size particles) (.capacity particles))
-        spec (or (:particle material) {})
-        half (max 0.001 (number-or (or (:size spec) (:scale spec)) 0.1))
-        texture (or (:texture spec) default-texture)]
-    (mapv (fn [i]
-            (let [x (double (aget (.positionX particles) i))
-                  y (double (aget (.positionY particles) i))
-                  z (double (aget (.positionZ particles) i))
-                  color (aget (.color particles) i)]
-              {:kind :quad
-               :p0 (V3. (- x half) y (- z half))
-               :p1 (V3. (- x half) y (+ z half))
-               :p2 (V3. (+ x half) y (+ z half))
-               :p3 (V3. (+ x half) y (- z half))
-               :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
-               :texture texture :color color}))
-          (range n))))
-
 (defn- range-pair [value fallback]
   (cond
     (map? value)
@@ -639,6 +613,91 @@
         faded (* alpha0 (fade-envelope particle age))]
     [(nth base 0) (nth base 1) (nth base 2)
      (long (Math/round ^double (max 0.0 (min 255.0 faded))))]))
+
+(defn- layout-column
+  "cn.li.vfx.layout's :cols entry for an attribute, or nil if the layout
+   dead-stripped it. Read out of the plain map the batch carries rather
+   than via cn.li.vfx.layout/column -- platform-shared must not gain a
+   dependency on vfx-core just to do a get-in."
+  [layout attr]
+  (get-in layout [:cols attr]))
+
+(defn- packed-rgba
+  "Unpack the single int column cn.li.vfx.layout packs a :color attribute
+   into. The layout deliberately packs 4 channels into one int rather than
+   4 columns, so the renderer is where they come apart again."
+  [^long packed]
+  [(bit-and (bit-shift-right packed 16) 0xFF)
+   (bit-and (bit-shift-right packed 8) 0xFF)
+   (bit-and packed 0xFF)
+   (bit-and (bit-shift-right packed 24) 0xFF)])
+
+(defn- particle-ops
+  "Expand the bounded Java particle SoA into billboard-like world quads.
+
+   The neutral ABI deliberately carries positions/colors only; camera-facing
+   orientation remains a version renderer concern. A stable XZ-facing quad is
+   therefore emitted here, which every existing mc-* quad backend can consume
+   without importing Minecraft classes into VFX core.
+
+   Reads cn.li.vfx.layout's columns off the ParticleColumns the emitter
+   stack actually fills. It used to take a ParticleBuffer -- a class with no
+   producer anywhere in the repo -- behind an `instance?` guard, so every
+   emitter batch failed the guard and drew nothing. ParticleColumns is its
+   successor; the guard was the last thing still naming the predecessor.
+
+   Every column but :position is optional, because cn.li.vfx.layout
+   dead-strips any attribute no module writes: an emitter that never varies
+   its size simply has no :size column, and takes the material's size."
+  [^ParticleColumns particles layout material]
+  (let [n (min (.size particles) (.capacity particles))
+        cap (long (:capacity layout))
+        ^floats fs (.floats particles)
+        ^ints is (.ints particles)
+        ;; No :position column means no module ever wrote one, so
+        ;; there is nothing to place a quad at -- n collapses to 0 rather
+        ;; than destructuring nil into three nil column indices.
+        pos (layout-column layout :position)
+        n (if (seq pos) n 0)
+        [px py pz] pos
+        size-col (first (layout-column layout :size))
+        alpha-col (first (layout-column layout :alpha))
+        color-col (first (layout-column layout :color))
+        age-col (first (layout-column layout :age))
+        life-col (first (layout-column layout :lifetime))
+        spec (or (:particle material) {})
+        default-half (max 0.001 (number-or (or (:size spec) (:scale spec)) 0.1))
+        base (or (color-rgba (:color spec)) default-color)
+        base-alpha (double (nth base 3))
+        texture (or (:texture spec) default-texture)
+        at (fn ^double [col ^long i] (double (aget fs (+ (* (long col) cap) i))))]
+    (mapv (fn [i]
+            (let [i (long i)
+                  x (at px i) y (at py i) z (at pz i)
+                  half (max 0.001 (if size-col (at size-col i) default-half))
+                  rgb (if color-col
+                        (packed-rgba (long (aget is (+ (* (long color-col) cap) i))))
+                        base)
+                  ;; The per-particle :alpha column and the material's fade
+                  ;; envelope multiply rather than override each other: the
+                  ;; column is the particle's own spawned opacity, the
+                  ;; envelope is the emitter-wide ramp in and out.
+                  a0 (if alpha-col (at alpha-col i) (double (nth rgb 3)))
+                  a0 (if color-col a0 (min a0 base-alpha))
+                  env (if (and age-col life-col)
+                        (fade-envelope (assoc spec :life-ticks (at life-col i))
+                                       (at age-col i))
+                        1.0)
+                  a (long (Math/round (max 0.0 (min 255.0 (* a0 env)))))]
+              {:kind :quad
+               :p0 (V3. (- x half) y (- z half))
+               :p1 (V3. (- x half) y (+ z half))
+               :p2 (V3. (+ x half) y (+ z half))
+               :p3 (V3. (+ x half) y (- z half))
+               :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+               :texture texture
+               :color [(nth rgb 0) (nth rgb 1) (nth rgb 2) a]}))
+          (range n))))
 
 (defn- marker-quad [anchor color particle geometry view-ctx]
   (let [chance (number-or (:chance geometry) 1.0)
@@ -1028,11 +1087,10 @@
                                                  geometry view-ctx)
                            :particle-trail (particle-trail-ops geometry material view-ctx)
                            (quad-ops geometry color material))
-                   :particle (if-let [particles (:particle-buffer op)]
-                               (if (instance? ParticleBuffer particles)
-                                 (particle-ops particles material)
-                                 [])
-                               [])
+                   :particle (let [particles (:particles op)]
+                               (if (instance? ParticleColumns particles)
+                                 (particle-ops particles (:layout op) material)
+                                 []))
                    :typed-vfx (typed-vfx-ops geometry color)
                    [])]
          {:ops ops})))))

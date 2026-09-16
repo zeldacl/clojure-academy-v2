@@ -325,6 +325,10 @@
   [decl context]
   (let [layout (layout/build (:attrs decl) (long (:capacity decl)))]
     {:layout layout
+     ;; Constant per emitter, so it rides on the batch rather than in a
+     ;; per-particle column: an int-bank :color column would cost one int
+     ;; per particle to say the same thing for all of them.
+     :material (:material decl)
      :spawn (compile-spawn-stage (:spawn decl) layout context
                                  (long (or (:seed decl) 0)))
      :update (compile-update-stage (:update decl) layout context)

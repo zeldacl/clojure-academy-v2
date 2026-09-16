@@ -38,7 +38,7 @@
 (deftest merge-vfx-rejects-nil-command-loudly
   (let [batches (doto (ArrayList.)
                   (.add (VfxBatch. VfxRenderStage/WORLD_AFTER_TRANSLUCENT
-                                   0 "quad" 0 nil {:operation :draw-batch})))
+                                   0 "quad" 0 {:operation :draw-batch})))
         outputs (doto (ArrayList.)
                   (.add (VfxOutput. VfxOutputKind/AUDIO 1 (float 0.5) "academy:em.arc_weak")))
         vfx (VfxFrame. 1 0 batches outputs)]

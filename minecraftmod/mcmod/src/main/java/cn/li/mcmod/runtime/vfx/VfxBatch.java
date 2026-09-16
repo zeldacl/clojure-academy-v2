@@ -9,15 +9,19 @@ package cn.li.mcmod.runtime.vfx;
  *  never matched that set -- no VFX draw batch reached a renderer through
  *  this record. Fixed by making the producer and every consumer agree on
  *  the same string vocabulary instead of a numeric encoding neither side's
- *  gate actually decoded. */
+ *  gate actually decoded.
+ *
+ *  Carried a typed ParticleBuffer component until emitter batches started
+ *  rendering. Nothing ever constructed a ParticleBuffer -- the emitter
+ *  stack fills a ParticleColumns -- so the field was always null and the
+ *  instanceCount check it guarded never ran. Particle data now travels in
+ *  the payload alongside the layout needed to decode it. */
 public record VfxBatch(VfxRenderStage stage,
                        int materialId,
                        String primitive,
                        int instanceCount,
-                       ParticleBuffer particles,
                        Object payload) {
     public VfxBatch {
         if (stage == null || instanceCount < 0) throw new IllegalArgumentException("invalid VFX batch");
-        if (particles != null && instanceCount > particles.size()) throw new IllegalArgumentException("instanceCount");
     }
 }

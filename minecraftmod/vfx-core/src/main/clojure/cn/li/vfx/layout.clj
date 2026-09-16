@@ -18,10 +18,10 @@
    Deliberately its own width/kind rules, NOT cn.li.node.types/width --
    that lattice serves the general DSL register-bank model, where e.g. a
    :color's 4 channels would each want their own register; a particle
-   buffer packs :color into a single int column instead, matching the
-   pre-existing cn.li.mcmod.runtime.vfx.ParticleBuffer convention this
-   layout is meant to feed. Conflating the two type systems would be
-   conflating two genuinely different packing concerns.")
+   buffer packs :color into a single int column instead, which
+   cn.li.platform.neutral.vfx-render-plan unpacks back into channels at
+   draw time. Conflating the two type systems would be conflating two
+   genuinely different packing concerns.")
 
 (def ^:private widths {:vec3 3 :float 1 :long 1 :color 1 :boolean 1})
 (def ^:private integral-types #{:long :color :boolean})
